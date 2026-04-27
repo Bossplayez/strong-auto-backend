@@ -1,0 +1,195 @@
+/* ==========================================================================
+   STRONG AUTO Design Tokens
+   strong-auto.ua — Ukrainian car import marketplace (USA / Europe / UA / in-transit / auctions)
+   ========================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  /* ==========================================================================
+     COLORS
+     ========================================================================== */
+
+  /* Brand green — primary CTA and accent */
+  --green-50:  #ecfdf3;
+  --green-100: #d1fadf;
+  --green-200: #a7f3c4;
+  --green-300: #6ee7a3;
+  --green-400: #34d57e;
+  --green-500: #22c55e;  /* primary green — buttons, price tag border */
+  --green-600: #1aa050;
+  --green-700: #157f40;
+  --green-800: #115e30;
+
+  /* Brand navy — dark photo placeholders, headings, primary text */
+  --navy-50:  #f3f5f8;
+  --navy-100: #e5e8ee;
+  --navy-200: #c8cdd8;
+  --navy-300: #9aa3b4;
+  --navy-400: #6c7589;
+  --navy-500: #4a5366;
+  --navy-600: #343c4d;
+  --navy-700: #252b3a;
+  --navy-800: #1c2230;  /* dark photo bg */
+  --navy-900: #131825;  /* deepest, footer */
+
+  /* Neutrals */
+  --neutral-0:   #ffffff;
+  --neutral-50:  #f7f8f9;
+  --neutral-100: #f3f4f5;  /* page bg */
+  --neutral-200: #e6e8eb;
+  --neutral-300: #cdd1d6;
+  --neutral-400: #9ea4ad;
+  --neutral-500: #6e7480;
+  --neutral-600: #4a5058;
+  --neutral-700: #2f343c;
+  --neutral-800: #1d2128;
+  --neutral-900: #0f1116;
+
+  --danger-500:  #ef4444;
+  --danger-50:   #fef2f2;
+  --warning-500: #f59e0b;
+  --info-500:    #3b82f6;
+
+  /* ==========================================================================
+     SEMANTIC ROLES
+     ========================================================================== */
+
+  --bg:          var(--neutral-100);    /* page background */
+  --bg-card:     var(--neutral-0);
+  --bg-dark:     var(--navy-800);       /* photo placeholders, calculator card */
+  --bg-darker:   var(--navy-900);
+  --bg-subtle:   var(--neutral-50);
+
+  --fg:          var(--navy-900);
+  --fg-muted:    var(--navy-500);
+  --fg-subtle:   var(--neutral-400);
+  --fg-on-dark:  var(--neutral-0);
+  --fg-on-green: var(--neutral-0);
+
+  --border:        var(--neutral-200);
+  --border-strong: var(--neutral-300);
+  --border-dark:   rgba(255,255,255,0.08);
+
+  --primary:        var(--green-500);
+  --primary-hover:  var(--green-600);
+  --primary-press:  var(--green-700);
+
+  --accent:         var(--navy-800);     /* secondary action surface */
+
+  /* ==========================================================================
+     TYPOGRAPHY
+     ========================================================================== */
+
+  --font-display: "Oswald", "Arial Narrow", sans-serif;  /* heavy condensed display */
+  --font-sans:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  /* Type scale */
+  --fs-xs:   11px;
+  --fs-sm:   13px;
+  --fs-base: 15px;
+  --fs-md:   17px;
+  --fs-lg:   20px;
+  --fs-xl:   24px;
+  --fs-2xl:  32px;
+  --fs-3xl:  44px;
+  --fs-4xl:  56px;
+  --fs-5xl:  72px;
+  --fs-6xl:  96px;
+
+  --lh-tight:  1.0;
+  --lh-snug:   1.15;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.65;
+
+  --tracking-display: 0.005em;
+  --tracking-eyebrow: 0.08em;
+
+  /* ==========================================================================
+     SPACING — 4px base
+     ========================================================================== */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+  --sp-16: 64px; --sp-20: 80px; --sp-24: 96px;
+
+  /* ==========================================================================
+     RADII — Strong Auto uses small radii, never pills on cards
+     ========================================================================== */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  8px;     /* cards, photo blocks, buttons */
+  --r-lg:  12px;
+  --r-xl:  16px;
+  --r-pill: 999px;
+
+  /* ==========================================================================
+     SHADOWS — minimal, mostly borders instead
+     ========================================================================== */
+  --shadow-xs: 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-sm: 0 1px 3px rgba(15,23,42,0.06);
+  --shadow-md: 0 4px 12px rgba(15,23,42,0.08);
+  --shadow-lg: 0 12px 28px rgba(15,23,42,0.12);
+  --shadow-focus: 0 0 0 3px rgba(34,197,94,0.30);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+
+  --container-max: 1200px;
+}
+
+/* Defaults */
+html, body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-4xl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-display);
+  color: var(--fg);
+  margin: 0;
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-snug);
+  margin: 0;
+}
+h3, .h3 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-snug);
+  margin: 0;
+}
+
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.mono { font-family: var(--font-mono); }
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }

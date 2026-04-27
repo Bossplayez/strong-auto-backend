@@ -1,0 +1,13 @@
+<!DOCTYPE html><html lang="uk"><head><meta charset="UTF-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:24px;background:var(--bg);font-family:Inter,sans-serif}.l{font-size:11px;color:var(--fg-muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}.row{display:flex;gap:14px;align-items:center;margin-bottom:14px}.in{height:42px;padding:0 14px;border-radius:6px;border:1px solid #cdd1d6;background:#fff;font-family:inherit;font-size:14px;flex:1;color:#0f1116}.in:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.30)}.search{display:flex;background:#fff;border:1px solid #cdd1d6;border-radius:8px;align-items:center;padding:4px 4px 4px 16px;gap:8px;color:#9aa3b4}.search input{flex:1;border:none;outline:none;height:44px;font-family:inherit;font-size:14px}.search button{background:#22c55e;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:600;font-size:14px;font-family:inherit;cursor:pointer}.seg{display:flex;background:#fff;border:1px solid #cdd1d6;border-radius:8px;padding:4px;gap:4px}.seg button{flex:1;border:none;padding:10px;font-family:inherit;font-size:13px;font-weight:600;border-radius:6px;cursor:pointer;background:transparent;color:#0f1116}.seg .on{background:#1c2230;color:#fff}.lab{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#0f1116}</style></head><body>
+<div class="l">Inputs · search · segmented</div>
+<div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Пошук"><button>Знайти</button></div>
+<div style="height:14px"></div>
+<div class="row">
+<div style="flex:1"><label class="lab">Марка / модель авто</label><input class="in" placeholder="Audi Q5"></div>
+<div style="flex:1"><label class="lab">Рік випуску</label><input class="in" placeholder="2020"></div>
+<div style="flex:1"><label class="lab">Ціна від, $</label><input class="in" placeholder="5 000"></div>
+</div>
+<label class="lab">Тип авто</label>
+<div class="seg"><button class="on">Аукціон (США)</button><button>В Україні</button><button>В дорозі</button></div>
+</body></html>
