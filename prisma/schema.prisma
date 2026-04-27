@@ -1,0 +1,799 @@
+// ─────────────────────────────────────────────────────────────
+// Strong Auto — car import / delivery platform (USA → Ukraine)
+// Prisma schema · PostgreSQL
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+enum UserType {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+enum VehicleSourceType {
+  INTERNAL
+  COPART
+}
+
+enum VehicleRegion {
+  USA
+  EUROPE
+  UKRAINE
+}
+
+enum VehiclePublicationStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  HIDDEN
+  ARCHIVED
+}
+
+enum VehicleAvailabilityStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  NOT_AVAILABLE
+}
+
+enum LeadType {
+  CONTACT_FORM
+  CALLBACK
+  CATALOG_REQUEST
+  CALCULATOR_REQUEST
+  SELECTION_REQUEST
+}
+
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  QUALIFIED
+  WON
+  LOST
+  SPAM
+  ARCHIVED
+}
+
+enum ImportJobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  PARTIAL_SUCCESS
+  FAILED
+}
+
+enum NewsStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELED
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IDENTITY / AUTH
+// ═══════════════════════════════════════════════════════════════
+
+model User {
+  id           String     @id @default(uuid()) @map("id")
+  email        String     @unique @map("email")
+  phone        String?    @unique @map("phone")
+  passwordHash String     @map("password_hash")
+  status       UserStatus @map("status")
+  userType     UserType   @map("user_type")
+  lastLoginAt  DateTime?  @map("last_login_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  profile                 UserProfile?
+  userRoles               UserRole[]
+  refreshSessions         RefreshSession[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+
+  // reverse relations
+  newsAuthored        News[]               @relation("NewsAuthor")
+  siteSettingsUpdated SiteSetting[]        @relation("SiteSettingUpdater")
+  calculatorEstimates CalculatorEstimate[] @relation("EstimateUser")
+  leadsAsCustomer     Lead[]               @relation("LeadCustomer")
+  leadsAsManager      Lead[]               @relation("LeadManager")
+  leadComments        LeadComment[]        @relation("LeadCommentAuthor")
+  leadStatusChanges   LeadStatusHistory[]  @relation("LeadStatusChanger")
+  favorites           Favorite[]
+  savedCalculations   SavedCalculation[]
+  broadcastsCreated   Broadcast[]          @relation("BroadcastCreator")
+  filesCreated        File[]               @relation("FileCreator")
+  importJobsCreated   ImportJob[]          @relation("ImportJobCreator")
+  auditLogs           AuditLog[]           @relation("AuditActor")
+
+  @@map("users")
+}
+
+model UserProfile {
+  userId                   String  @id @map("user_id")
+  firstName                String  @map("first_name")
+  lastName                 String  @map("last_name")
+  city                     String? @map("city")
+  preferredLanguage        String? @map("preferred_language")
+  notificationSettingsJson Json?   @map("notification_settings_json")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Role {
+  id       Int     @id @default(autoincrement()) @map("id")
+  code     String  @unique @map("code")
+  name     String  @map("name")
+  isSystem Boolean @map("is_system")
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id     Int    @id @default(autoincrement()) @map("id")
+  code   String @unique @map("code")
+  name   String @map("name")
+  module String @map("module")
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int @map("role_id")
+  permissionId Int @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId Int    @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RefreshSession {
+  id               String    @id @default(uuid()) @map("id")
+  userId           String    @map("user_id")
+  refreshTokenHash String    @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  ip               String?   @map("ip")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_sessions")
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement()) @map("id")
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        Int       @id @default(autoincrement()) @map("id")
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTENT / CMS
+// ═══════════════════════════════════════════════════════════════
+
+model News {
+  id             Int        @id @default(autoincrement()) @map("id")
+  slug           String     @unique @map("slug")
+  status         NewsStatus @map("status")
+  publishedAt    DateTime?  @map("published_at")
+  coverFileId    String?    @map("cover_file_id")
+  authorUserId   String     @map("author_user_id")
+  seoTitle       String?    @map("seo_title")
+  seoDescription String?    @map("seo_description")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  coverFile    File?             @relation("NewsCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  author       User              @relation("NewsAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  translations NewsTranslation[]
+
+  @@map("news")
+}
+
+model NewsTranslation {
+  newsId         Int     @map("news_id")
+  locale         String  @map("locale")
+  title          String  @map("title")
+  excerpt        String? @map("excerpt")
+  body           String  @map("body") @db.Text
+  seoTitle       String? @map("seo_title")
+  seoDescription String? @map("seo_description")
+
+  news News @relation(fields: [newsId], references: [id], onDelete: Cascade)
+
+  @@unique([newsId, locale])
+  @@map("news_translations")
+}
+
+model CmsPage {
+  id          Int        @id @default(autoincrement()) @map("id")
+  code        String     @unique @map("code")
+  slug        String     @unique @map("slug")
+  status      NewsStatus @map("status")
+  coverFileId String?    @map("cover_file_id")
+  sortOrder   Int        @default(0) @map("sort_order")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  coverFile    File?                @relation("CmsPageCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  translations CmsPageTranslation[]
+
+  @@map("cms_pages")
+}
+
+model CmsPageTranslation {
+  pageId         Int     @map("page_id")
+  locale         String  @map("locale")
+  title          String  @map("title")
+  body           String  @map("body") @db.Text
+  seoTitle       String? @map("seo_title")
+  seoDescription String? @map("seo_description")
+
+  page CmsPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, locale])
+  @@map("cms_page_translations")
+}
+
+model SiteSetting {
+  id              Int      @id @default(autoincrement()) @map("id")
+  key             String   @unique @map("key")
+  valueJson       Json     @map("value_json")
+  updatedByUserId String?  @map("updated_by_user_id")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation("SiteSettingUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("site_settings")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CATALOG / VEHICLES
+// ═══════════════════════════════════════════════════════════════
+
+model Vehicle {
+  id                 String                    @id @default(uuid()) @map("id")
+  slug               String                    @unique @map("slug")
+  sourceType         VehicleSourceType         @map("source_type")
+  sourceRegion       VehicleRegion             @map("source_region")
+  publicationStatus  VehiclePublicationStatus  @map("publication_status")
+  availabilityStatus VehicleAvailabilityStatus @map("availability_status")
+  isRecommended      Boolean                   @default(false) @map("is_recommended")
+  vin                String?                   @map("vin")
+  title              String                    @map("title")
+  make               String                    @map("make")
+  model              String                    @map("model")
+  year               Int                       @map("year")
+  priceAmount        Decimal                   @map("price_amount") @db.Decimal
+  currency           String                    @default("USD") @map("currency")
+  odometerValue      Int?                      @map("odometer_value")
+  bodyType           String?                   @map("body_type")
+  fuelType           String?                   @map("fuel_type")
+  transmission       String?                   @map("transmission")
+  driveType          String?                   @map("drive_type")
+  damagePrimary      String?                   @map("damage_primary")
+  locationCountry    String?                   @map("location_country")
+  locationCity       String?                   @map("location_city")
+  locationState      String?                   @map("location_state")
+  seoTitle           String?                   @map("seo_title")
+  seoDescription     String?                   @map("seo_description")
+  publishedAt        DateTime?                 @map("published_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  specs               VehicleSpec?
+  media               VehicleMedia[]
+  contentTranslations VehicleContentTranslation[]
+  sourceBindings      VehicleSourceBinding[]
+  favorites           Favorite[]
+  leads               Lead[]                      @relation("LeadVehicle")
+  calculatorEstimates CalculatorEstimate[]        @relation("EstimateVehicle")
+
+  @@index([publicationStatus, publishedAt])
+  @@index([sourceType, sourceRegion])
+  @@index([make, model, year])
+  @@index([priceAmount])
+  @@index([vin])
+  @@map("vehicles")
+}
+
+model VehicleSpec {
+  vehicleId     String    @id @map("vehicle_id")
+  engineVolume  String?   @map("engine_volume")
+  enginePower   String?   @map("engine_power")
+  cylinders     String?   @map("cylinders")
+  doors         String?   @map("doors")
+  color         String?   @map("color")
+  keysAvailable Boolean?  @map("keys_available")
+  startCode     String?   @map("start_code")
+  sellerName    String?   @map("seller_name")
+  lotNumber     String?   @map("lot_number")
+  auctionDate   DateTime? @map("auction_date")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_specs")
+}
+
+model VehicleMedia {
+  id        String  @id @default(uuid()) @map("id")
+  vehicleId String  @map("vehicle_id")
+  fileId    String? @map("file_id")
+  sourceUrl String? @map("source_url")
+  mediaType String  @default("image") @map("media_type")
+  sortOrder Int     @default(0) @map("sort_order")
+  isPrimary Boolean @default(false) @map("is_primary")
+  checksum  String? @map("checksum")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  file    File?   @relation("VehicleMediaFile", fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, sortOrder])
+  @@map("vehicle_media")
+}
+
+model VehicleContentTranslation {
+  vehicleId       String  @map("vehicle_id")
+  locale          String  @map("locale")
+  title           String? @map("title")
+  description     String? @map("description") @db.Text
+  shortBadgesJson Json?   @map("short_badges_json")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([vehicleId, locale])
+  @@map("vehicle_content_translations")
+}
+
+model VehicleSourceBinding {
+  id                String    @id @default(uuid()) @map("id")
+  vehicleId         String    @map("vehicle_id")
+  provider          String    @map("provider")
+  externalLotId     String    @map("external_lot_id")
+  externalUrl       String?   @map("external_url")
+  saleStatus        String?   @map("sale_status")
+  currentBidAmount  Decimal?  @map("current_bid_amount") @db.Decimal
+  buyNowAmount      Decimal?  @map("buy_now_amount") @db.Decimal
+  lastSyncedAt      DateTime? @map("last_synced_at")
+  sourcePayloadHash String?   @map("source_payload_hash")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalLotId])
+  @@map("vehicle_source_bindings")
+}
+
+model VehicleRawImport {
+  id            String   @id @default(uuid()) @map("id")
+  provider      String   @map("provider")
+  externalLotId String   @map("external_lot_id")
+  importJobId   String?  @map("import_job_id")
+  payloadJsonb  Json     @map("payload_jsonb")
+  receivedAt    DateTime @default(now()) @map("received_at")
+  checksum      String?  @map("checksum")
+
+  importJob ImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
+
+  @@index([provider, externalLotId, receivedAt])
+  @@map("vehicle_raw_imports")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CALCULATOR / PRICING
+// ═══════════════════════════════════════════════════════════════
+
+model AuctionFeeRule {
+  id            Int       @id @default(autoincrement()) @map("id")
+  provider      String    @map("provider")
+  priceFrom     Decimal   @map("price_from") @db.Decimal
+  priceTo       Decimal   @map("price_to") @db.Decimal
+  fixedFee      Decimal?  @map("fixed_fee") @db.Decimal
+  percentFee    Decimal?  @map("percent_fee") @db.Decimal
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  isActive      Boolean   @default(true) @map("is_active")
+
+  @@map("auction_fee_rules")
+}
+
+model LogisticsRoute {
+  id                 Int      @id @default(autoincrement()) @map("id")
+  sourceCountry      String   @map("source_country")
+  sourceState        String?  @map("source_state")
+  destinationCountry String   @map("destination_country")
+  destinationCity    String?  @map("destination_city")
+  destinationPort    String?  @map("destination_port")
+  inlandFee          Decimal? @map("inland_fee") @db.Decimal
+  oceanFee           Decimal? @map("ocean_fee") @db.Decimal
+  currency           String   @default("USD") @map("currency")
+  isActive           Boolean  @default(true) @map("is_active")
+
+  @@map("logistics_routes")
+}
+
+model CustomsRule {
+  id               Int      @id @default(autoincrement()) @map("id")
+  vehicleAgeFrom   Int?     @map("vehicle_age_from")
+  vehicleAgeTo     Int?     @map("vehicle_age_to")
+  engineVolumeFrom Decimal? @map("engine_volume_from") @db.Decimal
+  engineVolumeTo   Decimal? @map("engine_volume_to") @db.Decimal
+  fuelType         String?  @map("fuel_type")
+  formulaType      String   @map("formula_type")
+  formulaJson      Json     @map("formula_json")
+  isActive         Boolean  @default(true) @map("is_active")
+
+  @@map("customs_rules")
+}
+
+model InsuranceRule {
+  id         Int      @id @default(autoincrement()) @map("id")
+  amountFrom Decimal? @map("amount_from") @db.Decimal
+  amountTo   Decimal? @map("amount_to") @db.Decimal
+  fixedFee   Decimal? @map("fixed_fee") @db.Decimal
+  percentFee Decimal? @map("percent_fee") @db.Decimal
+  minFee     Decimal? @map("min_fee") @db.Decimal
+  maxFee     Decimal? @map("max_fee") @db.Decimal
+  isActive   Boolean  @default(true) @map("is_active")
+
+  @@map("insurance_rules")
+}
+
+model ServiceFeeRule {
+  id          Int      @id @default(autoincrement()) @map("id")
+  code        String   @map("code")
+  name        String   @map("name")
+  amount      Decimal? @map("amount") @db.Decimal
+  currency    String   @default("USD") @map("currency")
+  formulaType String?  @map("formula_type")
+  formulaJson Json?    @map("formula_json")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  @@map("service_fee_rules")
+}
+
+model ExchangeRate {
+  id            Int      @id @default(autoincrement()) @map("id")
+  baseCurrency  String   @map("base_currency")
+  quoteCurrency String   @map("quote_currency")
+  rate          Decimal  @map("rate") @db.Decimal
+  source        String   @map("source")
+  validAt       DateTime @map("valid_at")
+
+  @@unique([baseCurrency, quoteCurrency, validAt])
+  @@map("exchange_rates")
+}
+
+model CalculatorEstimate {
+  id             String   @id @default(uuid()) @map("id")
+  userId         String?  @map("user_id")
+  vehicleId      String?  @map("vehicle_id")
+  inputJsonb     Json     @map("input_jsonb")
+  outputJsonb    Json     @map("output_jsonb")
+  totalAmount    Decimal  @map("total_amount") @db.Decimal
+  totalCurrency  String   @default("USD") @map("total_currency")
+  rulesetVersion String?  @map("ruleset_version")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user              User?              @relation("EstimateUser", fields: [userId], references: [id], onDelete: SetNull)
+  vehicle           Vehicle?           @relation("EstimateVehicle", fields: [vehicleId], references: [id], onDelete: SetNull)
+  savedCalculations SavedCalculation[]
+  leads             Lead[]             @relation("LeadEstimate")
+
+  @@index([userId, createdAt])
+  @@index([vehicleId])
+  @@map("calculator_estimates")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEADS / CRM-LITE
+// ═══════════════════════════════════════════════════════════════
+
+model Lead {
+  id                   String     @id @default(uuid()) @map("id")
+  leadType             LeadType   @map("lead_type")
+  sourceChannel        String?    @map("source_channel")
+  status               LeadStatus @default(NEW) @map("status")
+  customerUserId       String?    @map("customer_user_id")
+  managerUserId        String?    @map("manager_user_id")
+  vehicleId            String?    @map("vehicle_id")
+  calculatorEstimateId String?    @map("calculator_estimate_id")
+  name                 String?    @map("name")
+  phone                String?    @map("phone")
+  email                String?    @map("email")
+  comment              String?    @map("comment") @db.Text
+  utmJsonb             Json?      @map("utm_jsonb")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+
+  customer           User?               @relation("LeadCustomer", fields: [customerUserId], references: [id], onDelete: SetNull)
+  manager            User?               @relation("LeadManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  vehicle            Vehicle?            @relation("LeadVehicle", fields: [vehicleId], references: [id], onDelete: SetNull)
+  calculatorEstimate CalculatorEstimate? @relation("LeadEstimate", fields: [calculatorEstimateId], references: [id], onDelete: SetNull)
+  comments           LeadComment[]
+  statusHistory      LeadStatusHistory[]
+
+  @@index([status, createdAt])
+  @@index([managerUserId])
+  @@index([leadType])
+  @@map("leads")
+}
+
+model LeadComment {
+  id           String   @id @default(uuid()) @map("id")
+  leadId       String   @map("lead_id")
+  authorUserId String   @map("author_user_id")
+  body         String   @map("body") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author User @relation("LeadCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([leadId, createdAt])
+  @@map("lead_comments")
+}
+
+model LeadStatusHistory {
+  id              String      @id @default(uuid()) @map("id")
+  leadId          String      @map("lead_id")
+  fromStatus      LeadStatus? @map("from_status")
+  toStatus        LeadStatus  @map("to_status")
+  changedByUserId String?     @map("changed_by_user_id")
+  reason          String?     @map("reason")
+  changedAt       DateTime    @default(now()) @map("changed_at")
+
+  lead      Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  changedBy User? @relation("LeadStatusChanger", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("lead_status_history")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FAVORITES / HISTORY / COMMUNICATIONS
+// ═══════════════════════════════════════════════════════════════
+
+model Favorite {
+  userId    String   @map("user_id")
+  vehicleId String   @map("vehicle_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vehicleId])
+  @@map("favorites")
+}
+
+model SavedCalculation {
+  userId               String   @map("user_id")
+  calculatorEstimateId String   @map("calculator_estimate_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calculatorEstimate CalculatorEstimate @relation(fields: [calculatorEstimateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, calculatorEstimateId])
+  @@map("saved_calculations")
+}
+
+model TelegramSubscriber {
+  id             Int       @id @default(autoincrement()) @map("id")
+  telegramChatId String    @unique @map("telegram_chat_id")
+  username       String?   @map("username")
+  status         String?   @map("status")
+  locale         String?   @map("locale")
+  source         String?   @map("source")
+  subscribedAt   DateTime  @default(now()) @map("subscribed_at")
+  unsubscribedAt DateTime? @map("unsubscribed_at")
+
+  segmentLinks SubscriberSegmentLink[]
+
+  @@map("telegram_subscribers")
+}
+
+model SubscriberSegment {
+  id   Int    @id @default(autoincrement()) @map("id")
+  code String @unique @map("code")
+  name String @map("name")
+
+  subscriberLinks SubscriberSegmentLink[]
+
+  @@map("subscriber_segments")
+}
+
+model SubscriberSegmentLink {
+  subscriberId Int @map("subscriber_id")
+  segmentId    Int @map("segment_id")
+
+  subscriber TelegramSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  segment    SubscriberSegment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, segmentId])
+  @@map("subscriber_segment_links")
+}
+
+model Broadcast {
+  id              String              @id @default(uuid()) @map("id")
+  channel         NotificationChannel @map("channel")
+  title           String              @map("title")
+  bodyTemplate    String              @map("body_template") @db.Text
+  status          String              @map("status")
+  createdByUserId String?             @map("created_by_user_id")
+  scheduledAt     DateTime?           @map("scheduled_at")
+  sentAt          DateTime?           @map("sent_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  createdBy User? @relation("BroadcastCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt])
+  @@map("broadcasts")
+}
+
+model NotificationMessage {
+  id           String              @id @default(uuid()) @map("id")
+  channel      NotificationChannel @map("channel")
+  messageType  String?             @map("message_type")
+  templateCode String?             @map("template_code")
+  recipientRef String              @map("recipient_ref")
+  payloadJsonb Json?               @map("payload_jsonb")
+  status       NotificationStatus  @default(PENDING) @map("status")
+  errorMessage String?             @map("error_message")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  sentAt       DateTime?           @map("sent_at")
+
+  @@index([channel, status, createdAt])
+  @@map("notification_messages")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILES / AUDIT / OPERATIONS
+// ═══════════════════════════════════════════════════════════════
+
+model File {
+  id              String   @id @default(uuid()) @map("id")
+  bucket          String   @map("bucket")
+  storageKey      String   @map("storage_key")
+  originalName    String?  @map("original_name")
+  mimeType        String?  @map("mime_type")
+  size            Int      @map("size")
+  checksum        String?  @map("checksum")
+  width           Int?     @map("width")
+  height          Int?     @map("height")
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  createdBy    User?          @relation("FileCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  newsCover    News[]         @relation("NewsCover")
+  cmsPageCover CmsPage[]      @relation("CmsPageCover")
+  vehicleMedia VehicleMedia[] @relation("VehicleMediaFile")
+
+  @@unique([bucket, storageKey])
+  @@index([checksum])
+  @@map("files")
+}
+
+model ImportJob {
+  id              String          @id @default(uuid()) @map("id")
+  provider        String          @map("provider")
+  mode            String          @map("mode")
+  status          ImportJobStatus @default(PENDING) @map("status")
+  startedAt       DateTime?       @map("started_at")
+  finishedAt      DateTime?       @map("finished_at")
+  createdByUserId String?         @map("created_by_user_id")
+  summaryJsonb    Json?           @map("summary_jsonb")
+  errorMessage    String?         @map("error_message")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  createdBy         User?              @relation("ImportJobCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  vehicleRawImports VehicleRawImport[]
+
+  @@index([provider, status, startedAt])
+  @@map("import_jobs")
+}
+
+model ProviderWebhook {
+  id           String    @id @default(uuid()) @map("id")
+  provider     String    @map("provider")
+  eventType    String?   @map("event_type")
+  headersJsonb Json?     @map("headers_jsonb")
+  payloadJsonb Json?     @map("payload_jsonb")
+  receivedAt   DateTime  @default(now()) @map("received_at")
+  processedAt  DateTime? @map("processed_at")
+  status       String?   @map("status")
+
+  @@map("provider_webhooks")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @map("id")
+  actorUserId String?  @map("actor_user_id")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  action      String   @map("action")
+  beforeJsonb Json?    @map("before_jsonb")
+  afterJsonb  Json?    @map("after_jsonb")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model AppEvent {
+  id           String   @id @default(uuid()) @map("id")
+  eventCode    String   @map("event_code")
+  entityType   String?  @map("entity_type")
+  entityId     String?  @map("entity_id")
+  payloadJsonb Json?    @map("payload_jsonb")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("app_events")
+}
