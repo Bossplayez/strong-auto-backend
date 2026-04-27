@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strong Auto Backend</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            padding: 100px 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 50%, rgba(168, 85, 247, 0.08) 0%, transparent 50%);
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .hero-content { position: relative; z-index: 1; max-width: 800px; margin: 0 auto; }
+
+        .logo {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #3b82f6, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+            letter-spacing: -1px;
+        }
+
+        .tagline {
+            font-size: 1.25rem;
+            color: #94a3b8;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
+
+        .badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid;
+        }
+
+        .badge-blue { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+        .badge-purple { background: rgba(168, 85, 247, 0.1); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
+        .badge-green { background: rgba(34, 197, 94, 0.1); color: #4ade80; border-color: rgba(34, 197, 94, 0.3); }
+        .badge-orange { background: rgba(249, 115, 22, 0.1); color: #fb923c; border-color: rgba(249, 115, 22, 0.3); }
+
+        .cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+        .btn {
+            padding: 14px 32px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3); }
+
+        .btn-outline {
+            background: transparent;
+            color: #94a3b8;
+            border: 1px solid #334155;
+        }
+
+        .btn-outline:hover { border-color: #60a5fa; color: #60a5fa; transform: translateY(-2px); }
+
+        .features {
+            padding: 80px 20px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 50px;
+            color: #f1f5f9;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+
+        .feature-icon { font-size: 2rem; margin-bottom: 16px; }
+
+        .feature-card h3 { font-size: 1.2rem; color: #f1f5f9; margin-bottom: 10px; }
+
+        .feature-card p { color: #94a3b8; line-height: 1.6; font-size: 0.95rem; }
+
+        .tech-stack {
+            padding: 60px 20px;
+            background: #111827;
+        }
+
+        .tech-grid {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .tech-item {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .tech-item span {
+            display: block;
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+        }
+
+        .tech-item p { color: #94a3b8; font-size: 0.9rem; font-weight: 500; }
+
+        .api-section {
+            padding: 80px 20px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .api-list { list-style: none; }
+
+        .api-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            border-bottom: 1px solid #1e293b;
+            transition: background 0.2s;
+        }
+
+        .api-item:hover { background: rgba(59, 130, 246, 0.05); }
+
+        .method {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            min-width: 60px;
+            text-align: center;
+            font-family: monospace;
+        }
+
+        .method-get { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+        .method-post { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .method-put { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+
+        .api-path { font-family: monospace; color: #e2e8f0; font-size: 0.95rem; }
+        .api-desc { color: #64748b; font-size: 0.85rem; margin-left: auto; }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            border-top: 1px solid #1e293b;
+            color: #475569;
+            font-size: 0.9rem;
+        }
+
+        footer a { color: #60a5fa; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        @media (max-width: 640px) {
+            .logo { font-size: 2.5rem; }
+            .tagline { font-size: 1rem; }
+            .features-grid { grid-template-columns: 1fr; }
+            .api-desc { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<section class="hero">
+    <div class="hero-content">
+        <h1 class="logo">Strong Auto</h1>
+        <p class="tagline">
+            Backend-платформа для автомобільного бізнесу.<br>
+            Каталог авто, калькулятор вартості, Copart інтеграція, лід-менеджмент.
+        </p>
+
+        <div class="badges">
+            <span class="badge badge-blue">NestJS</span>
+            <span class="badge badge-purple">Prisma ORM</span>
+            <span class="badge badge-green">REST API</span>
+            <span class="badge badge-orange">TypeScript</span>
+        </div>
+
+        <div class="cta-group">
+            <a href="https://github.com/starvex/strong-auto-backend" class="btn btn-primary">
+                GitHub
+            </a>
+            <a href="#features" class="btn btn-outline">
+                Можливості
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="features" id="features">
+    <h2 class="section-title">Модулі платформи</h2>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">🚗</div>
+            <h3>Каталог авто</h3>
+            <p>Управління каталогом транспортних засобів з детальними характеристиками, фото та фільтрацією.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🧮</div>
+            <h3>Калькулятор вартості</h3>
+            <p>Розрахунок повної вартості авто з урахуванням доставки, розмитнення та додаткових витрат.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔗</div>
+            <h3>Copart інтеграція</h3>
+            <p>Автоматичний імпорт даних з аукціону Copart — лоти, ціни, стан авто.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📋</div>
+            <h3>Лід-менеджмент</h3>
+            <p>Збір та обробка заявок від клієнтів, автоматичні сповіщення та трекінг статусів.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔐</div>
+            <h3>Авторизація</h3>
+            <p>JWT-аутентифікація з ролями (Admin, Manager, User), рефреш-токени та гарди.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📢</div>
+            <h3>Сповіщення</h3>
+            <p>Email та push-нотифікації, розсилки по сегментах користувачів, новини.</p>
+        </div>
+    </div>
+</section>
+
+<section class="tech-stack">
+    <h2 class="section-title">Технології</h2>
+    <div class="tech-grid">
+        <div class="tech-item"><span>🏗️</span><p>NestJS</p></div>
+        <div class="tech-item"><span>🔷</span><p>TypeScript</p></div>
+        <div class="tech-item"><span>🗄️</span><p>Prisma</p></div>
+        <div class="tech-item"><span>🐘</span><p>PostgreSQL</p></div>
+        <div class="tech-item"><span>🔑</span><p>JWT Auth</p></div>
+        <div class="tech-item"><span>📁</span><p>S3 Storage</p></div>
+    </div>
+</section>
+
+<section class="api-section">
+    <h2 class="section-title">API Endpoints</h2>
+    <ul class="api-list">
+        <li class="api-item">
+            <span class="method method-post">POST</span>
+            <span class="api-path">/auth/login</span>
+            <span class="api-desc">Авторизація</span>
+        </li>
+        <li class="api-item">
+            <span class="method method-get">GET</span>
+            <span class="api-path">/catalog/vehicles</span>
+            <span class="api-desc">Список авто</span>
+        </li>
+        <li class="api-item">
+            <span class="method method-post">POST</span>
+            <span class="api-path">/calculator/calculate</span>
+            <span class="api-desc">Розрахунок вартості</span>
+        </li>
+        <li class="api-item">
+            <span class="method method-get">GET</span>
+            <span class="api-path">/copart/lots</span>
+            <span class="api-desc">Лоти Copart</span>
+        </li>
+        <li class="api-item">
+            <span class="method method-post">POST</span>
+            <span class="api-path">/leads</span>
+            <span class="api-desc">Створити заявку</span>
+        </li>
+        <li class="api-item">
+            <span class="method method-get">GET</span>
+            <span class="api-path">/users/profile</span>
+            <span class="api-desc">Профіль користувача</span>
+        </li>
+        <li class="api-item">
+            <span class="method method-put">PUT</span>
+            <span class="api-path">/settings</span>
+            <span class="api-desc">Налаштування</span>
+        </li>
+        <li class="api-item">
+            <span class="method method-get">GET</span>
+            <span class="api-path">/news</span>
+            <span class="api-desc">Новини</span>
+        </li>
+    </ul>
+</section>
+
+<footer>
+    <p>Strong Auto Backend &copy; 2026 &mdash; <a href="https://github.com/starvex/strong-auto-backend">GitHub</a></p>
+</footer>
+
+</body>
+</html>
