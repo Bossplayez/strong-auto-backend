@@ -51,7 +51,6 @@ export default function ProfilePage() {
             (profile.profile?.preferredLanguage as 'uk' | 'en' | 'ru') || 'uk',
         });
       } catch {
-        // Use existing user data as fallback
         if (user?.profile) {
           reset({
             firstName: user.profile.firstName || '',
@@ -91,27 +90,29 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-[#3b82f6] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  const inputClass = 'w-full px-4 py-2.5 bg-white border border-border rounded-sm text-fg placeholder-fg-subtle focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-colors';
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
-        <UserCircle className="w-8 h-8 text-[#3b82f6]" />
-        <h1 className="text-2xl font-bold text-white">Профіль</h1>
+        <UserCircle className="w-8 h-8 text-green-500" />
+        <h1 className="text-2xl font-bold text-fg font-display">Профіль</h1>
       </div>
 
       {successMessage && (
-        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center gap-2 text-green-400 text-sm">
+        <div className="p-3 rounded-sm bg-green-50 border border-green-200 flex items-center gap-2 text-green-700 text-sm">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           {successMessage}
         </div>
       )}
 
       {errorMessage && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-red-400 text-sm">
+        <div className="p-3 rounded-sm bg-red-50 border border-red-200 flex items-center gap-2 text-red-600 text-sm">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {errorMessage}
         </div>
@@ -119,58 +120,58 @@ export default function ProfilePage() {
 
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="bg-[#111827] border border-[#1e293b] rounded-xl p-6 space-y-5"
+        className="bg-white border border-border rounded-lg p-6 space-y-5"
       >
         {/* Email (read-only) */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Email</label>
+          <label className="block text-sm text-fg-muted mb-1.5">Email</label>
           <input
             type="email"
             value={user?.email || ''}
             readOnly
-            className="w-full px-4 py-2.5 bg-[#0a0a0a] border border-[#1e293b] rounded-lg text-gray-500 cursor-not-allowed"
+            className="w-full px-4 py-2.5 bg-background border border-border rounded-sm text-fg-subtle cursor-not-allowed"
           />
         </div>
 
         {/* First name */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Ім&apos;я</label>
+          <label className="block text-sm text-fg-muted mb-1.5">Ім&apos;я</label>
           <input
             type="text"
             {...register('firstName')}
-            className="w-full px-4 py-2.5 bg-[#0a0a0a] border border-[#1e293b] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#3b82f6] transition-colors"
+            className={inputClass}
             placeholder="Ваше ім'я"
           />
         </div>
 
         {/* Last name */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Прізвище</label>
+          <label className="block text-sm text-fg-muted mb-1.5">Прізвище</label>
           <input
             type="text"
             {...register('lastName')}
-            className="w-full px-4 py-2.5 bg-[#0a0a0a] border border-[#1e293b] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#3b82f6] transition-colors"
+            className={inputClass}
             placeholder="Ваше прізвище"
           />
         </div>
 
         {/* City */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Місто</label>
+          <label className="block text-sm text-fg-muted mb-1.5">Місто</label>
           <input
             type="text"
             {...register('city')}
-            className="w-full px-4 py-2.5 bg-[#0a0a0a] border border-[#1e293b] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#3b82f6] transition-colors"
+            className={inputClass}
             placeholder="Ваше місто"
           />
         </div>
 
         {/* Preferred language */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Мова</label>
+          <label className="block text-sm text-fg-muted mb-1.5">Мова</label>
           <select
             {...register('preferredLanguage')}
-            className="w-full px-4 py-2.5 bg-[#0a0a0a] border border-[#1e293b] rounded-lg text-white focus:outline-none focus:border-[#3b82f6] transition-colors"
+            className={inputClass}
           >
             <option value="uk">Українська</option>
             <option value="en">English</option>
@@ -181,7 +182,7 @@ export default function ProfilePage() {
         <button
           type="submit"
           disabled={isSubmitting || !isDirty}
-          className="flex items-center gap-2 px-6 py-2.5 bg-[#3b82f6] hover:bg-[#2563eb] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+          className="flex items-center gap-2 px-6 py-2.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-sm transition-colors"
         >
           <Save className="w-4 h-4" />
           {isSubmitting ? 'Збереження...' : 'Зберегти'}

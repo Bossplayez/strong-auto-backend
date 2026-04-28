@@ -44,22 +44,25 @@ export default function FavoritesPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-[#3b82f6] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Обране</h1>
+      <h1 className="text-2xl font-bold text-fg font-display">Обране</h1>
 
       {favorites.length === 0 ? (
-        <div className="bg-[#111827] border border-[#1e293b] rounded-xl p-12 text-center">
-          <Heart className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-400 mb-4">У вас немає обраних авто</p>
+        <div className="bg-white border border-border rounded-lg p-12 text-center">
+          <Heart className="w-12 h-12 text-fg-subtle mx-auto mb-4" />
+          <p className="text-fg-muted mb-4">У вас немає обраних авто</p>
+          <p className="text-fg-subtle text-sm mb-6">
+            Натисніть серце на картці авто в каталозі, щоб додати його сюди
+          </p>
           <Link
             href="/catalog"
-            className="inline-block px-6 py-2.5 bg-[#3b82f6] hover:bg-[#2563eb] text-white font-medium rounded-lg transition-colors"
+            className="inline-block px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-sm transition-colors"
           >
             Переглянути каталог
           </Link>
@@ -69,40 +72,41 @@ export default function FavoritesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {favorites.map((vehicle) => {
               const primaryImage = vehicle.media?.find((m) => m.isPrimary);
+              const imgUrl = primaryImage?.sourceUrl || primaryImage?.url;
               return (
                 <div
                   key={vehicle.id}
-                  className="bg-[#111827] border border-[#1e293b] rounded-xl overflow-hidden group"
+                  className="bg-white border border-border rounded-lg overflow-hidden group"
                 >
-                  <div className="relative h-48 bg-[#1e293b] flex items-center justify-center">
-                    {primaryImage ? (
+                  <div className="relative h-48 bg-background flex items-center justify-center">
+                    {imgUrl ? (
                       <img
-                        src={primaryImage.url}
+                        src={imgUrl}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Car className="w-10 h-10 text-gray-600" />
+                      <Car className="w-10 h-10 text-fg-subtle" />
                     )}
                     <button
                       onClick={() => handleRemoveFavorite(vehicle.id)}
-                      className="absolute top-3 right-3 w-9 h-9 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-red-500/80 transition-colors"
+                      className="absolute top-3 right-3 w-9 h-9 bg-red-500/90 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
                       title="Видалити з обраного"
                     >
-                      <Heart className="w-5 h-5 text-red-400 fill-red-400" />
+                      <Heart className="w-5 h-5 text-white fill-white" />
                     </button>
                   </div>
                   <Link href={`/catalog/${vehicle.slug}`} className="block p-4">
-                    <h3 className="text-white font-semibold">
+                    <h3 className="text-fg font-semibold">
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </h3>
-                    {vehicle.odometer && (
-                      <p className="text-gray-400 text-sm mt-1">
-                        {vehicle.odometer.toLocaleString()} км
+                    {(vehicle.odometerValue || vehicle.odometer) && (
+                      <p className="text-fg-muted text-sm mt-1">
+                        {(vehicle.odometerValue || vehicle.odometer)!.toLocaleString()} км
                       </p>
                     )}
-                    <p className="text-[#3b82f6] font-bold text-lg mt-2">
-                      ${vehicle.priceAmount.toLocaleString()}
+                    <p className="text-green-600 font-bold text-lg mt-2">
+                      ${Number(vehicle.priceAmount).toLocaleString()}
                     </p>
                   </Link>
                 </div>
@@ -116,17 +120,17 @@ export default function FavoritesPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="p-2 rounded-lg bg-[#111827] border border-[#1e293b] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-2 rounded-lg bg-white border border-border text-fg-muted hover:text-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <span className="text-gray-400 text-sm px-4">
+              <span className="text-fg-muted text-sm px-4">
                 {page} / {meta.totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
                 disabled={page >= meta.totalPages}
-                className="p-2 rounded-lg bg-[#111827] border border-[#1e293b] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-2 rounded-lg bg-white border border-border text-fg-muted hover:text-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
