@@ -118,8 +118,9 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {recentFavorites.map((vehicle) => {
-              const primaryImage = vehicle.media?.find((m) => m.isPrimary);
+            {recentFavorites.map((vehicle: any) => {
+              const primaryImage = vehicle.media?.find((m: any) => m.isPrimary) || vehicle.media?.[0];
+              const imgUrl = primaryImage?.sourceUrl || primaryImage?.url;
               return (
                 <Link
                   key={vehicle.id}
@@ -127,9 +128,9 @@ export default function DashboardPage() {
                   className="bg-white border border-border rounded-lg overflow-hidden hover:border-green-500 transition-colors"
                 >
                   <div className="h-32 bg-navy-200 flex items-center justify-center">
-                    {primaryImage ? (
+                    {imgUrl ? (
                       <img
-                        src={primaryImage.url}
+                        src={imgUrl}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-full h-full object-cover"
                       />
@@ -142,7 +143,7 @@ export default function DashboardPage() {
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </p>
                     <p className="text-green-600 text-sm font-bold mt-1">
-                      ${vehicle.priceAmount.toLocaleString()}
+                      ${Number(vehicle.priceAmount).toLocaleString()}
                     </p>
                   </div>
                 </Link>

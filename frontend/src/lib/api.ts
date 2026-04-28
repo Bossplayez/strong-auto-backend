@@ -307,9 +307,10 @@ export const admin = {
   },
 
   // Broadcasts
-  async getBroadcasts(): Promise<unknown[]> {
-    const { data } = await apiClient.get<unknown[]>('/admin/broadcasts');
-    return data;
+  async getBroadcasts(): Promise<any> {
+    const { data } = await apiClient.get('/admin/broadcasts');
+    // Handle both paginated and array responses
+    return data?.items || data;
   },
 
   async createBroadcast(dto: { subject: string; body: string; targetGroup?: string }): Promise<unknown> {
