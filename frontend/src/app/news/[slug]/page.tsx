@@ -3,14 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { ArrowLeft, Calendar, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 import type { NewsArticle } from '@/lib/types';
 
 export default function NewsArticlePage() {
   const params = useParams<{ slug: string }>();
-  const [article, setArticle] = useState<NewsArticle | null>(null);
+  const [article, setArticle] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +31,18 @@ export default function NewsArticlePage() {
     fetchArticle();
   }, [params.slug]);
 
+  // SEO
+  useEffect(() => {
+    if (!article) return;
+    const translation = article.translations?.find((t: any) => t.locale === 'uk') ?? article.translations?.[0];
+    if (translation) {
+      document.title = `${translation.title} | Strong Auto`;
+      let metaDesc = document.querySelector('meta[name="description"]');
+      if (!metaDesc) { metaDesc = document.createElement('meta'); metaDesc.setAttribute('name', 'description'); document.head.appendChild(metaDesc); }
+      metaDesc.setAttribute('content', translation.excerpt || translation.title);
+    }
+  }, [article]);
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('uk-UA', {
       year: 'numeric',
@@ -50,7 +61,7 @@ export default function NewsArticlePage() {
 
   if (error || !article) {
     return (
-      <main className="px-8 py-10 max-w-container mx-auto">
+      <main className="px-4 sm:px-8 py-6 sm:py-10 max-w-container mx-auto">
         <div className="mx-auto max-w-3xl">
           <Link
             href="/news"
@@ -68,10 +79,20 @@ export default function NewsArticlePage() {
   }
 
   const translation =
-    article.translations.find((t) => t.locale === 'uk') ?? article.translations[0];
+    article.translations?.find((t: any) => t.locale === 'uk') ?? article.translations?.[0];
+  const coverUrl = article.coverImageUrl || article.coverFile?.storageKey;
+
+  // Convert markdown-like text to simple HTML
+  const formatBody = (text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n- /g, '</p><li>')
+      .replace(/\n/g, '<br/>');
+  };
 
   return (
-    <main className="px-8 py-10 max-w-container mx-auto">
+    <main className="px-4 sm:px-8 py-6 sm:py-10 max-w-container mx-auto">
       <div className="mx-auto max-w-3xl">
         <Link
           href="/news"
@@ -81,14 +102,12 @@ export default function NewsArticlePage() {
           Назад до новин
         </Link>
 
-        {article.coverImageUrl && (
+        {coverUrl && (
           <div className="relative mt-6 aspect-[16/9] overflow-hidden rounded-lg border border-border">
-            <Image
-              src={article.coverImageUrl}
+            <img
+              src={coverUrl}
               alt={translation?.title ?? ''}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 768px"
+              className="w-full h-full object-cover"
             />
           </div>
         )}
@@ -96,17 +115,17 @@ export default function NewsArticlePage() {
         <div className="mt-6">
           <div className="flex items-center gap-2 text-sm text-fg-subtle">
             <Calendar className="h-4 w-4" />
-            {formatDate(article.createdAt)}
+            {formatDate(article.publishedAt || article.createdAt)}
           </div>
 
-          <h1 className="mt-3 font-display font-bold text-fg" style={{ fontSize: 32 }}>
+          <h1 className="mt-3 font-display font-bold text-fg text-2xl sm:text-[32px] leading-tight">
             {translation?.title}
           </h1>
 
           {translation?.body && (
             <div
-              className="prose mt-8 max-w-none text-fg-muted prose-headings:text-fg prose-headings:font-display prose-a:text-green-600 prose-strong:text-fg prose-img:rounded-lg"
-              dangerouslySetInnerHTML={{ __html: translation.body }}
+              className="mt-8 text-fg-muted leading-relaxed space-y-4 [&_strong]:text-fg [&_strong]:font-semibold [&_li]:ml-4 [&_li]:list-disc"
+              dangerouslySetInnerHTML={{ __html: `<p>${formatBody(translation.body)}</p>` }}
             />
           )}
         </div>

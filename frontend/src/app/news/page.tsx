@@ -90,10 +90,11 @@ function NewsPage() {
       ) : (
         <>
           <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {articles.map((article) => {
+            {articles.map((article: any) => {
               const translation =
-                article.translations.find((t) => t.locale === 'uk') ??
+                article.translations.find((t: any) => t.locale === 'uk') ??
                 article.translations[0];
+              const coverUrl = article.coverImageUrl || article.coverFile?.storageKey;
 
               return (
                 <Link
@@ -101,14 +102,12 @@ function NewsPage() {
                   href={`/news/${article.slug}`}
                   className="group bg-white rounded overflow-hidden transition hover:shadow-md"
                 >
-                  {article.coverImageUrl ? (
+                  {coverUrl ? (
                     <div className="relative aspect-[16/9] overflow-hidden">
-                      <Image
-                        src={article.coverImageUrl}
+                      <img
+                        src={coverUrl}
                         alt={translation?.title ?? ''}
-                        fill
-                        className="object-cover transition group-hover:scale-105"
-                        sizes="(max-width: 768px) 100vw, 33vw"
+                        className="w-full h-full object-cover transition group-hover:scale-105"
                       />
                     </div>
                   ) : (
