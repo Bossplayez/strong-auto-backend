@@ -181,7 +181,7 @@ export const news = {
 // ---------------------------------------------------------------------------
 export const me = {
   async getProfile(): Promise<User> {
-    const { data } = await apiClient.get<User>('/me/profile');
+    const { data } = await apiClient.get<User>('/me');
     return data;
   },
 
@@ -213,7 +213,7 @@ export const me = {
   },
 
   async saveCalculation(estimateId: string): Promise<void> {
-    await apiClient.post(`/me/calculations/${estimateId}`);
+    await apiClient.post(`/me/calculations/${estimateId}/save`);
   },
 };
 

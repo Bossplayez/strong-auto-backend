@@ -1,11 +1,18 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { Car } from 'lucide-react';
+import { Car, Heart } from 'lucide-react';
 import type { Vehicle } from '@/lib/types';
 import { StatusTag } from './StatusTag';
 import { PriceTag } from './PriceTag';
+import { useAuth } from '@/hooks/useAuth';
+import { me } from '@/lib/api';
 
 interface VehicleCardProps {
   vehicle: Vehicle;
+  isFavorite?: boolean;
+  onFavoriteChange?: (vehicleId: string, isFav: boolean) => void;
 }
 
 const regionLabels: Record<string, string> = {
@@ -18,12 +25,37 @@ function formatNumber(n: number): string {
   return new Intl.NumberFormat('uk-UA').format(n);
 }
 
-export function VehicleCard({ vehicle }: VehicleCardProps) {
+export function VehicleCard({ vehicle, isFavorite: initialFav = false, onFavoriteChange }: VehicleCardProps) {
   const primaryMedia = vehicle.media?.[0];
   const imageUrl = primaryMedia?.sourceUrl || primaryMedia?.url;
   const statusLabel = regionLabels[vehicle.sourceRegion] || 'АВТО В УКРАЇНІ';
   const title = `${vehicle.make} ${vehicle.model} ${vehicle.year}`;
   const mileage = vehicle.odometerValue ?? vehicle.odometer;
+  const { isAuthenticated } = useAuth();
+  const [isFav, setIsFav] = useState(initialFav);
+  const [favLoading, setFavLoading] = useState(false);
+
+  const toggleFavorite = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isAuthenticated || favLoading) return;
+    setFavLoading(true);
+    try {
+      if (isFav) {
+        await me.removeFavorite(vehicle.id);
+        setIsFav(false);
+        onFavoriteChange?.(vehicle.id, false);
+      } else {
+        await me.addFavorite(vehicle.id);
+        setIsFav(true);
+        onFavoriteChange?.(vehicle.id, true);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setFavLoading(false);
+    }
+  };
 
   return (
     <Link href={`/catalog/${vehicle.slug}`} className="group block">
@@ -44,6 +76,19 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
           <div className="absolute top-2.5 left-2.5">
             <StatusTag>{statusLabel}</StatusTag>
           </div>
+          {isAuthenticated && (
+            <button
+              onClick={toggleFavorite}
+              className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                isFav
+                  ? 'bg-red-500/90 text-white'
+                  : 'bg-black/40 backdrop-blur-sm text-white/80 hover:bg-black/60'
+              }`}
+              title={isFav ? 'Видалити з обраного' : 'Додати в обране'}
+            >
+              <Heart className={`h-4 w-4 ${isFav ? 'fill-white' : ''}`} />
+            </button>
+          )}
         </div>
 
         {/* Content */}

@@ -54,9 +54,8 @@ export function LeadForm({
     setError(null);
 
     try {
-      const { default: axios } = await import('axios');
-      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '/api';
-      await axios.post(`${apiBase}/leads`, {
+      const { leads } = await import('@/lib/api');
+      await leads.create({
         leadType,
         name: data.name,
         phone: data.phone,

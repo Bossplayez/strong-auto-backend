@@ -8,7 +8,7 @@ export default function ContactsPage() {
   const [formSubmitted, setFormSubmitted] = useState(false);
 
   return (
-    <main className="px-8 py-10 max-w-container mx-auto">
+    <main className="px-4 sm:px-8 py-6 sm:py-10 max-w-container mx-auto">
       <h1 className="font-display font-bold text-fg" style={{ fontSize: 32 }}>Зв&#39;яжіться з нами</h1>
       <p className="mt-2 text-fg-muted text-sm">
         Маєте питання? Зв&#39;яжіться з нами зручним для вас способом або залиште заявку.

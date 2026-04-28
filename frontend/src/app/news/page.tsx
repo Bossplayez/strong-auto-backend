@@ -57,7 +57,7 @@ function NewsPage() {
   };
 
   return (
-    <div className="px-8 py-10 max-w-container mx-auto">
+    <div className="px-4 sm:px-8 py-6 sm:py-10 max-w-container mx-auto">
       <h1 className="font-display font-bold text-fg" style={{ fontSize: 32 }}>Новини</h1>
       <p className="mt-2 text-fg-muted text-sm">
         Актуальні новини про імпорт авто, зміни в законодавстві та корисні поради

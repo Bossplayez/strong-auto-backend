@@ -50,7 +50,13 @@ export class NewsService {
       this.prisma.news.count({ where }),
     ]);
 
-    return new PaginatedResponseDto(items, total, page, pageSize);
+    const mapped = items.map((item: any) => ({
+      ...item,
+      coverImageUrl: item.coverFile?.storageKey || null,
+      createdAt: item.publishedAt || item.createdAt,
+    }));
+
+    return new PaginatedResponseDto(mapped, total, page, pageSize);
   }
 
   async findBySlug(slug: string) {
@@ -69,7 +75,10 @@ export class NewsService {
       throw new NotFoundException(`News article "${slug}" not found`);
     }
 
-    return news;
+    return {
+      ...news,
+      coverImageUrl: news.coverFile?.storageKey || null,
+    };
   }
 
   // Admin methods

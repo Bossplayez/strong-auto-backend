@@ -32,7 +32,16 @@ export default function VehicleDetailPage() {
   const [bidHistory, setBidHistory] = useState<Array<{ id: string; amount: number; bidder: string; createdAt: string }>>([]);
   const [currentBid, setCurrentBid] = useState<number | null>(null);
   const [totalBids, setTotalBids] = useState(0);
-  const { isAuthenticated } = useAuth();
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favLoading, setFavLoading] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const { isAuthenticated, login, register: registerUser } = useAuth();
 
   const fetchBids = useCallback(async (vehicleId: string) => {
     try {
@@ -62,6 +71,64 @@ export default function VehicleDetailPage() {
       setBidLoading(false);
     }
   };
+
+  const handleAuth = async () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      if (authMode === 'login') {
+        await login(authEmail, authPassword);
+      } else {
+        await registerUser(authEmail, authPassword, authPhone || undefined);
+      }
+      setShowAuthModal(false);
+      setAuthEmail('');
+      setAuthPassword('');
+      setAuthPhone('');
+    } catch {
+      setAuthError(authMode === 'login' ? 'Невірний email або пароль' : 'Помилка реєстрації. Можливо, цей email вже зареєстровано.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!vehicle || !isAuthenticated || favLoading) return;
+    setFavLoading(true);
+    try {
+      if (isFavorite) {
+        await api.me.removeFavorite(vehicle.id);
+        setIsFavorite(false);
+      } else {
+        await api.me.addFavorite(vehicle.id);
+        setIsFavorite(true);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setFavLoading(false);
+    }
+  };
+
+  // SEO: dynamic meta tags
+  useEffect(() => {
+    if (!vehicle) return;
+    const seoTitle = `${vehicle.make} ${vehicle.model} ${vehicle.year} — купити в Україні | Strong Auto`;
+    const seoDesc = `${vehicle.make} ${vehicle.model} ${vehicle.year}, ${vehicle.fuelType || ''}, ${vehicle.odometerValue ? vehicle.odometerValue.toLocaleString() + ' км' : ''}, $${Number(vehicle.priceAmount).toLocaleString()}. Доставка та розмитнення під ключ.`;
+    document.title = seoTitle;
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) { metaDesc = document.createElement('meta'); metaDesc.setAttribute('name', 'description'); document.head.appendChild(metaDesc); }
+    metaDesc.setAttribute('content', seoDesc);
+    // Open Graph
+    const ogTags: Record<string, string> = { 'og:title': seoTitle, 'og:description': seoDesc, 'og:type': 'product' };
+    const primaryImg = vehicle.media?.find((m) => m.isPrimary);
+    if (primaryImg?.sourceUrl || primaryImg?.url) ogTags['og:image'] = (primaryImg.sourceUrl || primaryImg.url)!;
+    Object.entries(ogTags).forEach(([prop, content]) => {
+      let el = document.querySelector(`meta[property="${prop}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    });
+  }, [vehicle]);
 
   useEffect(() => {
     async function fetchVehicle() {
@@ -266,16 +333,33 @@ export default function VehicleDetailPage() {
                       </button>
                     </>
                   ) : (
-                    <Link
-                      href="/login"
-                      className="w-full bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-sm font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                    >
-                      Увійдіть щоб зробити ставку
-                    </Link>
+                    <div>
+                      <button
+                        onClick={() => { setShowAuthModal(true); setAuthMode('login'); }}
+                        className="w-full bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-sm font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Gavel className="h-4 w-4" /> Увійдіть щоб зробити ставку
+                      </button>
+                      <button
+                        onClick={() => { setShowAuthModal(true); setAuthMode('register'); }}
+                        className="w-full mt-2 text-sm text-fg-muted hover:text-green-600 transition-colors text-center"
+                      >
+                        Немає акаунту? <span className="text-green-600 font-semibold">Зареєструватися</span>
+                      </button>
+                    </div>
                   )}
 
-                  <button className="w-full mt-2 bg-white text-fg border border-border-strong py-3 rounded-sm font-semibold text-sm flex items-center justify-center gap-2 hover:bg-background transition-colors">
-                    <Heart className="h-4 w-4" /> Додати в обране
+                  <button
+                    onClick={toggleFavorite}
+                    disabled={favLoading || !isAuthenticated}
+                    className={`w-full mt-2 border py-3 rounded-sm font-semibold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
+                      isFavorite
+                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                        : 'bg-white text-fg border-border-strong hover:bg-background'
+                    }`}
+                  >
+                    <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                    {isFavorite ? 'В обраному' : 'Додати в обране'}
                   </button>
                 </div>
 
@@ -379,8 +463,17 @@ export default function VehicleDetailPage() {
                 </div>
 
                 {/* Favorites button */}
-                <button className="bg-white text-fg border border-border-strong py-3 rounded-sm font-semibold text-sm flex items-center justify-center gap-2 hover:bg-background transition-colors">
-                  <Heart className="h-4 w-4" /> Додати в обране
+                <button
+                  onClick={toggleFavorite}
+                  disabled={favLoading || !isAuthenticated}
+                  className={`border py-3 rounded-sm font-semibold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
+                    isFavorite
+                      ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                      : 'bg-white text-fg border-border-strong hover:bg-background'
+                  }`}
+                >
+                  <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                  {isFavorite ? 'В обраному' : 'Додати в обране'}
                 </button>
               </>
             )}
@@ -411,6 +504,80 @@ export default function VehicleDetailPage() {
                 onSuccess={() => setLeadSubmitted(true)}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4 relative">
+            <button
+              onClick={() => { setShowAuthModal(false); setAuthError(null); }}
+              className="absolute top-3 right-3 p-1 text-fg-muted hover:text-fg rounded"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <h2 className="font-display font-bold text-fg text-xl mb-1">
+              {authMode === 'login' ? 'Увійти' : 'Реєстрація'}
+            </h2>
+            <p className="text-sm text-fg-muted mb-4">
+              {authMode === 'login' ? 'Щоб зробити ставку на аукціоні' : 'Створіть акаунт за 10 секунд'}
+            </p>
+
+            {authError && (
+              <div className="mb-3 p-2.5 rounded-sm bg-red-50 border border-red-200 text-red-600 text-sm">
+                {authError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <input
+                type="email"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full px-3.5 py-2.5 bg-white border border-border-strong rounded-sm text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30"
+              />
+              {authMode === 'register' && (
+                <input
+                  type="tel"
+                  value={authPhone}
+                  onChange={(e) => setAuthPhone(e.target.value)}
+                  placeholder="Телефон (необов'язково)"
+                  className="w-full px-3.5 py-2.5 bg-white border border-border-strong rounded-sm text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30"
+                />
+              )}
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                placeholder={authMode === 'login' ? 'Пароль' : 'Пароль (мін. 6 символів)'}
+                onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
+                className="w-full px-3.5 py-2.5 bg-white border border-border-strong rounded-sm text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30"
+              />
+              <button
+                onClick={handleAuth}
+                disabled={authLoading || !authEmail || !authPassword}
+                className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-sm font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {authLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {authMode === 'login' ? 'Увійти' : 'Зареєструватися'}
+              </button>
+            </div>
+
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(null); }}
+                className="text-sm text-fg-muted hover:text-fg transition-colors"
+              >
+                {authMode === 'login'
+                  ? <>Немає акаунту? <span className="text-green-600 font-semibold">Зареєструватися</span></>
+                  : <>Вже є акаунт? <span className="text-green-600 font-semibold">Увійти</span></>
+                }
+              </button>
+            </div>
           </div>
         </div>
       )}

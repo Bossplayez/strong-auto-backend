@@ -9,17 +9,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { UserPlus, Mail, Lock, Phone, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-const registerSchema = z
-  .object({
-    email: z.string().email('Невірний формат email'),
-    phone: z.string().optional(),
-    password: z.string().min(8, 'Пароль має містити мінімум 8 символів'),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Паролі не збігаються',
-    path: ['confirmPassword'],
-  });
+const registerSchema = z.object({
+  email: z.string().email('Невірний формат email'),
+  phone: z.string().optional(),
+  password: z.string().min(6, 'Пароль має містити мінімум 6 символів'),
+});
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
@@ -91,21 +85,10 @@ export default function RegisterPage() {
             <label className="block text-sm font-bold text-fg mb-1">Пароль</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fg-muted" />
-              <input type="password" {...register('password')} className={inputClass} placeholder="Мінімум 8 символів" />
+              <input type="password" {...register('password')} className={inputClass} placeholder="Мінімум 6 символів" />
             </div>
             {errors.password && (
               <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-fg mb-1">Підтвердження паролю</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fg-muted" />
-              <input type="password" {...register('confirmPassword')} className={inputClass} placeholder="Повторіть пароль" />
-            </div>
-            {errors.confirmPassword && (
-              <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
             )}
           </div>
 
