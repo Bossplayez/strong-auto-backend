@@ -71,7 +71,7 @@ export default function FavoritesPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {favorites.map((vehicle) => {
-              const primaryImage = vehicle.media?.find((m) => m.isPrimary);
+              const primaryImage = vehicle.media?.find((m: any) => m.isPrimary) || vehicle.media?.[0];
               const imgUrl = primaryImage?.sourceUrl || primaryImage?.url;
               return (
                 <div

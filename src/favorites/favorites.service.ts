@@ -13,7 +13,7 @@ export class FavoritesService {
   ): Promise<PaginatedResponseDto<any>> {
     const skip = (page - 1) * pageSize;
 
-    const [items, total] = await this.prisma.$transaction([
+    const [favorites, total] = await this.prisma.$transaction([
       this.prisma.favorite.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -31,11 +31,17 @@ export class FavoritesService {
               priceAmount: true,
               currency: true,
               odometerValue: true,
+              sourceRegion: true,
+              sourceType: true,
+              fuelType: true,
+              transmission: true,
+              driveType: true,
+              bodyType: true,
               availabilityStatus: true,
               media: {
-                where: { isPrimary: true },
-                take: 1,
-                select: { id: true, sourceUrl: true },
+                orderBy: { sortOrder: 'asc' },
+                take: 2,
+                select: { id: true, sourceUrl: true, isPrimary: true, sortOrder: true },
               },
             },
           },
@@ -43,6 +49,12 @@ export class FavoritesService {
       }),
       this.prisma.favorite.count({ where: { userId } }),
     ]);
+
+    // Flatten: return vehicle objects directly (not wrapped in favorite)
+    const items = favorites.map((fav: any) => ({
+      ...fav.vehicle,
+      priceAmount: Number(fav.vehicle.priceAmount),
+    }));
 
     return new PaginatedResponseDto(items, total, page, pageSize);
   }
