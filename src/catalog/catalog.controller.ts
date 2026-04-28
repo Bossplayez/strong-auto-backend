@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CatalogService } from './catalog.service';
 import { VehicleFilterDto } from './dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 @ApiTags('Catalog')
 @Controller('catalog')
@@ -31,5 +32,27 @@ export class CatalogController {
   @ApiResponse({ status: 200, description: 'Filter options returned' })
   async getFilterOptions() {
     return this.catalogService.getFilterOptions();
+  }
+
+  // ── Auction Bids ──────────────────────────────────────────────
+
+  @Get('vehicles/:id/bids')
+  @ApiOperation({ summary: 'Get bid history for a vehicle' })
+  async getVehicleBids(@Param('id') vehicleId: string) {
+    return this.catalogService.getVehicleBids(vehicleId);
+  }
+
+  @Post('vehicles/:id/bid')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Place a bid on an auction vehicle' })
+  @ApiResponse({ status: 201, description: 'Bid placed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid bid amount' })
+  async placeBid(
+    @Param('id') vehicleId: string,
+    @Body() body: { amount: number; maxAmount?: number },
+    @Req() req: any,
+  ) {
+    return this.catalogService.placeBid(vehicleId, req.user.id, body.amount, body.maxAmount);
   }
 }

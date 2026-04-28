@@ -129,6 +129,7 @@ model User {
   leadComments        LeadComment[]        @relation("LeadCommentAuthor")
   leadStatusChanges   LeadStatusHistory[]  @relation("LeadStatusChanger")
   favorites           Favorite[]
+  bids                Bid[]                @relation("UserBids")
   savedCalculations   SavedCalculation[]
   broadcastsCreated   Broadcast[]          @relation("BroadcastCreator")
   filesCreated        File[]               @relation("FileCreator")
@@ -353,6 +354,7 @@ model Vehicle {
   contentTranslations VehicleContentTranslation[]
   sourceBindings      VehicleSourceBinding[]
   favorites           Favorite[]
+  bids                Bid[]
   leads               Lead[]                      @relation("LeadVehicle")
   calculatorEstimates CalculatorEstimate[]        @relation("EstimateVehicle")
 
@@ -612,6 +614,34 @@ model LeadStatusHistory {
   changedBy User? @relation("LeadStatusChanger", fields: [changedByUserId], references: [id], onDelete: SetNull)
 
   @@map("lead_status_history")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUCTION / BIDS
+// ═══════════════════════════════════════════════════════════════
+
+enum BidStatus {
+  ACTIVE
+  OUTBID
+  WON
+  CANCELLED
+}
+
+model Bid {
+  id        String    @id @default(uuid()) @map("id")
+  vehicleId String    @map("vehicle_id")
+  userId    String    @map("user_id")
+  amount    Decimal   @map("amount") @db.Decimal
+  maxAmount Decimal?  @map("max_amount") @db.Decimal
+  status    BidStatus @default(ACTIVE) @map("status")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user    User    @relation("UserBids", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, createdAt])
+  @@index([userId])
+  @@map("bids")
 }
 
 // ═══════════════════════════════════════════════════════════════

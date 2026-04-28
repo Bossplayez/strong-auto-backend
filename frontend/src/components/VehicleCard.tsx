@@ -19,18 +19,20 @@ function formatNumber(n: number): string {
 }
 
 export function VehicleCard({ vehicle }: VehicleCardProps) {
-  const primaryMedia = vehicle.media?.find((m) => m.isPrimary) ?? vehicle.media?.[0];
+  const primaryMedia = vehicle.media?.[0];
+  const imageUrl = primaryMedia?.sourceUrl || primaryMedia?.url;
   const statusLabel = regionLabels[vehicle.sourceRegion] || 'АВТО В УКРАЇНІ';
   const title = `${vehicle.make} ${vehicle.model} ${vehicle.year}`;
+  const mileage = vehicle.odometerValue ?? vehicle.odometer;
 
   return (
     <Link href={`/catalog/${vehicle.slug}`} className="group block">
       <div className="bg-bg-card rounded overflow-hidden transition-all duration-150 hover:shadow-md">
         {/* Image */}
         <div className="relative overflow-hidden" style={{ height: 170, background: 'var(--navy-800)' }}>
-          {primaryMedia ? (
+          {imageUrl ? (
             <img
-              src={primaryMedia.url}
+              src={imageUrl}
               alt={title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
@@ -45,10 +47,10 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
         </div>
 
         {/* Content */}
-        <div style={{ padding: '14px 16px 16px' }}>
+        <div className="p-3.5 sm:p-4">
           {/* Title + Price */}
-          <div className="flex justify-between items-center gap-2 mb-3">
-            <h3 className="font-display font-bold text-[22px] leading-none text-fg">
+          <div className="flex justify-between items-start gap-2 mb-3">
+            <h3 className="font-display font-bold text-lg sm:text-[22px] leading-tight text-fg">
               {title}
             </h3>
             <PriceTag value={vehicle.priceAmount} size="sm" />
@@ -56,14 +58,14 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
 
           {/* Specs */}
           {[
-            ['Двигун', vehicle.specs?.engineVolume ? `${vehicle.specs.engineVolume}L` : vehicle.fuelType || '—'],
-            ['Пробіг', vehicle.odometer != null ? `${formatNumber(vehicle.odometer)} км` : '—'],
+            ['Двигун', vehicle.specs?.engineVolume || vehicle.fuelType || '—'],
+            ['Пробіг', mileage != null ? `${formatNumber(mileage)} км` : '—'],
             ['Привід', vehicle.driveType || '—'],
             ['Коробка передач', vehicle.transmission || '—'],
           ].map(([label, value]) => (
-            <div key={label} className="flex justify-between text-[13px] gap-2" style={{ padding: '5px 0' }}>
+            <div key={label} className="flex justify-between text-[13px] gap-3 py-1">
               <span className="text-fg-muted whitespace-nowrap">{label}</span>
-              <span className="font-semibold text-fg whitespace-nowrap">{value}</span>
+              <span className="font-semibold text-fg text-right truncate">{value}</span>
             </div>
           ))}
 

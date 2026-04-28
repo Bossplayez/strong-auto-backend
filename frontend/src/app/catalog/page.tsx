@@ -127,8 +127,8 @@ function CatalogPage() {
   return (
     <div>
       {/* Header */}
-      <div className="bg-white border-b border-border px-8 py-5">
-        <h1 className="font-display font-bold text-fg" style={{ fontSize: 32 }}>
+      <div className="bg-white border-b border-border px-4 sm:px-8 py-4 sm:py-5">
+        <h1 className="font-display font-bold text-fg text-2xl sm:text-[32px]">
           Авто з США та Європи
         </h1>
         {meta && (
@@ -138,7 +138,7 @@ function CatalogPage() {
         )}
       </div>
 
-      <div className="flex gap-4 px-8 py-5 max-w-container mx-auto">
+      <div className="flex gap-4 px-4 sm:px-8 py-4 sm:py-5 max-w-container mx-auto">
         {/* Filter sidebar */}
         <aside className="hidden lg:block w-[240px] shrink-0 bg-white rounded-lg p-4.5 self-start" style={{ padding: 18 }}>
           <div className="font-display font-bold text-fg mb-3.5" style={{ fontSize: 22 }}>
@@ -212,8 +212,8 @@ function CatalogPage() {
         {/* Main content */}
         <div className="flex-1">
           {/* Tabs + Sort row */}
-          <div className="flex justify-between items-center mb-3.5">
-            <div className="flex gap-1.5">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2.5 mb-3.5">
+            <div className="flex flex-wrap gap-1.5">
               {sourceTypeTabs.map((tab) => (
                 <button
                   key={tab.value}
@@ -244,7 +244,7 @@ function CatalogPage() {
 
           {/* Vehicle grid */}
           {loading ? (
-            <div className="grid grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {Array.from({ length: 9 }).map((_, i) => (
                 <div key={i} className="bg-bg-card rounded overflow-hidden animate-pulse">
                   <div className="h-[170px] bg-navy-200" />
@@ -270,7 +270,7 @@ function CatalogPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                 {vehicles.map((vehicle) => (
                   <VehicleCard key={vehicle.id} vehicle={vehicle} />
                 ))}

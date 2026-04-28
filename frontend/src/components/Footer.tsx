@@ -3,8 +3,8 @@ import Link from 'next/link';
 
 export function Footer() {
   return (
-    <footer className="bg-navy-900 text-white" style={{ padding: '48px 32px 24px 100px' }}>
-      <div className="grid gap-12 max-w-container mx-auto" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+    <footer className="bg-navy-900 text-white px-4 sm:px-8 xl:pl-[100px] xl:pr-8 pt-10 sm:pt-12 pb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12 max-w-container mx-auto">
         {/* Logo */}
         <div>
           <Image src="/assets/strong-logo-on-dark.svg" alt="STRONG AUTO" width={180} height={46} />
@@ -68,7 +68,7 @@ export function Footer() {
       </div>
 
       <div
-        className="mt-8 pt-4 flex justify-between items-center text-xs max-w-container mx-auto"
+        className="mt-8 pt-4 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs max-w-container mx-auto"
         style={{ borderTop: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)' }}
       >
         <span>&copy; 2026 strong-auto.ua</span>

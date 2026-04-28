@@ -29,7 +29,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-10 bg-white border-b border-border" style={{ height: 70 }}>
-      <div className="flex items-center h-full" style={{ padding: '0 32px 0 100px' }}>
+      <div className="flex items-center h-full px-3 sm:px-6 lg:px-8 xl:pl-[100px] xl:pr-8">
         {/* Mobile hamburger */}
         <button
           className="lg:hidden p-2 mr-3 text-fg-muted hover:text-fg"
@@ -41,7 +41,7 @@ export function Header() {
 
         {/* Logo */}
         <Link href="/" className="shrink-0">
-          <Image src="/assets/strong-logo.svg" alt="STRONG AUTO" width={180} height={46} priority />
+          <Image src="/assets/strong-logo.svg" alt="STRONG AUTO" width={140} height={36} className="sm:w-[180px] sm:h-[46px]" priority />
         </Link>
 
         {/* Eyebrow text */}
@@ -83,7 +83,7 @@ export function Header() {
         {/* Favorites */}
         <Link
           href="/dashboard/favorites"
-          className="p-2 text-fg hover:text-green-600 transition-colors mr-3"
+          className="p-1.5 sm:p-2 text-fg hover:text-green-600 transition-colors mr-1 sm:mr-3"
           aria-label="Обране"
         >
           <Heart className="h-5 w-5" />

@@ -17,13 +17,13 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if (\!requiredRoles) {
+    if (!requiredRoles) {
       return true;
     }
 
     const { user } = context.switchToHttp().getRequest();
 
-    if (\!user || \!requiredRoles.includes(user.userType)) {
+    if (!user || !requiredRoles.includes(user.userType)) {
       throw new ForbiddenException('Insufficient permissions');
     }
 

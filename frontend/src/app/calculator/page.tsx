@@ -5,8 +5,8 @@ import { CalculatorForm } from '@/components/CalculatorForm';
 
 export default function CalculatorPage() {
   return (
-    <main className="px-8 py-10 max-w-container mx-auto">
-      <h1 className="font-display font-bold text-fg" style={{ fontSize: 32 }}>Калькулятор вартості</h1>
+    <main className="px-4 sm:px-8 py-6 sm:py-10 max-w-container mx-auto">
+      <h1 className="font-display font-bold text-fg text-2xl sm:text-[32px]">Калькулятор вартості</h1>
       <p className="mt-2 max-w-2xl text-fg-muted text-sm">
         Розрахуйте повну вартість імпорту автомобіля з США в Україну. Калькулятор
         враховує ціну авто, аукціонний збір, доставку, розмитнення та страхування.

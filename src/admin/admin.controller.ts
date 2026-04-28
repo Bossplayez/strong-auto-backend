@@ -355,7 +355,7 @@ export class AdminController {
     @Body() dto: CreateBroadcastDto,
     @CurrentUser('id') actorUserId: string,
   ): Promise<any> {
-    return this.adminService.updateBroadcast(id, dto, actorUserId);
+    return this.adminService.updateBroadcast(id, dto);
   }
 
   @Delete('broadcasts/:id')
@@ -367,7 +367,7 @@ export class AdminController {
     @Param('id') id: string,
     @CurrentUser('id') actorUserId: string,
   ): Promise<void> {
-    return this.adminService.deleteBroadcast(id, actorUserId);
+    return this.adminService.deleteBroadcast(id);
   }
 
   @Post('broadcasts/:id/send')

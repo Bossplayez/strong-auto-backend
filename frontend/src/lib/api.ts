@@ -108,17 +108,33 @@ export const auth = {
 // ---------------------------------------------------------------------------
 export const catalog = {
   async getVehicles(filters?: VehicleFilters): Promise<PaginatedResponse<Vehicle>> {
-    const { data } = await apiClient.get<PaginatedResponse<Vehicle>>('/vehicles', { params: filters });
+    const { data } = await apiClient.get<PaginatedResponse<Vehicle>>('/catalog/vehicles', { params: filters });
     return data;
   },
 
   async getVehicle(slug: string): Promise<Vehicle> {
-    const { data } = await apiClient.get<Vehicle>(`/vehicles/${slug}`);
+    const { data } = await apiClient.get<Vehicle>(`/catalog/vehicles/${slug}`);
     return data;
   },
 
   async getFilterOptions(): Promise<FilterOptions> {
-    const { data } = await apiClient.get<FilterOptions>('/vehicles/filters');
+    const { data } = await apiClient.get<FilterOptions>('/catalog/filter-options');
+    return data;
+  },
+
+  async getVehicleBids(vehicleId: string): Promise<{
+    bids: Array<{ id: string; amount: number; status: string; createdAt: string; bidder: string }>;
+    currentBidAmount: number | null;
+    totalBids: number;
+  }> {
+    const { data } = await apiClient.get(`/catalog/vehicles/${vehicleId}/bids`);
+    return data;
+  },
+
+  async placeBid(vehicleId: string, amount: number, maxAmount?: number): Promise<{
+    id: string; amount: number; status: string; message: string;
+  }> {
+    const { data } = await apiClient.post(`/catalog/vehicles/${vehicleId}/bid`, { amount, maxAmount });
     return data;
   },
 };

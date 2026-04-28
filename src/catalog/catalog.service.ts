@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehicleFilterDto } from './dto';
@@ -135,6 +135,115 @@ export class CatalogService {
       makes: makes.map((m) => m.make),
       bodyTypes: bodyTypes.map((b) => b.bodyType).filter(Boolean),
       fuelTypes: fuelTypes.map((f) => f.fuelType).filter(Boolean),
+    };
+  }
+
+  // ── Auction Bids ──────────────────────────────────────────────
+
+  async getVehicleBids(vehicleId: string) {
+    const bids = await this.prisma.bid.findMany({
+      where: { vehicleId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            profile: {
+              select: { firstName: true, lastName: true },
+            },
+          },
+        },
+      },
+    });
+
+    const currentBid = bids.length > 0 ? bids[0] : null;
+    const totalBids = await this.prisma.bid.count({ where: { vehicleId } });
+
+    return {
+      bids: bids.map((b) => ({
+        id: b.id,
+        amount: Number(b.amount),
+        status: b.status,
+        createdAt: b.createdAt,
+        bidder: b.user.profile
+          ? `${b.user.profile.firstName} ${b.user.profile.lastName?.[0] || ''}.`
+          : 'Анонім',
+      })),
+      currentBidAmount: currentBid ? Number(currentBid.amount) : null,
+      totalBids,
+    };
+  }
+
+  async placeBid(vehicleId: string, userId: string, amount: number, maxAmount?: number) {
+    // Validate vehicle exists and is auction type
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { id: true, sourceType: true, priceAmount: true, availabilityStatus: true },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Автомобіль не знайдено');
+    }
+
+    if (vehicle.sourceType !== 'COPART') {
+      throw new BadRequestException('Ставки доступні лише для аукціонних авто');
+    }
+
+    if (vehicle.availabilityStatus !== 'AVAILABLE') {
+      throw new BadRequestException('Цей автомобіль вже не доступний для ставок');
+    }
+
+    // Get current highest bid
+    const highestBid = await this.prisma.bid.findFirst({
+      where: { vehicleId, status: 'ACTIVE' },
+      orderBy: { amount: 'desc' },
+    });
+
+    const currentPrice = highestBid ? Number(highestBid.amount) : Number(vehicle.priceAmount);
+    const minBid = currentPrice + 100; // Minimum step $100
+
+    if (amount < minBid) {
+      throw new BadRequestException(
+        `Мінімальна ставка — $${minBid.toLocaleString()}. Поточна ціна — $${currentPrice.toLocaleString()}, крок — $100.`,
+      );
+    }
+
+    // Mark previous active bids as OUTBID
+    if (highestBid) {
+      await this.prisma.bid.updateMany({
+        where: { vehicleId, status: 'ACTIVE' },
+        data: { status: 'OUTBID' },
+      });
+    }
+
+    // Create new bid
+    const bid = await this.prisma.bid.create({
+      data: {
+        vehicleId,
+        userId,
+        amount,
+        maxAmount: maxAmount || null,
+        status: 'ACTIVE',
+      },
+    });
+
+    // Update vehicle price to match highest bid
+    await this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { priceAmount: amount },
+    });
+
+    return {
+      id: bid.id,
+      amount: Number(bid.amount),
+      status: bid.status,
+      createdAt: bid.createdAt,
+      message: `Вашу ставку $${amount.toLocaleString()} прийнято!`,
     };
   }
 
