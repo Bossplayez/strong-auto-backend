@@ -46,10 +46,10 @@ export function FilterChips({ filters, onRemove, onReset }: FilterChipsProps) {
         <button
           key={key}
           onClick={() => onRemove(key as keyof VehicleFilters)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border-strong rounded-full text-xs font-medium text-fg hover:border-red-300 hover:bg-red-50 transition-colors group"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-navy-800 rounded-full text-xs font-medium text-white hover:bg-navy-700 transition-colors group"
         >
           {filterLabels[key](value)}
-          <X className="h-3 w-3 text-fg-subtle group-hover:text-red-500 transition-colors" />
+          <X className="h-3 w-3 text-white/60 group-hover:text-white transition-colors" />
         </button>
       ))}
       <button
