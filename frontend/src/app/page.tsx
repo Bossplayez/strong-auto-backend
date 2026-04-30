@@ -9,10 +9,10 @@ import api from '@/lib/api';
 import type { Vehicle, FilterOptions } from '@/lib/types';
 
 const categoryTabs = [
-  { label: 'Аукціон (США)', value: 'USA' },
-  { label: 'Авто в дорозі', value: 'transit' },
-  { label: 'Авто в Україні', value: 'UKRAINE' },
-  { label: 'Авто з Європи', value: 'EUROPE' },
+  { label: 'Аукціон (США)', value: 'USA', href: '/catalog/usa' },
+  { label: 'Авто в дорозі', value: 'TRANSIT', href: '/catalog/transit' },
+  { label: 'Авто в Україні', value: 'UKRAINE', href: '/catalog/ukraine' },
+  { label: 'Авто з Європи', value: 'EUROPE', href: '/catalog/europe' },
 ];
 
 const sourceRegionOptions = [
@@ -177,17 +177,13 @@ export default function HomePage() {
           {/* Category chips */}
           <div className="flex flex-wrap gap-2 mt-4">
             {categoryTabs.map((tab) => (
-              <button
+              <Link
                 key={tab.value}
-                onClick={() => handleTabClick(tab.value)}
-                className={`text-[13px] font-semibold px-3.5 py-1.5 rounded-sm transition-colors ${
-                  activeTab === tab.value
-                    ? 'bg-navy-800 text-white'
-                    : 'bg-white text-fg border border-border-strong hover:bg-background'
-                }`}
+                href={tab.href}
+                className="text-[13px] font-semibold px-3.5 py-1.5 rounded-sm transition-colors bg-white text-fg border border-border-strong hover:bg-navy-800 hover:text-white hover:border-navy-800"
               >
                 {tab.label}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
