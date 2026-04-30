@@ -97,13 +97,14 @@ export function VehicleCard({
 }: VehicleCardProps) {
   const allMedia = (vehicle.media || [])
     .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const [photoIndex, setPhotoIndex] = useState(0);
   const currentMedia = allMedia[photoIndex];
   const imageUrl = currentMedia?.sourceUrl || currentMedia?.url;
   const statusLabel = regionLabels[vehicle.sourceRegion] || 'АВТО В УКРАЇНІ';
   const title = `${vehicle.make} ${vehicle.model} ${vehicle.year}`;
-  const uahPrice = Math.round(vehicle.priceAmount * USD_TO_UAH);
+  const price = typeof vehicle.priceAmount === 'string' ? parseFloat(vehicle.priceAmount) : vehicle.priceAmount;
+  const uahPrice = Math.round((price || 0) * USD_TO_UAH);
   const { isAuthenticated } = useAuth();
   const [isFav, setIsFav] = useState(initialFav);
   const [favLoading, setFavLoading] = useState(false);
@@ -229,7 +230,7 @@ export function VehicleCard({
               {/* Price — prominent */}
               <div className="mb-3">
                 <span className="text-green-500 font-bold text-xl sm:text-2xl">
-                  {formatPrice(vehicle.priceAmount)} $
+                  {formatPrice(price)} $
                 </span>
                 <span className="text-fg-muted text-sm ml-2">
                   · {formatNumber(uahPrice)} грн
@@ -278,7 +279,7 @@ export function VehicleCard({
           {/* Price — prominent */}
           <div className="mb-3">
             <span className="text-green-500 font-bold text-lg">
-              {formatPrice(vehicle.priceAmount)} $
+              {formatPrice(price)} $
             </span>
             <span className="text-fg-muted text-xs ml-1.5">
               · {formatNumber(uahPrice)} грн
