@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "rm -f .env .env.* && npx prisma generate && npm run build"
+buildCommand = "rm -rf dist .env .env.* .nxcache && npx prisma generate && nest build --webpack=false"
 
 [phases.install]
 cmds = ["npm i --legacy-peer-deps"]
