@@ -6,7 +6,7 @@ buildCommand = "rm -f .env .env.* && npx prisma generate && npm run build"
 cmds = ["npm i --legacy-peer-deps"]
 
 [deploy]
-startCommand = "rm -f .env .env.* && npx prisma db push --accept-data-loss && npx ts-node -r tsconfig-paths/register src/ensure-admin.ts && node scripts/direct-copart-sync.cjs && npm run start:prod"
+startCommand = "rm -f /app/.env /app/.env.* dist/.env dist/.env.* .env .env.* && npx prisma db push --accept-data-loss && npx ts-node -r tsconfig-paths/register src/ensure-admin.ts && node scripts/direct-copart-sync.cjs && npm run start:prod"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
