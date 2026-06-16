@@ -29,4 +29,9 @@ export class AppController {
       await prisma.$disconnect();
     }
   }
+
+  @Get('healthz')
+  healthz() {
+    return { ok: true, dbHost: process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown' };
+  }
 }
