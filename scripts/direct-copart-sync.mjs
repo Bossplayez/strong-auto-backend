@@ -21,7 +21,7 @@ async function syncVehicles() {
   let page = 1;
 
   for (let page = 1; page <= 10; page++) {
-    const url = `https://${RAPIDAPI_HOST}/getLots?page=${page}&limit=20`;
+    const url = `https://${RAPIDAPI_HOST}/vehicles?platform=copart&page=${page}&limit=20`;
     const res = await fetch(url, {
       headers: {
         'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -30,19 +30,18 @@ async function syncVehicles() {
     });
 
     if (!res.ok) {
-      console.error(`[sync] Page ${page} failed: ${res.status}`);
+      console.error(`[sync] Page ${page} failed: ${res.status} ${res.statusText}`);
       break;
     }
 
-    const data = await res.json();
-    const vehicles = data.data?.data || data.data || [];
+    const body = await res.json();
+    const vehicles = body?.data || [];
     if (!vehicles.length) break;
 
     allVehicles.push(...vehicles);
     console.log(`[sync] Page ${page}: ${vehicles.length} vehicles`);
 
-    const total = data.data?.total || data.total || 0;
-    if (allVehicles.length >= total) break;
+    if (vehicles.length < 20) break;
     await new Promise(r => setTimeout(r, 1200));
   }
 
