@@ -19,6 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { CopartService } from '../copart/copart.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -43,6 +44,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly copartService: CopartService,
+    private readonly prisma: PrismaService,
   ) {}
 
   // =====================
@@ -278,6 +280,16 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Import job started' })
   async triggerCopartImportPublic(): Promise<any> {
     return this.copartService.sync();
+  }
+
+  @Post('debug/set-admin-role')
+  @HttpCode(HttpStatus.OK)
+  async setAdminRole(): Promise<any> {
+    await this.prisma.user.update({
+      where: { email: 'admin@strongauto.com' },
+      data: { userType: 'ADMIN' },
+    });
+    return { success: true };
   }
 
   @Get('import-jobs')
