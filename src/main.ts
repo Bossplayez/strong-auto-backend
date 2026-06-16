@@ -7,9 +7,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Unique deployment ID
+  // Unique deployment ID (silent — available via X-Deploy-Id header)
   const deployId = process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_SNAPSHOT_ID || `unknown-${Date.now()}`;
-  console.log(`[BOOT] Deployment ID: ${deployId}`);
 
   const allowedOrigins = [
     'https://strong-auto-frontend.vercel.app',
@@ -23,12 +22,24 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
-  // Add deployment ID to all responses + prevent caching
+  // Add deployment ID to all responses
   app.use((req, res, next) => {
     res.setHeader('X-Deploy-Id', deployId);
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+
+    // Smart caching: cache GET for public catalog/news, no-store for the rest
+    if (req.method === 'GET') {
+      const isPublicPath = req.path.startsWith('/api/v1/catalog') ||
+                           req.path.startsWith('/api/v1/news') ||
+                           req.path.startsWith('/api/v1/calculator');
+      if (isPublicPath) {
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
+      } else {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      }
+    } else {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+
     next();
   });
 
