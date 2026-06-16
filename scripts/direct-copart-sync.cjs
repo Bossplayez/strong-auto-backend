@@ -53,9 +53,9 @@ async function syncVehicles() {
       if (!lotNumber) { skipped++; continue; }
 
       // Check existing via binding
-      const platform = v.platform === 'iaai' ? 'IAAI' : 'COPART';
+      const platform = 'COPART'; // enum only has COPART, not IAAI
       const existing = await prisma.vehicleSourceBinding.findUnique({
-        where: { provider_externalLotId: { provider: platform, externalLotId: lotNumber } },
+        where: { provider_externalLotId: { provider: 'COPART', externalLotId: lotNumber } },
       });
       if (existing) { skipped++; continue; }
 
@@ -116,7 +116,7 @@ async function syncVehicles() {
       await prisma.vehicleSourceBinding.create({
         data: {
           vehicleId: vehicle.id,
-          provider: platform,
+          provider: 'COPART',
           externalLotId: lotNumber,
         },
       });
