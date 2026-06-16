@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "rm -rf dist tsconfig.build.tsbuildinfo .env .env.* && npx prisma generate && npm run build"
+buildCommand = "rm -rf dist tsconfig.build.tsbuildinfo .env .env.* .next && npx prisma generate && npm run build && echo 'cache-bust-'$(date +%s)"
 
 [phases.install]
 cmds = ["npm i --legacy-peer-deps"]
