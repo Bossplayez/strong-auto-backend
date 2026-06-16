@@ -7,7 +7,17 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Unique deployment ID
+  const deployId = process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_SNAPSHOT_ID || `unknown-${Date.now()}`;
+  console.log(`[BOOT] Deployment ID: ${deployId}`);
+
   app.enableCors();
+
+  // Add deployment ID to all responses
+  app.use((req, res, next) => {
+    res.setHeader('X-Deploy-Id', deployId);
+    next();
+  });
 
   app.setGlobalPrefix('api/v1');
 
