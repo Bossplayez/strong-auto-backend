@@ -34,6 +34,16 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
+  // Diagnostic: check DB connection
+  const { PrismaClient } = await import('@prisma/client');
+  const diagPrisma = new PrismaClient();
+  const adminUser = await diagPrisma.user.findFirst({ where: { email: 'admin@strongauto.com' }, select: { userType: true, status: true } });
+  const vehicleCount = await diagPrisma.vehicle.count();
+  console.log(`[DIAG] DB: ${process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown'}`);
+  console.log(`[DIAG] Admin user: ${JSON.stringify(adminUser)}`);
+  console.log(`[DIAG] Vehicle count: ${vehicleCount}`);
+  await diagPrisma.$disconnect();
+
   const port = process.env.PORT || 3000;
   await app.listen(port);
 }
