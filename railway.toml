@@ -1,9 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "rm -rf dist tsconfig.build.tsbuildinfo .env .env.* .next && npx prisma generate && npm run build && echo 'cache-bust-'$(date +%s)"
-
-[phases.install]
-cmds = ["npm i --legacy-peer-deps"]
+buildCommand = "rm -rf dist tsconfig.build.tsbuildinfo .env .env.* .next && npm i --legacy-peer-deps && npx prisma generate && npm run build"
 
 [deploy]
 startCommand = "npx prisma db push --accept-data-loss --skip-generate && npm run start:prod"
