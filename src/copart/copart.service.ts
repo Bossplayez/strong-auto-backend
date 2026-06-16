@@ -6,6 +6,10 @@ import { VehiclesService } from '../vehicles/vehicles.service';
 @Injectable()
 export class CopartService {
   private readonly logger = new Logger(CopartService.name);
+  private readonly RAPIDAPI_HOST = 'vehicle-auction-data-api-copart-iaai.p.rapidapi.com';
+  private readonly RAPIDAPI_BASE = 'https://vehicle-auction-data-api-copart-iaai.p.rapidapi.com';
+  private readonly BATCH_SIZE = 20; // API returns max 20 per request
+  private readonly MAX_PAGES = 5; // Safety limit: 5 pages = 100 vehicles per sync
 
   constructor(
     private readonly prisma: PrismaService,
@@ -40,7 +44,36 @@ export class CopartService {
     return { jobId: job.id, status: 'PENDING' };
   }
 
+  async syncByPlatform(platform: 'copart' | 'iaai'): Promise<{ jobId: string; status: string }> {
+    const activeJob = await this.prisma.importJob.findFirst({
+      where: { provider: platform, status: { in: ['PENDING', 'RUNNING'] } },
+    });
+
+    if (activeJob) {
+      this.logger.warn(`Import job ${activeJob.id} is still running`);
+      return { jobId: activeJob.id, status: activeJob.status };
+    }
+
+    const job = await this.prisma.importJob.create({
+      data: {
+        provider: platform,
+        mode: 'full_sync',
+        status: 'PENDING',
+      },
+    });
+
+    this.logger.log(`Created ${platform} import job: ${job.id}`);
+
+    setImmediate(() => this.processImportJobWithPlatform(job.id, platform));
+
+    return { jobId: job.id, status: 'PENDING' };
+  }
+
   async processImportJob(jobId: string): Promise<void> {
+    await this.processImportJobWithPlatform(jobId, 'copart');
+  }
+
+  async processImportJobWithPlatform(jobId: string, platform: 'copart' | 'iaai'): Promise<void> {
     await this.prisma.importJob.update({
       where: { id: jobId },
       data: { status: 'RUNNING', startedAt: new Date() },
@@ -52,37 +85,71 @@ export class CopartService {
     let errors = 0;
 
     try {
-      // TODO: Replace with actual Copart API call
-      const apiKey = this.config.get('COPART_API_KEY');
-      const apiUrl = this.config.get('COPART_API_URL', 'https://api.copart.com');
+      const apiKey = this.config.get('RAPIDAPI_KEY');
 
       if (!apiKey) {
-        this.logger.warn('COPART_API_KEY not configured, skipping actual sync');
+        this.logger.warn('RAPIDAPI_KEY not configured, skipping actual sync');
         await this.prisma.importJob.update({
           where: { id: jobId },
           data: {
             status: 'SUCCESS',
             finishedAt: new Date(),
-            summaryJsonb: { created, updated, skipped, errors, note: 'No API key configured' } as any,
+            summaryJsonb: { created, updated, skipped, errors, note: 'No RAPIDAPI_KEY configured' } as any,
           },
         });
         return;
       }
 
-      // Placeholder: fetch from API
-      // const response = await fetch(`${apiUrl}/lots?apiKey=${apiKey}`);
-      // const lots = await response.json();
+      // Fetch vehicles from RapidAPI (paginated)
       const lots: Record<string, any>[] = [];
+      let page = 1;
+
+      while (page <= this.MAX_PAGES) {
+        const url = `${this.RAPIDAPI_BASE}/vehicles?platform=${platform}&page=${page}&limit=${this.BATCH_SIZE}`;
+        this.logger.log(`Fetching ${platform} page ${page}: ${url}`);
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'x-rapidapi-host': this.RAPIDAPI_HOST,
+            'x-rapidapi-key': apiKey,
+          },
+        });
+
+        if (!response.ok) {
+          this.logger.error(`RapidAPI error: ${response.status} ${response.statusText}`);
+          break;
+        }
+
+        const body = await response.json();
+        const data = body?.data ?? [];
+
+        if (data.length === 0) {
+          this.logger.log(`No more data at page ${page}`);
+          break;
+        }
+
+        lots.push(...data);
+        this.logger.log(`Fetched ${data.length} vehicles from page ${page} (total: ${lots.length})`);
+
+        if (data.length < this.BATCH_SIZE) {
+          break; // Last page
+        }
+
+        page++;
+      }
+
+      this.logger.log(`Total vehicles to process: ${lots.length}`);
 
       for (const raw of lots) {
         try {
-          const mapped = this.mapRawToVehicle(raw);
+          const mapped = this.mapRawToVehicle(raw, platform);
 
           // Store raw import
           await this.prisma.vehicleRawImport.create({
             data: {
-              provider: 'copart',
-              externalLotId: String(raw.lotNumber),
+              provider: platform,
+              externalLotId: String(raw.lot_number),
               importJobId: jobId,
               payloadJsonb: raw as any,
             },
@@ -92,8 +159,8 @@ export class CopartService {
           const existing = await this.prisma.vehicleSourceBinding.findUnique({
             where: {
               provider_externalLotId: {
-                provider: 'copart',
-                externalLotId: String(raw.lotNumber),
+                provider: platform,
+                externalLotId: String(raw.lot_number),
               },
             },
           });
@@ -104,19 +171,20 @@ export class CopartService {
           } else {
             const vehicle = await this.vehiclesService.create({
               ...mapped,
-              sourceType: 'COPART',
+              sourceType: platform === 'iaai' ? 'IAAI' : 'COPART',
               sourceRegion: 'USA',
             });
 
+            const pricing = raw.pricing ?? {};
             await this.prisma.vehicleSourceBinding.create({
               data: {
                 vehicleId: vehicle.id,
-                provider: 'copart',
-                externalLotId: String(raw.lotNumber),
-                externalUrl: raw.url,
-                saleStatus: raw.saleStatus,
-                currentBidAmount: raw.currentBid,
-                buyNowAmount: raw.buyNow,
+                provider: platform,
+                externalLotId: String(raw.lot_number),
+                externalUrl: `https://www.${platform}.com/lot/${raw.lot_number}`,
+                saleStatus: raw.auction?.state,
+                currentBidAmount: pricing.current_bid_usd ?? 0,
+                buyNowAmount: pricing.buy_now_usd ?? 0,
                 lastSyncedAt: new Date(),
               },
             });
@@ -125,7 +193,7 @@ export class CopartService {
           }
         } catch (error) {
           errors++;
-          this.logger.error(`Failed to process lot ${raw.lotNumber}: ${error}`);
+          this.logger.error(`Failed to process lot ${raw.lot_number}: ${error}`);
         }
       }
 
@@ -154,35 +222,63 @@ export class CopartService {
     }
   }
 
-  mapRawToVehicle(raw: Record<string, any>) {
+  mapRawToVehicle(raw: Record<string, any>, platform: 'copart' | 'iaai') {
     const year = Number(raw.year) || new Date().getFullYear();
     const make = String(raw.make ?? 'Unknown').trim();
     const model = String(raw.model ?? 'Unknown').trim();
 
+    // Extract images from media.items
+    const mediaUrls = (raw.media?.items ?? [])
+      .map((img: any) => img.full ?? img.thumb ?? '')
+      .filter(Boolean);
+
+    // Extract pricing
+    const pricing = raw.pricing ?? {};
+    const currentBid = pricing.current_bid_usd ?? pricing.current_bid2_usd ?? 0;
+    const buyNow = pricing.buy_now_usd ?? 0;
+
+    // Extract condition
+    const condition = raw.condition ?? {};
+
+    // Extract specs
+    const specs = raw.vehicle_specs ?? {};
+    const engine = specs.engine ?? {};
+
+    // External URL
+    const externalUrl = `https://www.${platform}.com/lot/${raw.lot_number}`;
+
     return {
-      title: `${year} ${make} ${model}`,
+      title: raw.title ?? `${year} ${make} ${model}`,
       make,
       model,
       year,
-      priceAmount: Number(raw.currentBid ?? raw.buyNow ?? 0),
+      priceAmount: Number(currentBid),
+      buyNowAmount: Number(buyNow),
       vin: raw.vin,
-      odometerValue: raw.odometer ? Number(raw.odometer) : undefined,
-      bodyType: raw.bodyStyle,
-      fuelType: raw.fuelType,
-      transmission: raw.transmission,
-      driveType: raw.drive,
-      damagePrimary: raw.primaryDamage,
+      odometerValue: raw.odometer?.km ? Number(raw.odometer.km) : undefined,
+      odometerUnit: 'km',
+      bodyType: specs.body_style,
+      fuelType: specs.fuel_type,
+      transmission: specs.transmission,
+      driveType: specs.drive_type,
+      damagePrimary: condition.primary_damage,
+      damageSecondary: condition.secondary_damage,
+      hasKeys: condition.has_key,
       locationCountry: 'US',
       locationState: raw.location?.state,
-      locationCity: raw.location?.city,
-      mediaUrls: raw.images ?? [],
+      locationCity: raw.location?.display,
+      mediaUrls,
+      auctionDate: raw.auction?.auction_at ? new Date(raw.auction.auction_at) : undefined,
+      auctionStatus: raw.auction?.state,
+      sellerType: raw.seller?.type,
+      externalUrl,
       specs: {
-        engineVolume: raw.engineSize,
-        enginePower: raw.engineType,
-        cylinders: raw.cylinders,
-        color: raw.color,
-        keysAvailable: raw.hasKeys,
-        lotNumber: String(raw.lotNumber),
+        engineVolume: engine.size_l,
+        enginePower: engine.hp,
+        cylinders: engine.raw,
+        color: specs.exterior_color,
+        keysAvailable: condition.has_key,
+        lotNumber: String(raw.lot_number),
       },
     };
   }
