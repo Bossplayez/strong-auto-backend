@@ -1,9 +1,11 @@
 node_modules
 .git
 frontend/
-.markup/
+.markup
 docs/
 *.md
 .env
 .env.*
 .env
+dist
+tsconfig.build.tsbuildinfo
