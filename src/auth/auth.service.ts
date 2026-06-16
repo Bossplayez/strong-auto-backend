@@ -87,9 +87,12 @@ export class AuthService {
 
   // ─── LOGIN ─────────────────────────────────────────────────
   async login(dto: LoginDto): Promise<TokenPair> {
+    const dbHost = process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown';
+    console.log(`[AuthService.login] DB host: ${dbHost}`);
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
+    console.log(`[AuthService.login] Found user: ${user?.id?.substring(0,8)} type: ${user?.userType}`);
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
