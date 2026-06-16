@@ -52,47 +52,58 @@ async function syncVehicles() {
       const lotNumber = String(v.lot_number || v.lotNumber || '');
       if (!lotNumber) { skipped++; continue; }
 
-      const existing = await prisma.vehicle.findFirst({ where: { sourceId: lotNumber } });
-      if (existing) { skipped++; continue; }
+      const existingBinding = await prisma.vehicleSourceBinding.findUnique({
+        where: { provider_externalLotId: { provider: v.platform === 'iaai' ? 'IAAI' : 'COPART', externalLotId: lotNumber } },
+        include: { vehicle: true },
+      });
+      if (existingBinding) { skipped++; continue; }
 
       const year = parseInt(v.year || '0');
       const make = (v.make || '').trim();
       const model = (v.model || '').trim();
       if (!make || !model || !year) { skipped++; continue; }
 
+      const platform = v.platform === 'iaai' ? 'IAAI' : 'COPART';
       const price = v.pricing?.estimate?.amount || v.pricing?.sold_amount || 0;
       const odometer = v.odometer || 0;
       const specs = v.vehicle_specs || [];
       const spec = specs[0] || {};
-      const media = v.media || [];
-      const firstImage = media[0]?.url || media[0]?.image_url || '';
+      const mediaArr = v.media || [];
+      const firstImage = mediaArr[0]?.url || mediaArr[0]?.image_url || '';
       const details = v.details || {};
+
+      const slug = `${year}-${make.toLowerCase()}-${model.toLowerCase().replace(/\s+/g, '-')}-${lotNumber}`;
 
       await prisma.vehicle.create({
         data: {
+          slug,
           title: v.title || `${year} ${make} ${model}`,
-          slug: `${year}-${make.toLowerCase()}-${model.toLowerCase().replace(/\s+/g, '-')}-${lotNumber}`,
           make, model, year,
           priceAmount: parseFloat(price) || 0,
           currency: 'USD',
           odometerValue: parseFloat(odometer) || 0,
-          bodyType: spec.body_type || details.body_type || 'Unknown',
-          fuelType: spec.fuel_type || details.fuel_type || 'Unknown',
-          transmission: spec.transmission || details.transmission || 'Unknown',
-          driveType: spec.drive_type || details.drive_type || 'Unknown',
-          sourceType: v.platform === 'iaai' ? 'IAAI' : 'COPART',
+          bodyType: spec.body_type || details.body_type || null,
+          fuelType: spec.fuel_type || details.fuel_type || null,
+          transmission: spec.transmission || details.transmission || null,
+          driveType: spec.drive_type || details.drive_type || null,
+          sourceType: platform,
           sourceRegion: 'USA',
-          sourceId: lotNumber,
-          vin: (v.vin || '').trim(),
-          engineType: (spec.engine_type || '').trim(),
-          damageType: (details.primary_damage || '').trim(),
-          locationCity: (v.location?.city || '').trim(),
-          locationState: (v.location?.state || '').trim(),
+          vin: (v.vin || '').trim() || null,
+          damagePrimary: (details.primary_damage || '').trim() || null,
+          locationCity: (v.location?.city || '').trim() || null,
+          locationState: (v.location?.state || '').trim() || null,
           locationCountry: 'US',
           availabilityStatus: 'AVAILABLE',
           isRecommended: false,
           publicationStatus: 'PUBLISHED',
           publishedAt: new Date(),
+          sourceBindings: {
+            create: {
+              provider: platform,
+              externalLotId: lotNumber,
+              payloadJsonb: v,
+            },
+          },
           media: firstImage ? {
             create: { sourceUrl: firstImage, sortOrder: 0 },
           } : undefined,
