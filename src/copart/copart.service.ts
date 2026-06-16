@@ -283,6 +283,162 @@ export class CopartService {
     };
   }
 
+  // =====================
+  // Search & Single Import
+  // =====================
+
+  async search(params: {
+    platform?: 'copart' | 'iaai';
+    page?: number;
+    limit?: number;
+    make?: string;
+    model?: string;
+    year_from?: number;
+    year_to?: number;
+    search?: string;
+  }): Promise<{ items: Record<string, any>[]; total: number; page: number; hasMore: boolean }> {
+    const apiKey = this.config.get('RAPIDAPI_KEY');
+    if (!apiKey) throw new Error('RAPIDAPI_KEY not configured');
+
+    const platform = params.platform ?? 'copart';
+    const page = params.page ?? 1;
+    const limit = Math.min(params.limit ?? 20, 50);
+
+    const url = new URL(`${this.RAPIDAPI_BASE}/vehicles`);
+    url.searchParams.set('platform', platform);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('limit', String(limit));
+    if (params.make) url.searchParams.set('make', params.make);
+    if (params.model) url.searchParams.set('model', params.model);
+    if (params.year_from) url.searchParams.set('year_from', String(params.year_from));
+    if (params.year_to) url.searchParams.set('year_to', String(params.year_to));
+    if (params.search) url.searchParams.set('search', params.search);
+
+    this.logger.log(`Searching ${platform}: ${url.toString()}`);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': this.RAPIDAPI_HOST,
+        'x-rapidapi-key': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      this.logger.error(`RapidAPI search error: ${response.status} ${errText}`);
+      throw new Error(`RapidAPI error: ${response.status}`);
+    }
+
+    const body = await response.json();
+    const items = body?.data ?? [];
+
+    // Mark items that are already imported
+    const lotNumbers = items.map((v: any) => String(v.lot_number)).filter(Boolean);
+    const existingBindings = lotNumbers.length > 0
+      ? await this.prisma.vehicleSourceBinding.findMany({
+          where: { provider: platform, externalLotId: { in: lotNumbers } },
+          select: { externalLotId: true },
+        })
+      : [];
+    const existingSet = new Set(existingBindings.map((b) => b.externalLotId));
+    items.forEach((v: any) => {
+      v._alreadyImported = existingSet.has(String(v.lot_number));
+    });
+
+    return {
+      items,
+      total: items.length,
+      page,
+      hasMore: items.length === limit,
+    };
+  }
+
+  async importSingle(lotNumber: string, platform: 'copart' | 'iaai' = 'copart'): Promise<{
+    imported: boolean;
+    vehicleId?: string;
+    alreadyExists?: boolean;
+    slug?: string;
+  }> {
+    const apiKey = this.config.get('RAPIDAPI_KEY');
+    if (!apiKey) throw new Error('RAPIDAPI_KEY not configured');
+
+    // Check if already imported
+    const existing = await this.prisma.vehicleSourceBinding.findUnique({
+      where: {
+        provider_externalLotId: {
+          provider: platform,
+          externalLotId: lotNumber,
+        },
+      },
+      include: { vehicle: true },
+    });
+
+    if (existing) {
+      return {
+        imported: false,
+        alreadyExists: true,
+        vehicleId: existing.vehicleId,
+        slug: existing.vehicle.slug,
+      };
+    }
+
+    // Fetch single vehicle details
+    const url = `${this.RAPIDAPI_BASE}/vehicles/${lotNumber}?platform=${platform}`;
+    this.logger.log(`Fetching single vehicle: ${url}`);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': this.RAPIDAPI_HOST,
+        'x-rapidapi-key': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      this.logger.error(`RapidAPI single fetch error: ${response.status} ${errText}`);
+      throw new Error(`RapidAPI error: ${response.status}`);
+    }
+
+    const body = await response.json();
+    const raw = body?.data ?? body;
+
+    if (!raw || !raw.lot_number) {
+      throw new Error('Vehicle not found');
+    }
+
+    const mapped = this.mapRawToVehicle(raw, platform);
+
+    const vehicle = await this.vehiclesService.create({
+      ...mapped,
+      sourceType: platform === 'iaai' ? 'IAAI' : 'COPART',
+      sourceRegion: 'USA',
+    });
+
+    const pricing = raw.pricing ?? {};
+    await this.prisma.vehicleSourceBinding.create({
+      data: {
+        vehicleId: vehicle.id,
+        provider: platform,
+        externalLotId: lotNumber,
+        externalUrl: `https://www.${platform}.com/lot/${lotNumber}`,
+        saleStatus: raw.auction?.state,
+        currentBidAmount: pricing.current_bid_usd ?? 0,
+        buyNowAmount: pricing.buy_now_usd ?? 0,
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Imported lot ${lotNumber} → vehicle ${vehicle.id} (${vehicle.slug})`);
+
+    return {
+      imported: true,
+      vehicleId: vehicle.id,
+      slug: vehicle.slug,
+    };
+  }
+
   async handleCronSync(): Promise<void> {
     this.logger.log('Cron-triggered Copart sync');
     await this.sync();
