@@ -11,7 +11,17 @@ async function bootstrap() {
   const deployId = process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_SNAPSHOT_ID || `unknown-${Date.now()}`;
   console.log(`[BOOT] Deployment ID: ${deployId}`);
 
-  app.enableCors();
+  const allowedOrigins = [
+    'https://strong-auto-frontend.vercel.app',
+    process.env.FRONTEND_URL,
+    process.env.RAILWAY_PUBLIC_DOMAIN,
+  ].filter(Boolean) as string[];
+
+  app.enableCors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
 
   // Add deployment ID to all responses + prevent caching
   app.use((req, res, next) => {
