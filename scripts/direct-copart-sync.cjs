@@ -26,7 +26,7 @@ async function syncVehicles() {
     });
 
     if (!res.ok) {
-      console.error(`[sync] Page ${page} failed: ${res.status} ${res.statusText}`);
+      console.error(`[sync] Page ${page} failed: ${res.status}`);
       break;
     }
 
@@ -49,69 +49,93 @@ async function syncVehicles() {
 
   for (const v of allVehicles) {
     try {
-      const lotNumber = String(v.lot_number || v.lotNumber || '');
+      const lotNumber = String(v.lot_number || '');
       if (!lotNumber) { skipped++; continue; }
 
-      const existingBinding = await prisma.vehicleSourceBinding.findUnique({
-        where: { provider_externalLotId: { provider: v.platform === 'iaai' ? 'IAAI' : 'COPART', externalLotId: lotNumber } },
-        include: { vehicle: true },
+      // Check existing via binding
+      const platform = v.platform === 'iaai' ? 'IAAI' : 'COPART';
+      const existing = await prisma.vehicleSourceBinding.findUnique({
+        where: { provider_externalLotId: { provider: platform, externalLotId: lotNumber } },
       });
-      if (existingBinding) { skipped++; continue; }
+      if (existing) { skipped++; continue; }
 
       const year = parseInt(v.year || '0');
       const make = (v.make || '').trim();
       const model = (v.model || '').trim();
       if (!make || !model || !year) { skipped++; continue; }
 
-      const platform = v.platform === 'iaai' ? 'IAAI' : 'COPART';
-      const price = v.pricing?.estimate?.amount || v.pricing?.sold_amount || 0;
-      const odometer = v.odometer || 0;
-      const specs = v.vehicle_specs || [];
-      const spec = specs[0] || {};
-      const mediaArr = v.media || [];
-      const firstImage = mediaArr[0]?.url || mediaArr[0]?.image_url || '';
-      const details = v.details || {};
-
       const slug = `${year}-${make.toLowerCase()}-${model.toLowerCase().replace(/\s+/g, '-')}-${lotNumber}`;
 
-      await prisma.vehicle.create({
+      // Check slug uniqueness
+      const slugExists = await prisma.vehicle.findUnique({ where: { slug } });
+      if (slugExists) { skipped++; continue; }
+
+      // Get price as number
+      let price = 0;
+      if (v.pricing) {
+        price = parseFloat(v.pricing.estimate?.amount || v.pricing.sold_amount || v.pricing.current_bid || 0);
+      }
+      if (isNaN(price)) price = 0;
+
+      const odometer = parseFloat(v.odometer || 0);
+      const spec = (v.vehicle_specs && v.vehicle_specs[0]) || {};
+      const details = v.details || {};
+      const mediaArr = v.media || [];
+      const firstImage = (mediaArr[0] && (mediaArr[0].url || mediaArr[0].image_url)) || '';
+
+      // Create vehicle WITHOUT nested creates
+      const vehicle = await prisma.vehicle.create({
         data: {
           slug,
           title: v.title || `${year} ${make} ${model}`,
-          make, model, year,
-          priceAmount: parseFloat(price) || 0,
+          make,
+          model,
+          year,
+          priceAmount: price,
           currency: 'USD',
-          odometerValue: parseFloat(odometer) || 0,
+          odometerValue: isNaN(odometer) ? null : odometer,
           bodyType: spec.body_type || details.body_type || null,
           fuelType: spec.fuel_type || details.fuel_type || null,
           transmission: spec.transmission || details.transmission || null,
           driveType: spec.drive_type || details.drive_type || null,
           sourceType: platform,
           sourceRegion: 'USA',
-          vin: (v.vin || '').trim() || null,
-          damagePrimary: (details.primary_damage || '').trim() || null,
-          locationCity: (v.location?.city || '').trim() || null,
-          locationState: (v.location?.state || '').trim() || null,
+          vin: v.vin || null,
+          damagePrimary: details.primary_damage || null,
+          locationCity: v.location?.city || null,
+          locationState: v.location?.state || null,
           locationCountry: 'US',
           availabilityStatus: 'AVAILABLE',
           isRecommended: false,
           publicationStatus: 'PUBLISHED',
           publishedAt: new Date(),
-          sourceBindings: {
-            create: {
-              provider: platform,
-              externalLotId: lotNumber,
-            },
-          },
-          media: firstImage ? {
-            create: { sourceUrl: firstImage, sortOrder: 0 },
-          } : undefined,
         },
       });
+
+      // Create binding separately
+      await prisma.vehicleSourceBinding.create({
+        data: {
+          vehicleId: vehicle.id,
+          provider: platform,
+          externalLotId: lotNumber,
+        },
+      });
+
+      // Create media separately
+      if (firstImage) {
+        await prisma.vehicleMedia.create({
+          data: {
+            vehicleId: vehicle.id,
+            sourceUrl: firstImage,
+            sortOrder: 0,
+          },
+        });
+      }
+
       created++;
     } catch (e) {
       errors++;
-      if (errors <= 3) console.error(`[sync] Error: ${e.message.substring(0, 150)}`);
+      if (errors <= 5) console.error(`[sync] Error: ${e.message.substring(0, 200)}`);
     }
   }
 
