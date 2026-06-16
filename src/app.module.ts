@@ -24,7 +24,11 @@ import { HealthModule } from './health/health.module';
 @Module({
   imports: [
     // Global modules
-    ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      ignoreEnvFile: true,
+      envFilePath: [], // explicitly empty - never load .env files
+    }),
     PrismaModule,
     SettingsModule,
 
