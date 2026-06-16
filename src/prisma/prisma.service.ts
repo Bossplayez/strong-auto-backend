@@ -8,6 +8,10 @@ export class PrismaService
 {
   async onModuleInit(): Promise<void> {
     await this.$connect();
+    // Diagnostic
+    const adminUser = await this.user.findFirst({ where: { email: 'admin@strongauto.com' }, select: { userType: true } });
+    const vehicleCount = await this.vehicle.count();
+    console.log(`[PrismaService] DB connected, admin: ${adminUser?.userType}, vehicles: ${vehicleCount}`);
   }
 
   async onModuleDestroy(): Promise<void> {
