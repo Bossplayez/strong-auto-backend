@@ -1,5 +1,4 @@
-// Direct Copart sync - runs on Railway server
-import { PrismaClient } from '@prisma/client';
+const { PrismaClient } = require('@prisma/client');
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || 'baf5834d3bmsh206d7839b043d4bp1dcaecjsn28fd36bff0a2';
 const RAPIDAPI_HOST = 'vehicle-auction-data-api-copart-iaai.p.rapidapi.com';
@@ -9,16 +8,13 @@ const prisma = new PrismaClient();
 async function syncVehicles() {
   console.log('[sync] Starting direct Copart sync...');
 
-  // Check DB
   const dbHost = process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown';
   console.log(`[sync] DB: ${dbHost}`);
 
   const beforeCount = await prisma.vehicle.count();
   console.log(`[sync] Vehicles before: ${beforeCount}`);
 
-  // Fetch from RapidAPI
   const allVehicles = [];
-  let page = 1;
 
   for (let page = 1; page <= 10; page++) {
     const url = `https://${RAPIDAPI_HOST}/vehicles?platform=copart&page=${page}&limit=20`;
@@ -105,7 +101,7 @@ async function syncVehicles() {
       created++;
     } catch (e) {
       errors++;
-      if (errors <= 3) console.error(`[sync] Error: ${e.message.substring(0, 100)}`);
+      if (errors <= 3) console.error(`[sync] Error: ${e.message.substring(0, 150)}`);
     }
   }
 
