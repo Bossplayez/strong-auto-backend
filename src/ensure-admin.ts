@@ -16,7 +16,7 @@ async function ensureAdmin() {
           email,
           passwordHash,
           userType: 'ADMIN',
-          status: 'VERIFIED',
+          status: 'ACTIVE',
         },
       });
       console.log(`[ensure-admin] Created admin user: ${email}`);
