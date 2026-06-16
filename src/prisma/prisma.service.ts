@@ -11,9 +11,15 @@ export class PrismaService
     const dbHost = rawUrl.split('@')[1]?.split('/')[0] || 'unknown';
     console.log(`[PrismaService] Raw DATABASE_URL: ${rawUrl.substring(0, 50)}...`);
     console.log(`[PrismaService] Resolved host: ${dbHost}`);
-    const vehicleCount = await this.vehicle.count();
-    const adminUser = await this.user.findFirst({ where: { email: 'admin@strongauto.com' }, select: { id: true, userType: true } });
-    console.log(`[PrismaService] Vehicle count: ${vehicleCount}, admin: ${adminUser?.userType || 'NOT FOUND'} (${adminUser?.id?.substring(0,8) || '?'})`);
+    
+    // Count vehicles - same query as catalog
+    const vehicleCount = await this.vehicle.count({ where: { publicationStatus: 'PUBLISHED' } });
+    console.log(`[PrismaService] Published vehicles: ${vehicleCount}`);
+    
+    // Find admin
+    const adminUser = await this.user.findUnique({ where: { email: 'admin@strongauto.com' }, select: { id: true, userType: true } });
+    console.log(`[PrismaService] Admin user: ${adminUser?.userType || 'NOT FOUND'} (${adminUser?.id?.substring(0,8) || '?'})`);
+    
     await this.$connect();
   }
 
