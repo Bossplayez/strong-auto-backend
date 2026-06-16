@@ -18,6 +18,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { CopartService } from '../copart/copart.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -39,7 +40,10 @@ import {
 @Roles('ADMIN', 'MANAGER')
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly copartService: CopartService,
+  ) {}
 
   // =====================
   // Users
@@ -266,6 +270,14 @@ export class AdminController {
     @CurrentUser('id') actorUserId: string,
   ): Promise<any> {
     return this.adminService.triggerCopartImport(actorUserId);
+  }
+
+  @Post('copart/import/run-public')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Trigger Copart import sync (public - for testing)' })
+  @ApiResponse({ status: 200, description: 'Import job started' })
+  async triggerCopartImportPublic(): Promise<any> {
+    return this.copartService.sync();
   }
 
   @Get('import-jobs')

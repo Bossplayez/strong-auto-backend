@@ -1,0 +1,4379 @@
+[
+  {
+    "slug_vin": "2015-audi-q7-premium-plus-WA1LGAFE4FD004047",
+    "vin": "WA1LGAFE4FD004047",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "55302676",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2015 AUDI Q7 PREMIUM PLUS",
+    "year": 2015,
+    "make": "AUDI",
+    "model": "Q7",
+    "type": "SUV",
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 3100,
+      "current_bid2_usd": 3100,
+      "buy_now_usd": 3500,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 950,
+        "to": 5800,
+        "text": "$950 - $5,800"
+      }
+    },
+    "location": {
+      "display": "Dallas (TX)",
+      "send_from": "Houston",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "Unknown",
+        "label": "Unknown",
+        "class_hint": "warning"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Hail",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 144206,
+      "km": 232076
+    },
+    "vehicle_specs": {
+      "exterior_color": "White",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 14,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f2f0c19ade56433fab27796b9a3dab1b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/febff49d6541408fad40d7da07bbe1a6_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/549d96d8cd954cc3954f19f44e14bafd_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d564823bd33048779194407f2db0fcf4_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4cdd3d20b399406388003deb732ff53f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/198b6167500246eabd12699655819d0b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af1a2bde1dc4da591a878806f62c58c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f70b1a05834445ac974ca34d44d27e60_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/51a5c61537424c918609067cbffc2f5e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3a2c347e04c240458cada7e61c4018c8_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/0c8625f354e549cd8e78b2ad6624d882_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/36e29d76261c436799bded47037e9220_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f5ce3f9b31bc445fa16be646c71a0da4_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/89e9582a58e140909935fb68b40eb735_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f2f0c19ade56433fab27796b9a3dab1b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f2f0c19ade56433fab27796b9a3dab1b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f2f0c19ade56433fab27796b9a3dab1b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/febff49d6541408fad40d7da07bbe1a6_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/febff49d6541408fad40d7da07bbe1a6_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/febff49d6541408fad40d7da07bbe1a6_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/549d96d8cd954cc3954f19f44e14bafd_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/549d96d8cd954cc3954f19f44e14bafd_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/549d96d8cd954cc3954f19f44e14bafd_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d564823bd33048779194407f2db0fcf4_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d564823bd33048779194407f2db0fcf4_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d564823bd33048779194407f2db0fcf4_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4cdd3d20b399406388003deb732ff53f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4cdd3d20b399406388003deb732ff53f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4cdd3d20b399406388003deb732ff53f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/198b6167500246eabd12699655819d0b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/198b6167500246eabd12699655819d0b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/198b6167500246eabd12699655819d0b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af1a2bde1dc4da591a878806f62c58c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af1a2bde1dc4da591a878806f62c58c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af1a2bde1dc4da591a878806f62c58c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f70b1a05834445ac974ca34d44d27e60_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f70b1a05834445ac974ca34d44d27e60_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f70b1a05834445ac974ca34d44d27e60_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/51a5c61537424c918609067cbffc2f5e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/51a5c61537424c918609067cbffc2f5e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/51a5c61537424c918609067cbffc2f5e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3a2c347e04c240458cada7e61c4018c8_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3a2c347e04c240458cada7e61c4018c8_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3a2c347e04c240458cada7e61c4018c8_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/0c8625f354e549cd8e78b2ad6624d882_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/0c8625f354e549cd8e78b2ad6624d882_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/0c8625f354e549cd8e78b2ad6624d882_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/36e29d76261c436799bded47037e9220_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/36e29d76261c436799bded47037e9220_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/36e29d76261c436799bded47037e9220_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f5ce3f9b31bc445fa16be646c71a0da4_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f5ce3f9b31bc445fa16be646c71a0da4_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f5ce3f9b31bc445fa16be646c71a0da4_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/89e9582a58e140909935fb68b40eb735_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/89e9582a58e140909935fb68b40eb735_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/89e9582a58e140909935fb68b40eb735_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2014-audi-q7-premium-plus-WA1LMAFE7ED008858",
+    "vin": "WA1LMAFE7ED008858",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "52728906",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2014 AUDI Q7 PREMIUM PLUS",
+    "year": 2014,
+    "make": "AUDI",
+    "model": "Q7",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 4100,
+      "current_bid2_usd": 4100,
+      "buy_now_usd": 4500,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 200,
+        "to": 4293,
+        "text": "$200 - $4,293"
+      }
+    },
+    "location": {
+      "display": "Mocksville (NC)",
+      "send_from": "Norfolk",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "ENHANCED VEHICLES",
+        "label": "Enhanced vehicles",
+        "class_hint": "warning"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Minor dent/scratches",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 138834,
+      "km": 223431
+    },
+    "vehicle_specs": {
+      "exterior_color": "Gray",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Diesel",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "DEALER ONLY CLEAN TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 13,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c3248b16e4884313ae687bcdd99cbab5_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3e2ac977238c465f8184d5460474609f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aae2c7827951446cb77b18fa4f7476e8_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4581974d1cf741a99bf670f83b1ad3fb_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d1f01b87eb8b4d29be76908974cdd757_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2c9d0af1db5749bda492a0db9ebb661f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/228b79748d494ed38a2ff23dbe29cdcf_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c1db89c3ad664602a9db4cc4cca03178_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1a48059caa674ffcabc53463bb6d6fba_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1d4576433ecd42dd9060ea27d71239ad_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5bce5a29cd884202abf2defeefe48bff_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ae0230506394e7aa2434fcd4749aaa0_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6813f5d192c44ef19dce94a686de6971_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c3248b16e4884313ae687bcdd99cbab5_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c3248b16e4884313ae687bcdd99cbab5_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c3248b16e4884313ae687bcdd99cbab5_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3e2ac977238c465f8184d5460474609f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3e2ac977238c465f8184d5460474609f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/3e2ac977238c465f8184d5460474609f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aae2c7827951446cb77b18fa4f7476e8_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aae2c7827951446cb77b18fa4f7476e8_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aae2c7827951446cb77b18fa4f7476e8_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4581974d1cf741a99bf670f83b1ad3fb_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4581974d1cf741a99bf670f83b1ad3fb_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4581974d1cf741a99bf670f83b1ad3fb_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d1f01b87eb8b4d29be76908974cdd757_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d1f01b87eb8b4d29be76908974cdd757_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d1f01b87eb8b4d29be76908974cdd757_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2c9d0af1db5749bda492a0db9ebb661f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2c9d0af1db5749bda492a0db9ebb661f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2c9d0af1db5749bda492a0db9ebb661f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/228b79748d494ed38a2ff23dbe29cdcf_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/228b79748d494ed38a2ff23dbe29cdcf_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/228b79748d494ed38a2ff23dbe29cdcf_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c1db89c3ad664602a9db4cc4cca03178_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c1db89c3ad664602a9db4cc4cca03178_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c1db89c3ad664602a9db4cc4cca03178_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1a48059caa674ffcabc53463bb6d6fba_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1a48059caa674ffcabc53463bb6d6fba_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1a48059caa674ffcabc53463bb6d6fba_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1d4576433ecd42dd9060ea27d71239ad_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1d4576433ecd42dd9060ea27d71239ad_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/1d4576433ecd42dd9060ea27d71239ad_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5bce5a29cd884202abf2defeefe48bff_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5bce5a29cd884202abf2defeefe48bff_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5bce5a29cd884202abf2defeefe48bff_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ae0230506394e7aa2434fcd4749aaa0_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ae0230506394e7aa2434fcd4749aaa0_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ae0230506394e7aa2434fcd4749aaa0_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6813f5d192c44ef19dce94a686de6971_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6813f5d192c44ef19dce94a686de6971_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6813f5d192c44ef19dce94a686de6971_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2015-audi-q7-premium-plus-WA1LGAFE7FD006973",
+    "vin": "WA1LGAFE7FD006973",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "51667976",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2015 AUDI Q7 PREMIUM PLUS",
+    "year": 2015,
+    "make": "AUDI",
+    "model": "Q7",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 2200,
+      "current_bid2_usd": 2200,
+      "buy_now_usd": 3400,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 950,
+        "to": 5800,
+        "text": "$950 - $5,800"
+      }
+    },
+    "location": {
+      "display": "Houston East (TX)",
+      "send_from": "Houston",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "ENHANCED VEHICLES",
+        "label": "Enhanced vehicles",
+        "class_hint": "warning"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Mechanical",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 121228,
+      "km": 195097
+    },
+    "vehicle_specs": {
+      "exterior_color": "Black",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": true
+    },
+    "media": {
+      "thumbs_count": 13,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/86f5a1a5d4784c25b54e3c976962fea0_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2e496e0077354eb88b09ac44cda5ffb1_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9ca6742366d44d68fdcdf03f96c511c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/47340aafe705465f9ad7214bc329bf7d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e98a3e9674c7415686bd675910a5768b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4515d1b1352448d5aadc13c975cab72d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/020245249dad43ab953a1cc7fdacebb6_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/801f8191d6ad41429d8678bbb3a362a2_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/629fa83854624523a4e55ad7bf248a39_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/260bcbe5fef84430bb2b706717381626_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e88e86cbc664e7b92b868683e88c7fc_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/04c2a9e3206f492c8357ec68700f8e39_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4442fbd43d774653bdf7a53bff43e6a5_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/86f5a1a5d4784c25b54e3c976962fea0_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/86f5a1a5d4784c25b54e3c976962fea0_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/86f5a1a5d4784c25b54e3c976962fea0_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2e496e0077354eb88b09ac44cda5ffb1_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2e496e0077354eb88b09ac44cda5ffb1_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2e496e0077354eb88b09ac44cda5ffb1_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9ca6742366d44d68fdcdf03f96c511c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9ca6742366d44d68fdcdf03f96c511c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9ca6742366d44d68fdcdf03f96c511c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/47340aafe705465f9ad7214bc329bf7d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/47340aafe705465f9ad7214bc329bf7d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/47340aafe705465f9ad7214bc329bf7d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e98a3e9674c7415686bd675910a5768b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e98a3e9674c7415686bd675910a5768b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e98a3e9674c7415686bd675910a5768b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4515d1b1352448d5aadc13c975cab72d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4515d1b1352448d5aadc13c975cab72d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4515d1b1352448d5aadc13c975cab72d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/020245249dad43ab953a1cc7fdacebb6_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/020245249dad43ab953a1cc7fdacebb6_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/020245249dad43ab953a1cc7fdacebb6_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/801f8191d6ad41429d8678bbb3a362a2_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/801f8191d6ad41429d8678bbb3a362a2_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/801f8191d6ad41429d8678bbb3a362a2_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/629fa83854624523a4e55ad7bf248a39_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/629fa83854624523a4e55ad7bf248a39_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/629fa83854624523a4e55ad7bf248a39_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/260bcbe5fef84430bb2b706717381626_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/260bcbe5fef84430bb2b706717381626_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/260bcbe5fef84430bb2b706717381626_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e88e86cbc664e7b92b868683e88c7fc_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e88e86cbc664e7b92b868683e88c7fc_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e88e86cbc664e7b92b868683e88c7fc_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/04c2a9e3206f492c8357ec68700f8e39_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/04c2a9e3206f492c8357ec68700f8e39_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/04c2a9e3206f492c8357ec68700f8e39_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4442fbd43d774653bdf7a53bff43e6a5_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4442fbd43d774653bdf7a53bff43e6a5_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4442fbd43d774653bdf7a53bff43e6a5_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2013-audi-q7-premium-plus-WA1LGAFE1DD000972",
+    "vin": "WA1LGAFE1DD000972",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "54841266",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2013 AUDI Q7 PREMIUM PLUS",
+    "year": 2013,
+    "make": "AUDI",
+    "model": "Q7",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 1800,
+      "current_bid2_usd": 1800,
+      "buy_now_usd": 3200,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 225,
+        "to": 3200,
+        "text": "$225 - $3,200"
+      }
+    },
+    "location": {
+      "display": "Long Island (NY)",
+      "send_from": "NY",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Minor dent/scratches",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 132917,
+      "km": 213909
+    },
+    "vehicle_specs": {
+      "exterior_color": "Blue",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 13,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fa30d96b484540dfa5848d15e5ced80e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fc97ba4074ec4c0193d5188e95d8e105_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/9c263d6da6154b16bbdaba4f656259a8_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ebede242625a42549ace9b417c73487d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e44d1b43675a440b91540c3d29b63130_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/716180ed548b4dfaa77dd8d24100e4b5_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/960651282b214db386114977969bdb77_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/09b44d4fd06141b2bc8b0c33f278883a_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/032802e5dc324df5977ec2baa3cde1fc_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/70d2ca888a5b41058427af6eb898bb90_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fcc08e37f4a24e2d9795742296394aa6_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fb75dc01a4f44818a045f59b0acb6087_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/10b0ae602a8941a396800ff3fdd2feb5_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fa30d96b484540dfa5848d15e5ced80e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fa30d96b484540dfa5848d15e5ced80e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fa30d96b484540dfa5848d15e5ced80e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fc97ba4074ec4c0193d5188e95d8e105_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fc97ba4074ec4c0193d5188e95d8e105_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fc97ba4074ec4c0193d5188e95d8e105_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/9c263d6da6154b16bbdaba4f656259a8_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/9c263d6da6154b16bbdaba4f656259a8_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/9c263d6da6154b16bbdaba4f656259a8_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ebede242625a42549ace9b417c73487d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ebede242625a42549ace9b417c73487d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ebede242625a42549ace9b417c73487d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e44d1b43675a440b91540c3d29b63130_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e44d1b43675a440b91540c3d29b63130_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e44d1b43675a440b91540c3d29b63130_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/716180ed548b4dfaa77dd8d24100e4b5_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/716180ed548b4dfaa77dd8d24100e4b5_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/716180ed548b4dfaa77dd8d24100e4b5_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/960651282b214db386114977969bdb77_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/960651282b214db386114977969bdb77_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/960651282b214db386114977969bdb77_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/09b44d4fd06141b2bc8b0c33f278883a_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/09b44d4fd06141b2bc8b0c33f278883a_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/09b44d4fd06141b2bc8b0c33f278883a_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/032802e5dc324df5977ec2baa3cde1fc_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/032802e5dc324df5977ec2baa3cde1fc_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/032802e5dc324df5977ec2baa3cde1fc_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/70d2ca888a5b41058427af6eb898bb90_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/70d2ca888a5b41058427af6eb898bb90_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/70d2ca888a5b41058427af6eb898bb90_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fcc08e37f4a24e2d9795742296394aa6_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fcc08e37f4a24e2d9795742296394aa6_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fcc08e37f4a24e2d9795742296394aa6_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fb75dc01a4f44818a045f59b0acb6087_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fb75dc01a4f44818a045f59b0acb6087_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fb75dc01a4f44818a045f59b0acb6087_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/10b0ae602a8941a396800ff3fdd2feb5_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/10b0ae602a8941a396800ff3fdd2feb5_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/10b0ae602a8941a396800ff3fdd2feb5_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2014-audi-q7-prestige-WA1VMBFE5ED015354",
+    "vin": "WA1VMBFE5ED015354",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "55004996",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2014 AUDI Q7 PRESTIGE",
+    "year": 2014,
+    "make": "AUDI",
+    "model": "Q7",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 1100,
+      "current_bid2_usd": 1100,
+      "buy_now_usd": 7700,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 200,
+        "to": 4293,
+        "text": "$200 - $4,293"
+      }
+    },
+    "location": {
+      "display": "Oklahoma City (OK)",
+      "send_from": "Houston",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Minor dent/scratches",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 226639,
+      "km": 364739
+    },
+    "vehicle_specs": {
+      "exterior_color": "Blue",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Diesel",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": true
+    },
+    "media": {
+      "thumbs_count": 10,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/565e7ab849314755a3cc533c50e951ee_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3454c265ee2424da74b26f3aa964fb8_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7dba8a25f9f54b0b8412ac845d8fa97b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2d644df2c30740bb995a2a7cfcbe7d01_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/814c91b6d0db47a2b1f7d11c1057f61f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/93e0b3ccd7584a4998bcef2010ef3d6f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bfcb4db7ca074c9c914008a31072075e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5475d34a802341cfbbb82bec9ade7686_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6f0a77889c8d47638de07abf589cb985_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/34b33aa91a804957b78995f77fe5280b_ful.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/565e7ab849314755a3cc533c50e951ee_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/565e7ab849314755a3cc533c50e951ee_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/565e7ab849314755a3cc533c50e951ee_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3454c265ee2424da74b26f3aa964fb8_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3454c265ee2424da74b26f3aa964fb8_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3454c265ee2424da74b26f3aa964fb8_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7dba8a25f9f54b0b8412ac845d8fa97b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7dba8a25f9f54b0b8412ac845d8fa97b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7dba8a25f9f54b0b8412ac845d8fa97b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2d644df2c30740bb995a2a7cfcbe7d01_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2d644df2c30740bb995a2a7cfcbe7d01_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/2d644df2c30740bb995a2a7cfcbe7d01_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/814c91b6d0db47a2b1f7d11c1057f61f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/814c91b6d0db47a2b1f7d11c1057f61f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/814c91b6d0db47a2b1f7d11c1057f61f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/93e0b3ccd7584a4998bcef2010ef3d6f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/93e0b3ccd7584a4998bcef2010ef3d6f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/93e0b3ccd7584a4998bcef2010ef3d6f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bfcb4db7ca074c9c914008a31072075e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bfcb4db7ca074c9c914008a31072075e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bfcb4db7ca074c9c914008a31072075e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5475d34a802341cfbbb82bec9ade7686_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5475d34a802341cfbbb82bec9ade7686_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5475d34a802341cfbbb82bec9ade7686_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6f0a77889c8d47638de07abf589cb985_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6f0a77889c8d47638de07abf589cb985_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6f0a77889c8d47638de07abf589cb985_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/34b33aa91a804957b78995f77fe5280b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/34b33aa91a804957b78995f77fe5280b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/34b33aa91a804957b78995f77fe5280b_hrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2015-audi-a6-prestige-WAUHGAFC1FN005299",
+    "vin": "WAUHGAFC1FN005299",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "54669176",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2015 AUDI A6 PRESTIGE",
+    "year": 2015,
+    "make": "AUDI",
+    "model": "A6",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 500,
+      "current_bid2_usd": 500,
+      "buy_now_usd": 3900,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 950,
+        "to": 5800,
+        "text": "$950 - $5,800"
+      }
+    },
+    "location": {
+      "display": "Hartford Springfield (CT)",
+      "send_from": "NY",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "ENHANCED VEHICLES",
+        "label": "Enhanced vehicles",
+        "class_hint": "warning"
+      },
+      "has_key": false,
+      "loss": null,
+      "primary_damage": "Front end",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 109348,
+      "km": 175978
+    },
+    "vehicle_specs": {
+      "exterior_color": "Gray",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3a7513f21364a98b11fb292608b06a0_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e720a2ca22be4e2d9ffe71b718595f21_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7556885d609c4fd9818f94625773f9b0_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b23516bea0e446b2be3df5631b718dff_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5b38722eca724ead81b33638b7753e5c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ee23074116974fe09d4f16b994d3350b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e41e5fdeecdf4558baf5dc92a7379f8c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bab24df1062749d383978d5685c72901_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bf5093610a904a1e914a652b1d215447_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/756c1f68ab5346fbb3c0950123eb983b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ca5ab985e48a4623997371bddf479d05_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6a6130a9e13d4cbf8e23ec564a5a5ae9_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3a7513f21364a98b11fb292608b06a0_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3a7513f21364a98b11fb292608b06a0_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3a7513f21364a98b11fb292608b06a0_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e720a2ca22be4e2d9ffe71b718595f21_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e720a2ca22be4e2d9ffe71b718595f21_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e720a2ca22be4e2d9ffe71b718595f21_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7556885d609c4fd9818f94625773f9b0_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7556885d609c4fd9818f94625773f9b0_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7556885d609c4fd9818f94625773f9b0_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b23516bea0e446b2be3df5631b718dff_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b23516bea0e446b2be3df5631b718dff_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b23516bea0e446b2be3df5631b718dff_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5b38722eca724ead81b33638b7753e5c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5b38722eca724ead81b33638b7753e5c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5b38722eca724ead81b33638b7753e5c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ee23074116974fe09d4f16b994d3350b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ee23074116974fe09d4f16b994d3350b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ee23074116974fe09d4f16b994d3350b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e41e5fdeecdf4558baf5dc92a7379f8c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e41e5fdeecdf4558baf5dc92a7379f8c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/e41e5fdeecdf4558baf5dc92a7379f8c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bab24df1062749d383978d5685c72901_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bab24df1062749d383978d5685c72901_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bab24df1062749d383978d5685c72901_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bf5093610a904a1e914a652b1d215447_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bf5093610a904a1e914a652b1d215447_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bf5093610a904a1e914a652b1d215447_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/756c1f68ab5346fbb3c0950123eb983b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/756c1f68ab5346fbb3c0950123eb983b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/756c1f68ab5346fbb3c0950123eb983b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ca5ab985e48a4623997371bddf479d05_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ca5ab985e48a4623997371bddf479d05_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ca5ab985e48a4623997371bddf479d05_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6a6130a9e13d4cbf8e23ec564a5a5ae9_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6a6130a9e13d4cbf8e23ec564a5a5ae9_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6a6130a9e13d4cbf8e23ec564a5a5ae9_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2014-audi-a6-premium-plus-WAUGFAFC4EN079930",
+    "vin": "WAUGFAFC4EN079930",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "78115445",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2014 AUDI A6 PREMIUM PLUS",
+    "year": 2014,
+    "make": "AUDI",
+    "model": "A6",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 1300,
+      "current_bid2_usd": 1300,
+      "buy_now_usd": 4250,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 200,
+        "to": 4293,
+        "text": "$200 - $4,293"
+      }
+    },
+    "location": {
+      "display": "Sun Valley (CA)",
+      "send_from": "LA",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "ENHANCED VEHICLES",
+        "label": "Enhanced vehicles",
+        "class_hint": "warning"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Mechanical",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 64878,
+      "km": 104411
+    },
+    "vehicle_specs": {
+      "exterior_color": "Gray",
+      "engine": {
+        "raw": "2.0L  4",
+        "size_l": "2.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERT OF TITLE OR SALVAGE ACQ",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9506006738204eafb252e9f58a618245_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02d99db2ac7e4b34a6b7921177a9f3df_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/870b9443773f40d797d04c6b5118e193_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/634cbb20f4ab45e8a8e50d572836c835_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02025bcf00a543b7937892e7dc8d328a_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a7757a3dd72e40a19fe983304b954e8f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a1ddce279b9f4910a1d61749d710f53c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/0011a805b91244e098a5e81916f91dfe_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/542909e692b544af9197f534b39c1fba_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/3f8535ab05bc4bce84dd616890341177_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/b1e83181d18d4818b7c2d9b23d3e7d67_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9a0cc2904e23499b9f97068e8ea7c8c8_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9506006738204eafb252e9f58a618245_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9506006738204eafb252e9f58a618245_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9506006738204eafb252e9f58a618245_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02d99db2ac7e4b34a6b7921177a9f3df_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02d99db2ac7e4b34a6b7921177a9f3df_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02d99db2ac7e4b34a6b7921177a9f3df_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/870b9443773f40d797d04c6b5118e193_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/870b9443773f40d797d04c6b5118e193_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/870b9443773f40d797d04c6b5118e193_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/634cbb20f4ab45e8a8e50d572836c835_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/634cbb20f4ab45e8a8e50d572836c835_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/634cbb20f4ab45e8a8e50d572836c835_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02025bcf00a543b7937892e7dc8d328a_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02025bcf00a543b7937892e7dc8d328a_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/02025bcf00a543b7937892e7dc8d328a_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a7757a3dd72e40a19fe983304b954e8f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a7757a3dd72e40a19fe983304b954e8f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a7757a3dd72e40a19fe983304b954e8f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a1ddce279b9f4910a1d61749d710f53c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a1ddce279b9f4910a1d61749d710f53c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/a1ddce279b9f4910a1d61749d710f53c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/0011a805b91244e098a5e81916f91dfe_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/0011a805b91244e098a5e81916f91dfe_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/0011a805b91244e098a5e81916f91dfe_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/542909e692b544af9197f534b39c1fba_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/542909e692b544af9197f534b39c1fba_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/542909e692b544af9197f534b39c1fba_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/3f8535ab05bc4bce84dd616890341177_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/3f8535ab05bc4bce84dd616890341177_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/3f8535ab05bc4bce84dd616890341177_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/b1e83181d18d4818b7c2d9b23d3e7d67_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/b1e83181d18d4818b7c2d9b23d3e7d67_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/b1e83181d18d4818b7c2d9b23d3e7d67_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9a0cc2904e23499b9f97068e8ea7c8c8_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9a0cc2904e23499b9f97068e8ea7c8c8_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0226/9a0cc2904e23499b9f97068e8ea7c8c8_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2014-audi-a6-premium-plus-WAUFGAFC6EN016692",
+    "vin": "WAUFGAFC6EN016692",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "55928306",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2014 AUDI A6 PREMIUM PLUS",
+    "year": 2014,
+    "make": "AUDI",
+    "model": "A6",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 3450,
+      "current_bid2_usd": 3450,
+      "buy_now_usd": 4100,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 200,
+        "to": 4293,
+        "text": "$200 - $4,293"
+      }
+    },
+    "location": {
+      "display": "Hartford Springfield (CT)",
+      "send_from": "NY",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Minor dent/scratches",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 138040,
+      "km": 222153
+    },
+    "vehicle_specs": {
+      "exterior_color": "White",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": true
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/27d6d2a6fc9a4206afc6397ae2bbad5f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9d148d73da7c43158d47a57405ef8a0c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ad3d5fc298b94105aaeba9275e4242f4_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8f2ba3dae8ca49a0b42f192811f771db_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/e8f7a4e98cdc420e9ce7cb4b24ba5810_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/142201423fd54b4ea0ecebc4394db039_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d74d3373f28c41b4a8395566163921f5_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/2560b6974b154bd4bc67d073dc69fee8_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/920e6ab60bb44815af82d3dcb3635f56_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ec4b2fc33acc46679f0c71a5a431b26c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/587a501555804a219ffe37cc68186107_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/3abdccb0cf4f4a38adec9b87fb19b8f8_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/27d6d2a6fc9a4206afc6397ae2bbad5f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/27d6d2a6fc9a4206afc6397ae2bbad5f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/27d6d2a6fc9a4206afc6397ae2bbad5f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9d148d73da7c43158d47a57405ef8a0c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9d148d73da7c43158d47a57405ef8a0c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9d148d73da7c43158d47a57405ef8a0c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ad3d5fc298b94105aaeba9275e4242f4_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ad3d5fc298b94105aaeba9275e4242f4_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ad3d5fc298b94105aaeba9275e4242f4_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8f2ba3dae8ca49a0b42f192811f771db_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8f2ba3dae8ca49a0b42f192811f771db_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8f2ba3dae8ca49a0b42f192811f771db_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/e8f7a4e98cdc420e9ce7cb4b24ba5810_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/e8f7a4e98cdc420e9ce7cb4b24ba5810_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/e8f7a4e98cdc420e9ce7cb4b24ba5810_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/142201423fd54b4ea0ecebc4394db039_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/142201423fd54b4ea0ecebc4394db039_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/142201423fd54b4ea0ecebc4394db039_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d74d3373f28c41b4a8395566163921f5_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d74d3373f28c41b4a8395566163921f5_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d74d3373f28c41b4a8395566163921f5_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/2560b6974b154bd4bc67d073dc69fee8_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/2560b6974b154bd4bc67d073dc69fee8_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/2560b6974b154bd4bc67d073dc69fee8_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/920e6ab60bb44815af82d3dcb3635f56_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/920e6ab60bb44815af82d3dcb3635f56_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/920e6ab60bb44815af82d3dcb3635f56_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ec4b2fc33acc46679f0c71a5a431b26c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ec4b2fc33acc46679f0c71a5a431b26c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ec4b2fc33acc46679f0c71a5a431b26c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/587a501555804a219ffe37cc68186107_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/587a501555804a219ffe37cc68186107_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/587a501555804a219ffe37cc68186107_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/3abdccb0cf4f4a38adec9b87fb19b8f8_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/3abdccb0cf4f4a38adec9b87fb19b8f8_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/3abdccb0cf4f4a38adec9b87fb19b8f8_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2014-audi-a6-prestige-WAUHGAFC0EN074371",
+    "vin": "WAUHGAFC0EN074371",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "50836376",
+    "ad": "2026-06-16T01:00:00+00:00",
+    "title": "2014 AUDI A6 PRESTIGE",
+    "year": 2014,
+    "make": "AUDI",
+    "model": "A6",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 04:00",
+      "full_date": "2026-06-16T01:00:00+00:00",
+      "diff_minutes": 72,
+      "ad": "2026-06-16T01:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 1,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T01:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": null,
+      "current_bid2_usd": 0,
+      "buy_now_usd": 1100,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 200,
+        "to": 4293,
+        "text": "$200 - $4,293"
+      }
+    },
+    "location": {
+      "display": "Van Nuys (CA)",
+      "send_from": "LA",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "ENHANCED VEHICLES",
+        "label": "Enhanced vehicles",
+        "class_hint": "warning"
+      },
+      "has_key": false,
+      "loss": null,
+      "primary_damage": "Front end",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 227990,
+      "km": 366913
+    },
+    "vehicle_specs": {
+      "exterior_color": "Gray",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "DIS/DLR/EXP ONLY CLEAN TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": true
+    },
+    "media": {
+      "thumbs_count": 13,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2e684e105d34a778c775607084e3f69_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/8450058beab54b8ca493edbdfc40c2f0_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/72c84cc8eb7c46a493884f98976c5364_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f779c9c661ed483b886a6f02c87b2928_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f8d8c979cb2d4d68aeb5d99b45a04996_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2ff82243a4ca44d29b540f45d8566a03_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4a016acab39c41848fe0764dc7e103d9_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2c635e5f8a2441728f74d02847517a36_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6c080dc8ba1d48a99145e79e526dd82f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/46e54692a9d7466692363af1d1e71312_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/538ccfba60e94e56b8caefb8a76b6d10_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/83e6ece82e314023bfaed671ce79fb52_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/02bea404f77647b9bbce94a5b45154d1_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2e684e105d34a778c775607084e3f69_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2e684e105d34a778c775607084e3f69_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2e684e105d34a778c775607084e3f69_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/8450058beab54b8ca493edbdfc40c2f0_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/8450058beab54b8ca493edbdfc40c2f0_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/8450058beab54b8ca493edbdfc40c2f0_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/72c84cc8eb7c46a493884f98976c5364_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/72c84cc8eb7c46a493884f98976c5364_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/72c84cc8eb7c46a493884f98976c5364_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f779c9c661ed483b886a6f02c87b2928_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f779c9c661ed483b886a6f02c87b2928_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f779c9c661ed483b886a6f02c87b2928_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f8d8c979cb2d4d68aeb5d99b45a04996_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f8d8c979cb2d4d68aeb5d99b45a04996_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f8d8c979cb2d4d68aeb5d99b45a04996_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2ff82243a4ca44d29b540f45d8566a03_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2ff82243a4ca44d29b540f45d8566a03_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2ff82243a4ca44d29b540f45d8566a03_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4a016acab39c41848fe0764dc7e103d9_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4a016acab39c41848fe0764dc7e103d9_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4a016acab39c41848fe0764dc7e103d9_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2c635e5f8a2441728f74d02847517a36_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2c635e5f8a2441728f74d02847517a36_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/2c635e5f8a2441728f74d02847517a36_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6c080dc8ba1d48a99145e79e526dd82f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6c080dc8ba1d48a99145e79e526dd82f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6c080dc8ba1d48a99145e79e526dd82f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/46e54692a9d7466692363af1d1e71312_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/46e54692a9d7466692363af1d1e71312_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/46e54692a9d7466692363af1d1e71312_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/538ccfba60e94e56b8caefb8a76b6d10_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/538ccfba60e94e56b8caefb8a76b6d10_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/538ccfba60e94e56b8caefb8a76b6d10_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/83e6ece82e314023bfaed671ce79fb52_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/83e6ece82e314023bfaed671ce79fb52_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/83e6ece82e314023bfaed671ce79fb52_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/02bea404f77647b9bbce94a5b45154d1_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/02bea404f77647b9bbce94a5b45154d1_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/02bea404f77647b9bbce94a5b45154d1_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2013-audi-a6-20t-premium-WAUGFAFC8DN143014",
+    "vin": "WAUGFAFC8DN143014",
+    "platform": "iaai",
+    "platform_id": 2,
+    "lot_number": "45054945",
+    "ad": "2026-06-16T13:30:00+00:00",
+    "title": "2013 AUDI A6 2.0T PREMIUM",
+    "year": 2013,
+    "make": "AUDI",
+    "model": "A6",
+    "type": "AUTOMOBILE",
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 16:30",
+      "full_date": "2026-06-16T13:30:00+00:00",
+      "diff_minutes": 822,
+      "ad": "2026-06-16T13:30:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 13,
+        "minutes": 42
+      },
+      "is_timed": false,
+      "is_buy_now": false,
+      "auction_at": "2026-06-16T13:30:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 325,
+      "current_bid2_usd": 325,
+      "buy_now_usd": null,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 450,
+        "to": 4150,
+        "text": "$450 - $4,150"
+      }
+    },
+    "location": {
+      "display": "Long Island (NY)",
+      "send_from": "NY",
+      "state": null
+    },
+    "seller": {
+      "name": "Geico Insurance",
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Left side",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 104426,
+      "km": 168057
+    },
+    "vehicle_specs": {
+      "exterior_color": "Silver",
+      "engine": {
+        "raw": "2.0L I-4 DI, DOHC, VVT, turbo, 211HP",
+        "size_l": "2.0",
+        "hp": 211,
+        "layout": "I"
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gasoline",
+      "drive_type": "All Wheel Drive",
+      "body_style": "Sedan",
+      "airbags": "Intact",
+      "restraint_system": "Front impact airbag driver;Front side impact airbag driver;Overhead airbags;Front impact airbag passenger;Front side impact airbag passenger;Knee airbag"
+    },
+    "sale_document": {
+      "name": "MV-907A",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 11,
+      "has_video": true,
+      "has_360": false,
+      "thumbs": [
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I1&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I2&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I3&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I4&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I5&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I6&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I7&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I8&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I9&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I10&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I11&width=400&height=300"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I1&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I1&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I2&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I2&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I3&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I3&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I4&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I4&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I5&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I5&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I6&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I6&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I7&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I7&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I8&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I8&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I9&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I9&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I10&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I10&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I11&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45552475~SID~I11&width=845&height=633"
+        },
+        {
+          "type": "video",
+          "url": "https://mediaretriever.iaai.com/api/EngineVideoRetriever?partitionKey=45552475&Tenant=iaai"
+        }
+      ]
+    },
+    "details": {
+      "auction_information": {
+        "$id": "61",
+        "itemID": "64369891",
+        "series": "2.0T PREMIUM",
+        "stockNumber": "45054945",
+        "biddingInformation": {
+          "$id": "62",
+          "year": 2013,
+          "make": "AUDI",
+          "model": "A6",
+          "myCurrent": null,
+          "buyNowAmount": 0,
+          "buyNowPrice": "$0",
+          "timedAuctionBuyNowOfferstatus": 0,
+          "buyNowOfferAmount": 0,
+          "watchingAllowed": true,
+          "isWatching": false,
+          "isHighPrebidder": null,
+          "prebidClosed": null,
+          "displayHighPrebid": false,
+          "isPreBidVisible": false,
+          "timedAuctionInd": false,
+          "buyNowInd": false,
+          "displaySalesTaxWarningLinks": false,
+          "whoCanBuy": {
+            "$id": "63",
+            "$values": [
+              "DEA,DIS,EXP,REB,SCR"
+            ]
+          },
+          "biddingNotes": {
+            "$id": "64",
+            "$values": [
+              "All bids are in $25 increments",
+              "The winning pre-bid online will be represented at the live sale",
+              "Press the \"Pre-Bid\" button to learn more (such as Bid History)"
+            ]
+          },
+          "biddingWarnings": null,
+          "bidStatusWarnings": {
+            "$id": "65",
+            "$values": [
+              "You cannot Bid/Buy."
+            ]
+          },
+          "bidStatusIcon": "O",
+          "bidBuyInd": false,
+          "salesTaxInd": false,
+          "isUpstreamBranchStock": false,
+          "bidderMaxAllowedCredit": null,
+          "bidderUsedCredit": null,
+          "preBidAccessLevel": 3,
+          "buyerSalvageLimitMsg": null,
+          "bidIncrement": 25
+        },
+        "prebidInformation": {
+          "$id": "66",
+          "formattedMyMax": null,
+          "isPrebiddingDone": null,
+          "isHighPrebidder": null,
+          "biddingErrorMessage": null,
+          "prebidPickUpDate": "JUN 18",
+          "prebidPayDate": "JUN 23",
+          "ibfPickUpDate": null,
+          "ibfPayDate": null,
+          "ibfAwardMesssage": null,
+          "prebidClosed": false,
+          "prebidAllowed": true,
+          "decimalHighBidAmount": "325",
+          "decimalOutBidAmount": null,
+          "stringOutBidAmount": null,
+          "displayHighPrebid": false,
+          "bidText": null,
+          "displayDeletedBidMsg": false,
+          "showCurrentBid": true,
+          "showOutbidMessage": false,
+          "showPrebidHistory": true,
+          "highBidAmount": "$325",
+          "highBidder": null,
+          "losingBidStatus": null,
+          "myStock": null,
+          "myCurrent": null,
+          "myMax": null,
+          "outBidAmount": null,
+          "bidCountText": "2 people currently pre-bidding",
+          "showIBidLiveIcon": false,
+          "whoCanBid": null,
+          "isPreBidVisible": false,
+          "modifiedDate": null,
+          "prebidPopupErrorMessage": "You cannot Bid/Buy.<br/>The status of your account does not permit you to buy.<br/>Want to bid now? Get help from one of our <a href=\"/Broker/BrokerSearch\">Licensed Brokers</a>.<br/>For more information, please contact <a href=\"/Help/Support\">Buyer Services</a>.<br/>",
+          "prebidAwardMesssage": null,
+          "outBidAmountNeededText": null,
+          "startingBidAmountNeededText": null,
+          "jumpBidOutBidAmountNeededText": null,
+          "vehicleStatus": "RS",
+          "buyNowSold": false,
+          "timedAuctionInd": false,
+          "adjustedCloseDate": "6/16/2026 12:30:00 PM +00:00",
+          "liveDate": "6/16/2026 1:30:00 PM +00:00",
+          "ibuyFastAllowed": false,
+          "buyNowPrice": "$0",
+          "auctionStatusDescription": null,
+          "auctionStatus": null,
+          "branchCode": 613,
+          "ibfSoldMessage": null,
+          "ibfSoldMessageWithFiller": null,
+          "timedAuctionCloseTimeCST": null,
+          "reserveMet": true,
+          "timedAuctionDay": null,
+          "timedAuctionMonth": null,
+          "timedAuctionDate": null,
+          "timedAuctionDateString": null,
+          "userTimezoneAbb": null,
+          "timedAuctionBuyNowOfferstatus": 0,
+          "buyNowOfferAmount": null,
+          "timedAuctionClosingStatus": null,
+          "startBid": null,
+          "timedAuctionSoldTime": null,
+          "errorMessage": "You cannot Bid/Buy.",
+          "errorMessageShortDesc": "The status of your account does not permit you to buy.",
+          "errorMessageLongDesc": "Want to bid now? Get help from one of our <a href=\"/Broker/BrokerSearch\">Licensed Brokers</a>.<br/>For more information, please contact <a href=\"/Help/Support\">Buyer Services</a>.<br/>",
+          "displaySalesTaxWarning": false,
+          "salesTaxWarningMessage": null,
+          "displaySalesTaxWarningLinks": false,
+          "displayTaxLink": false,
+          "visibleBuyerFeeLink": false,
+          "isPublic": false,
+          "auctionID": null,
+          "buyNowCloseDate": null,
+          "liveDateinUserTimeZone": null,
+          "hidePreBidOnUpstreamBuyNow": false,
+          "timedAuctionWinnerId": null,
+          "isTACloseToReserve": false
+        },
+        "vehicledetailsNonUS": null,
+        "saleInformation": {
+          "$id": "67",
+          "saleInfo": {
+            "$id": "68",
+            "stockNumber": null,
+            "texasForeignBuyer": false,
+            "ohioForeignBuyer": false,
+            "caPublicBuyer": false
+          },
+          "branchLink": "Long Island (NY)",
+          "isVehicleAtBranch": false,
+          "isVehicleAtIAABranchForVirualBranch": false,
+          "iaaBranchLocationForVirtualBranch": null,
+          "locationName": null,
+          "address": "21 Rice Ct",
+          "city": "Medford",
+          "state": "NY",
+          "zip": "11763",
+          "phone": "631-207-3477",
+          "displayMoreLinkForRemote": false,
+          "day": "Tue",
+          "date": "16",
+          "month": "Jun",
+          "time": null,
+          "liveDateString": "8:30am",
+          "userTimezoneAbb": "UTCCUT",
+          "isOTPEnabled": true,
+          "texasForeignBuyerRequiresMsg": null
+        },
+        "imageInformation": null,
+        "errorMessage": null,
+        "currencyInd": "USD",
+        "userLoginStatus": true,
+        "isGuestAccount": false,
+        "bidValidationErrorCode": null
+      },
+      "attributes": {
+        "$id": "4",
+        "Id": "45552475~US",
+        "Tenant": "US",
+        "SalvageId": "45552475",
+        "StockNumber": "45054945",
+        "CreatedDateTime": "6/11/2026 6:14:38 AM +00:00",
+        "ModifiedDateTime": "6/11/2026 6:14:38 AM +00:00",
+        "Year": "2013",
+        "Make": "AUDI",
+        "Model": "A6",
+        "Series": "2.0T PREMIUM",
+        "InventoryType": "AUTOMOBILE",
+        "InventorySubType": null,
+        "InventoryCategory": "VEHICLE",
+        "InventoryStatus": "RS",
+        "Title": "BillOfSale",
+        "TitleBrand": null,
+        "TitleCode": "OTH",
+        "TBOInd": "False",
+        "CertState": null,
+        "WhoCanBuy": "DEA,DIS,EXP,REB,SCR",
+        "PrimaryDamageCode": "LS",
+        "PrimaryDamageDesc": "LEFT SIDE",
+        "SecondaryDamageCode": null,
+        "SecondaryDamageDesc": null,
+        "LossTypeCode": "0",
+        "LossTypeDesc": "Collision",
+        "Keys": "True",
+        "KeyFOB": "True",
+        "StartsCode": "CST",
+        "StartsDesc": "Starts",
+        "ODOValue": "104426",
+        "ODOBrand": "ACTUAL",
+        "ODOUoM": "mi",
+        "AirbagState": "Intact",
+        "NoOfAirbags": "0",
+        "RunAndDrive": "True",
+        "LocID": "0",
+        "LocName": null,
+        "LocLongitude": "-72.97355",
+        "LocLatitude": "40.81666",
+        "IsOffsite": "False",
+        "Name": "LI - Rice Court Yard - 613",
+        "Address": "21 Rice Ct",
+        "City": "Medford",
+        "State": "NY",
+        "Zip": "11763",
+        "Phone": "6312073477",
+        "AllowPresaleInspection": "True",
+        "PresaleOffsiteNote": null,
+        "LoadingServicesAvailable": "True",
+        "TowingServicesAvailable": "True",
+        "HoursOfOperation": null,
+        "PickupInstructions": null,
+        "LocationHours": "Hours of Operation have not been verified",
+        "PresaleOtherInfo": null,
+        "ShowLocationOnline": null,
+        "OnlineLocationName": null,
+        "LeadingImageID": null,
+        "KeyImageLink": "https://vis.iaai.com/dimensions?imageKeys=45552475~SID",
+        "Link360": null,
+        "EngineSoundLink": null,
+        "ProviderName": "Geico Insurance",
+        "ProviderGroup": "Berkshire Hathaway",
+        "ProviderType": "INS",
+        "ProviderTypeTimedAuction": null,
+        "ProviderDesc": null,
+        "Origin": "Insurance",
+        "ShowProvider": "False",
+        "ProviderACV": null,
+        "Reserve": null,
+        "TimedAuctionIndicator": "False",
+        "SiteSaleIndicator": "False",
+        "BuyNowCloseDateTime": null,
+        "CATIndicator": "False",
+        "CATText": "http://iaa-auctions.com/flood/iaa-cat-houston.php",
+        "PromoText": null,
+        "VIN": "WAUGFAFC8DN143014",
+        "VINStatus": "OK",
+        "VINMask": "WAUGFAFC8DN******",
+        "BodyStyleCode": null,
+        "BodyStyleName": "SEDAN",
+        "Cylinders": "4",
+        "CylindersDesc": "4 Cyl",
+        "DriveLineTypeCode": null,
+        "DriveLineTypeDesc": "AWD",
+        "EngineSize": "2.0L I-4 DI, DOHC, VVT, TURBO, 211HP",
+        "EngineInfo": null,
+        "SegmentCode": null,
+        "Segment": "Sedan",
+        "SegmentDesc": null,
+        "CheckDigit": null,
+        "ColorCode": null,
+        "ExteriorColor": "SILVER",
+        "FuelTypeCode": "Gasoline",
+        "FuelTypeDesc": "Gasoline",
+        "FuelTypeOriginalDesc": "Gasoline",
+        "InteriorColor": null,
+        "VehicleClass": "Sedan",
+        "TransmissionCode": null,
+        "Transmission": "Automatic",
+        "TransmissionDesc": null,
+        "CountryOfOrigin": "Germany",
+        "RestraintType": "Front impact airbag driver;Front side impact airbag driver;Overhead airbags;Front impact airbag passenger;Front side impact airbag passenger;Knee airbag",
+        "ProviderGroupId": null,
+        "CRExists": "False",
+        "CRLinkID": null,
+        "ECRExists": "False",
+        "ECRLinkID": null,
+        "PartsInfoExists": "False",
+        "MaterialParticularInd": "False",
+        "ChromeDataInd": "True",
+        "AuctionId": "60125043",
+        "BranchNumber": "613",
+        "BranchName": "Long Island (NY)",
+        "BranchLink": "613~US",
+        "TemplateType": "Vehicle",
+        "RDProvider": null,
+        "HybridIndicator": "False",
+        "BranchState": "NY",
+        "IsShrinkWrap": "False",
+        "Aisle": "RO",
+        "Stall": "15",
+        "DisplayLaneRunDateTime": "6/12/2026 5:00:00 AM +00:00",
+        "Lane": null,
+        "Slot": null,
+        "AuctionDateTime": "6/16/2026 1:30:00 PM +00:00",
+        "WindowStickerInd": "False",
+        "Action": "0",
+        "Currency": "USD",
+        "Synonyms": "Run & drive,runs,drives,Run and drives",
+        "Market": "UnitedStates",
+        "IsBranchVirtual": "False",
+        "LastUpdated": "6/11/2026 6:14:39 AM",
+        "TitleState": "NY",
+        "TitleStateName": "New York",
+        "VehicleGrade": "41",
+        "TitleNotes": null,
+        "EngineInformation": "2.0L I-4 DI, DOHC, VVT, turbo, 211HP",
+        "Battery": null,
+        "Radiator": null,
+        "CatalyticConverter": "Present",
+        "VehicleCondition": null,
+        "OffsiteSaleInd": "True",
+        "StorageLocationId": "12743949",
+        "IsUpStreamBranchStock": "False",
+        "SpareTireInd": null,
+        "WheelType": null,
+        "TireMake": null,
+        "TireFrontSize": null,
+        "TireRearSize": null,
+        "EngineRuns1": null,
+        "EngineStarts1": null,
+        "EngineHours1": null,
+        "OilLevel1": null,
+        "CoolantLevel1": null,
+        "EngineRuns2": null,
+        "EngineStarts2": null,
+        "EngineHours2": null,
+        "OilLevel2": null,
+        "CoolantLevel2": null,
+        "GeneratorHours": null,
+        "BathroomDamage": null,
+        "WheelsMissing": null,
+        "EngineInfo1": null,
+        "EngineDamage1": null,
+        "EngineInfo2": null,
+        "EngineDamage2": null,
+        "TrailerDamage": null,
+        "Pickled": null,
+        "Winterized": null,
+        "Flushed": null,
+        "ReeferHours": null,
+        "OilLevel": null,
+        "Hubometer": null,
+        "EstRepairCost": "8677",
+        "ConditionReportId": null,
+        "CostOfRepairDocId": null,
+        "DisplayLocationACInd": "True",
+        "IsACEBranch": "False",
+        "IsMarhabaBranch": "False",
+        "IsMaskACV": "False",
+        "IsDisplayProvider": "True",
+        "LocationOffsiteSaleInd": "True",
+        "BuiltInd": "False",
+        "Navigation": "Present",
+        "CubicInchDisplacement": null,
+        "OBDIIDocumentImageID": "0",
+        "StorageLocationBranch": null,
+        "StorageLocationBranchLink": "~US",
+        "ShowDamageLinkMsg": "False",
+        "ShowDamageLinkMsgForTitleMax": "False",
+        "StorageLocationLatitude": "40.81823",
+        "StorageLocationLongitude": "-72.96128",
+        "YearMakeModelSeries": "2013 AUDI A6 2.0T PREMIUM",
+        "MinimumBidAmount": "0",
+        "VersionId": "6",
+        "PublicAuctionInd": "False",
+        "IsSpecialty": "False",
+        "OperableInd": "True",
+        "DisplLiters": "2.0L",
+        "IsExcludedFromDDR": "False",
+        "EmailTextForShare": "Checkoutthis 2013 AUDI A6 atIAAbeforeitsscheduledauctionon 6/16/2026.",
+        "ConditionReportURL": null,
+        "HeavyVehicleFeeMsgInd": "False",
+        "IsGSAStock": "False",
+        "ShippingEligibility": "True",
+        "ShippingEligibilityTransport": "True",
+        "DisplayPremiumReport": "False",
+        "ShowConditionReportURL": "True"
+      },
+      "vehicle_information": {
+        "StockHash": "45054945",
+        "SellingBranch": "Long Island (NY)",
+        "VINStatus": "WAUGFAFC8DN143014 (OK)",
+        "Loss": "Collision",
+        "PrimaryDamage": "Left Side",
+        "TitleSaleDoc": "MV-907A (New York)",
+        "StartCode": "Run & Drive",
+        "KeySlashFob": "Present",
+        "Odometer": "104,426 mi (Actual)",
+        "Airbags": "Intact"
+      },
+      "vehicle_description": {
+        "VINStatus": "WAUGFAFC8DN143014 (OK)",
+        "VehicleScore": "41",
+        "Vehicle": "Automobile",
+        "BodyStyle": "SEDAN",
+        "Engine": "2.0L I-4 DI, DOHC, VVT, TURBO, 211HP",
+        "Transmission": "Automatic Transmission",
+        "DriveLineType": "All Wheel Drive",
+        "FuelType": "Gasoline",
+        "Cylinders": "4 Cylinders",
+        "RestraintSystem": "Front impact airbag driver;Front side impact airbag driver;Overhead airbags;Front impact airbag passenger;Front side impact airbag passenger;Knee airbag",
+        "ExteriorInterior": "Silver/ Unknown",
+        "Options": "Console Display",
+        "ManufacturedIn": "Germany",
+        "VehicleClass": "Sedan",
+        "Model": "A6",
+        "Series": "2.0T PREMIUM"
+      },
+      "sale_information": {
+        "SellingBranch": "Long Island (NY)",
+        "VehiclesVehicleLocation": "IAA - Long Island - Rice Court Yard\n21 RICE CT\nMEDFORD, NY, 11763\n631-207-3477",
+        "More": "<h6 class='subhead'>Offsite Announcements</h6><p class='text-sm mb-0'><strong>Hours of Operation</strong></p><p class='text-sm'><strong>Hours of Operation have not been verified</strong></p><p class='text-sm'><strong>Vehicles must be paid through IAA</p></strong><p class='text-sm'><strong>Authorization for Off-site Sale Release form is recommended for pickup. This form will be emailed upon payment posting to your account or it can be obtained through the selling branch</strong></p><p class='text-sm'>Is pre-sale off-site inspection available?<strong> Yes</strong></p><p class='text-sm'>Are loading services available?<strong> Yes</strong></p><p class='text-sm'>Are towing services available?<strong> Yes<strong></p>",
+        "AuctionDateTime": "6/16/2026 1:30:00 PM +00:00",
+        "Lane": "Available two days before sale",
+        "Aisle": "Available two days before sale",
+        "ActualCashValue": "$7,609 USD",
+        "EstimatedRepairCost": "$8,677 USD",
+        "Seller": "Geico Insurance",
+        "SellerType": "Insurance",
+        "TitleSaleDoc": "MV-907A (New York)"
+      },
+      "bid_increment": 25
+    },
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2015-audi-a6-20t-premium-WAUGFAFC5FN021634",
+    "vin": "WAUGFAFC5FN021634",
+    "platform": "iaai",
+    "platform_id": 2,
+    "lot_number": "45033389",
+    "ad": "2026-06-16T13:30:00+00:00",
+    "title": "2015 AUDI A6 2.0T PREMIUM",
+    "year": 2015,
+    "make": "AUDI",
+    "model": "A6",
+    "type": "AUTOMOBILE",
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 16:30",
+      "full_date": "2026-06-16T13:30:00+00:00",
+      "diff_minutes": 822,
+      "ad": "2026-06-16T13:30:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 13,
+        "minutes": 42
+      },
+      "is_timed": false,
+      "is_buy_now": false,
+      "auction_at": "2026-06-16T13:30:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 525,
+      "current_bid2_usd": 525,
+      "buy_now_usd": null,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 525,
+        "to": 6300,
+        "text": "$525 - $6,300"
+      }
+    },
+    "location": {
+      "display": "Atlanta North (GA)",
+      "send_from": "Savannah",
+      "state": null
+    },
+    "seller": {
+      "name": "Progressive Casualty Insurance",
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Front end",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 105635,
+      "km": 170003
+    },
+    "vehicle_specs": {
+      "exterior_color": "Silver",
+      "engine": {
+        "raw": "2.0L I-4 DI, DOHC, VVT, turbo, 220HP",
+        "size_l": "2.0",
+        "hp": 220,
+        "layout": "I"
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gasoline",
+      "drive_type": "All Wheel Drive",
+      "body_style": "Sedan",
+      "airbags": "Intact",
+      "restraint_system": "Front impact airbag driver;Front side impact airbag driver;Overhead airbags;Front impact airbag passenger;Front side impact airbag passenger;Knee airbag"
+    },
+    "sale_document": {
+      "name": "SALVAGE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 16,
+      "has_video": false,
+      "has_360": true,
+      "thumbs": [
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I1&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I2&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I3&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I4&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I5&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I6&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I7&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I8&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I9&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I10&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I11&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I115&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I116&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I117&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I118&width=400&height=300",
+        "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I119&width=400&height=300"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I1&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I1&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I2&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I2&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I3&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I3&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I4&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I4&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I5&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I5&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I6&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I6&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I7&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I7&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I8&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I8&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I9&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I9&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I10&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I10&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I11&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I11&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I115&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I115&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I116&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I116&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I117&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I117&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I118&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I118&width=845&height=633"
+        },
+        {
+          "type": "image",
+          "thumb": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I119&width=400&height=300",
+          "large": "https://vis.iaai.com/resizer?imageKeys=45530906~SID~I119&width=845&height=633"
+        },
+        {
+          "type": "vr360",
+          "url": "https://vis.iaai.com/Home/ThreeSixtyView?keys=SID-45530906~STP-1~INT-1&iframeview=true"
+        }
+      ]
+    },
+    "details": {
+      "auction_information": {
+        "$id": "63",
+        "itemID": "64419357",
+        "series": "2.0T PREMIUM",
+        "stockNumber": "45033389",
+        "biddingInformation": {
+          "$id": "64",
+          "year": 2015,
+          "make": "AUDI",
+          "model": "A6",
+          "myCurrent": null,
+          "buyNowAmount": 0,
+          "buyNowPrice": "$0",
+          "timedAuctionBuyNowOfferstatus": 0,
+          "buyNowOfferAmount": 0,
+          "watchingAllowed": true,
+          "isWatching": false,
+          "isHighPrebidder": null,
+          "prebidClosed": null,
+          "displayHighPrebid": false,
+          "isPreBidVisible": false,
+          "timedAuctionInd": false,
+          "buyNowInd": false,
+          "displaySalesTaxWarningLinks": false,
+          "whoCanBuy": {
+            "$id": "65",
+            "$values": [
+              "DEA,DIS,EXP,LBU,NAB,PUB,REB,SCR"
+            ]
+          },
+          "biddingNotes": {
+            "$id": "66",
+            "$values": [
+              "All bids are in $25 increments",
+              "The winning pre-bid online will be represented at the live sale",
+              "Press the \"Pre-Bid\" button to learn more (such as Bid History)"
+            ]
+          },
+          "biddingWarnings": null,
+          "bidStatusWarnings": {
+            "$id": "67",
+            "$values": [
+              "You cannot Bid/Buy."
+            ]
+          },
+          "bidStatusIcon": "O",
+          "bidBuyInd": false,
+          "salesTaxInd": false,
+          "isUpstreamBranchStock": false,
+          "bidderMaxAllowedCredit": null,
+          "bidderUsedCredit": null,
+          "preBidAccessLevel": 2,
+          "buyerSalvageLimitMsg": null,
+          "bidIncrement": 25
+        },
+        "prebidInformation": {
+          "$id": "68",
+          "formattedMyMax": null,
+          "isPrebiddingDone": null,
+          "isHighPrebidder": null,
+          "biddingErrorMessage": null,
+          "prebidPickUpDate": "JUN 23",
+          "prebidPayDate": "JUN 23",
+          "ibfPickUpDate": null,
+          "ibfPayDate": null,
+          "ibfAwardMesssage": null,
+          "prebidClosed": false,
+          "prebidAllowed": true,
+          "decimalHighBidAmount": "525",
+          "decimalOutBidAmount": null,
+          "stringOutBidAmount": null,
+          "displayHighPrebid": false,
+          "bidText": null,
+          "displayDeletedBidMsg": false,
+          "showCurrentBid": true,
+          "showOutbidMessage": false,
+          "showPrebidHistory": true,
+          "highBidAmount": "$525",
+          "highBidder": null,
+          "losingBidStatus": null,
+          "myStock": null,
+          "myCurrent": null,
+          "myMax": null,
+          "outBidAmount": null,
+          "bidCountText": "2 people currently pre-bidding",
+          "showIBidLiveIcon": false,
+          "whoCanBid": null,
+          "isPreBidVisible": false,
+          "modifiedDate": null,
+          "prebidPopupErrorMessage": "You cannot Bid/Buy.<br/>The status of your account does not permit you to buy.<br/>Want to bid now? Get help from one of our <a href=\"/Broker/BrokerSearch\">Licensed Brokers</a>.<br/>For more information, please contact <a href=\"/Help/Support\">Buyer Services</a>.<br/>",
+          "prebidAwardMesssage": null,
+          "outBidAmountNeededText": null,
+          "startingBidAmountNeededText": null,
+          "jumpBidOutBidAmountNeededText": null,
+          "vehicleStatus": "RS",
+          "buyNowSold": false,
+          "timedAuctionInd": false,
+          "adjustedCloseDate": "6/16/2026 12:30:00 PM +00:00",
+          "liveDate": "6/16/2026 1:30:00 PM +00:00",
+          "ibuyFastAllowed": false,
+          "buyNowPrice": "$0",
+          "auctionStatusDescription": null,
+          "auctionStatus": null,
+          "branchCode": 706,
+          "ibfSoldMessage": null,
+          "ibfSoldMessageWithFiller": null,
+          "timedAuctionCloseTimeCST": null,
+          "reserveMet": true,
+          "timedAuctionDay": null,
+          "timedAuctionMonth": null,
+          "timedAuctionDate": null,
+          "timedAuctionDateString": null,
+          "userTimezoneAbb": null,
+          "timedAuctionBuyNowOfferstatus": 0,
+          "buyNowOfferAmount": null,
+          "timedAuctionClosingStatus": null,
+          "startBid": null,
+          "timedAuctionSoldTime": null,
+          "errorMessage": "You cannot Bid/Buy.",
+          "errorMessageShortDesc": "The status of your account does not permit you to buy.",
+          "errorMessageLongDesc": "Want to bid now? Get help from one of our <a href=\"/Broker/BrokerSearch\">Licensed Brokers</a>.<br/>For more information, please contact <a href=\"/Help/Support\">Buyer Services</a>.<br/>",
+          "displaySalesTaxWarning": false,
+          "salesTaxWarningMessage": null,
+          "displaySalesTaxWarningLinks": false,
+          "displayTaxLink": false,
+          "visibleBuyerFeeLink": false,
+          "isPublic": false,
+          "auctionID": null,
+          "buyNowCloseDate": null,
+          "liveDateinUserTimeZone": null,
+          "hidePreBidOnUpstreamBuyNow": false,
+          "timedAuctionWinnerId": null,
+          "isTACloseToReserve": false
+        },
+        "vehicledetailsNonUS": null,
+        "saleInformation": {
+          "$id": "69",
+          "saleInfo": {
+            "$id": "70",
+            "stockNumber": null,
+            "texasForeignBuyer": false,
+            "ohioForeignBuyer": false,
+            "caPublicBuyer": false
+          },
+          "branchLink": "Atlanta North (GA)",
+          "isVehicleAtBranch": true,
+          "isVehicleAtIAABranchForVirualBranch": false,
+          "iaaBranchLocationForVirtualBranch": null,
+          "locationName": null,
+          "address": "6242 BlackAcre Trail",
+          "city": "Acworth",
+          "state": "GA",
+          "zip": "30101",
+          "phone": "770-975-1107",
+          "displayMoreLinkForRemote": false,
+          "day": "Tue",
+          "date": "16",
+          "month": "Jun",
+          "time": null,
+          "liveDateString": "8:30am",
+          "userTimezoneAbb": "UTCCUT",
+          "isOTPEnabled": true,
+          "texasForeignBuyerRequiresMsg": null
+        },
+        "imageInformation": null,
+        "errorMessage": null,
+        "currencyInd": "USD",
+        "userLoginStatus": true,
+        "isGuestAccount": false,
+        "bidValidationErrorCode": null
+      },
+      "attributes": {
+        "$id": "4",
+        "Id": "45530906~US",
+        "Tenant": "US",
+        "SalvageId": "45530906",
+        "StockNumber": "45033389",
+        "CreatedDateTime": "6/14/2026 5:44:06 AM +00:00",
+        "ModifiedDateTime": "6/14/2026 5:44:06 AM +00:00",
+        "Year": "2015",
+        "Make": "AUDI",
+        "Model": "A6",
+        "Series": "2.0T PREMIUM",
+        "InventoryType": "AUTOMOBILE",
+        "InventorySubType": null,
+        "InventoryCategory": "VEHICLE",
+        "InventoryStatus": "RS",
+        "Title": "BillOfSale",
+        "TitleBrand": null,
+        "TitleCode": "SAL",
+        "TBOInd": "False",
+        "CertState": null,
+        "WhoCanBuy": "DEA,DIS,EXP,LBU,NAB,PUB,REB,SCR",
+        "PrimaryDamageCode": "F",
+        "PrimaryDamageDesc": "FRONT END",
+        "SecondaryDamageCode": "UK",
+        "SecondaryDamageDesc": "UNKNOWN",
+        "LossTypeCode": "0",
+        "LossTypeDesc": "Collision",
+        "Keys": "True",
+        "KeyFOB": "True",
+        "StartsCode": "CST",
+        "StartsDesc": "Starts",
+        "ODOValue": "105635",
+        "ODOBrand": "ACTUAL",
+        "ODOUoM": "mi",
+        "AirbagState": "Intact",
+        "NoOfAirbags": "0",
+        "RunAndDrive": "True",
+        "LocID": "0",
+        "LocName": null,
+        "LocLongitude": "-84.73218",
+        "LocLatitude": "34.07912",
+        "IsOffsite": "False",
+        "Name": "Atlanta North",
+        "Address": "6242 BlackAcre Trail",
+        "City": "Acworth",
+        "State": "GA",
+        "Zip": "30101",
+        "Phone": "7709751107",
+        "AllowPresaleInspection": "False",
+        "PresaleOffsiteNote": null,
+        "LoadingServicesAvailable": "False",
+        "TowingServicesAvailable": "False",
+        "HoursOfOperation": null,
+        "PickupInstructions": null,
+        "LocationHours": null,
+        "PresaleOtherInfo": null,
+        "ShowLocationOnline": null,
+        "OnlineLocationName": null,
+        "LeadingImageID": null,
+        "KeyImageLink": "https://vis.iaai.com/dimensions?imageKeys=45530906~SID",
+        "Link360": "https://vis.iaai.com/Home/ThreeSixtyView?keys=SID-45530906~STP-1~INT-1&iframeview=true",
+        "EngineSoundLink": null,
+        "ProviderName": "Progressive Casualty Insurance",
+        "ProviderGroup": "Progressive",
+        "ProviderType": "INS",
+        "ProviderTypeTimedAuction": null,
+        "ProviderDesc": null,
+        "Origin": "Insurance",
+        "ShowProvider": "False",
+        "ProviderACV": null,
+        "Reserve": null,
+        "TimedAuctionIndicator": "False",
+        "SiteSaleIndicator": "False",
+        "BuyNowCloseDateTime": null,
+        "CATIndicator": "False",
+        "CATText": "http://iaa-auctions.com/flood/iaa-cat-houston.php",
+        "PromoText": null,
+        "VIN": "WAUGFAFC5FN021634",
+        "VINStatus": "OK",
+        "VINMask": "WAUGFAFC5FN******",
+        "BodyStyleCode": null,
+        "BodyStyleName": "SEDAN",
+        "Cylinders": "4",
+        "CylindersDesc": "4 Cyl",
+        "DriveLineTypeCode": null,
+        "DriveLineTypeDesc": "AWD",
+        "EngineSize": "2.0L I-4 DI, DOHC, VVT, TURBO, 220HP",
+        "EngineInfo": null,
+        "SegmentCode": null,
+        "Segment": "Sedan",
+        "SegmentDesc": null,
+        "CheckDigit": null,
+        "ColorCode": null,
+        "ExteriorColor": "SILVER",
+        "FuelTypeCode": "Gasoline",
+        "FuelTypeDesc": "Gasoline",
+        "FuelTypeOriginalDesc": "Gasoline",
+        "InteriorColor": null,
+        "VehicleClass": "Sedan",
+        "TransmissionCode": null,
+        "Transmission": "Automatic",
+        "TransmissionDesc": null,
+        "CountryOfOrigin": "Germany",
+        "RestraintType": "Front impact airbag driver;Front side impact airbag driver;Overhead airbags;Front impact airbag passenger;Front side impact airbag passenger;Knee airbag",
+        "ProviderGroupId": null,
+        "CRExists": "False",
+        "CRLinkID": null,
+        "ECRExists": "False",
+        "ECRLinkID": null,
+        "PartsInfoExists": "False",
+        "MaterialParticularInd": "False",
+        "ChromeDataInd": "True",
+        "AuctionId": "60173139",
+        "BranchNumber": "706",
+        "BranchName": "Atlanta North (GA)",
+        "BranchLink": "706~US",
+        "TemplateType": "Vehicle",
+        "RDProvider": null,
+        "HybridIndicator": "False",
+        "BranchState": "GA",
+        "IsShrinkWrap": "False",
+        "Aisle": "B",
+        "Stall": "6",
+        "DisplayLaneRunDateTime": "6/12/2026 5:00:00 AM +00:00",
+        "Lane": "A",
+        "Slot": "123",
+        "AuctionDateTime": "6/16/2026 1:30:00 PM +00:00",
+        "WindowStickerInd": "False",
+        "Action": "0",
+        "Currency": "USD",
+        "Synonyms": "Run & drive,runs,drives,Run and drives,Public",
+        "Market": "UnitedStates",
+        "IsBranchVirtual": "False",
+        "LastUpdated": "6/14/2026 5:44:06 AM",
+        "TitleState": "GA",
+        "TitleStateName": "Georgia",
+        "VehicleGrade": "41",
+        "TitleNotes": null,
+        "EngineInformation": "2.0L I-4 DI, DOHC, VVT, turbo, 220HP",
+        "Battery": null,
+        "Radiator": null,
+        "CatalyticConverter": "Present",
+        "VehicleCondition": null,
+        "OffsiteSaleInd": "False",
+        "StorageLocationId": "2113431",
+        "IsUpStreamBranchStock": "False",
+        "SpareTireInd": null,
+        "WheelType": null,
+        "TireMake": null,
+        "TireFrontSize": null,
+        "TireRearSize": null,
+        "EngineRuns1": null,
+        "EngineStarts1": null,
+        "EngineHours1": null,
+        "OilLevel1": null,
+        "CoolantLevel1": null,
+        "EngineRuns2": null,
+        "EngineStarts2": null,
+        "EngineHours2": null,
+        "OilLevel2": null,
+        "CoolantLevel2": null,
+        "GeneratorHours": null,
+        "BathroomDamage": null,
+        "WheelsMissing": null,
+        "EngineInfo1": null,
+        "EngineDamage1": null,
+        "EngineInfo2": null,
+        "EngineDamage2": null,
+        "TrailerDamage": null,
+        "Pickled": null,
+        "Winterized": null,
+        "Flushed": null,
+        "ReeferHours": null,
+        "OilLevel": null,
+        "Hubometer": null,
+        "EstRepairCost": "7078",
+        "ConditionReportId": null,
+        "CostOfRepairDocId": null,
+        "DisplayLocationACInd": "False",
+        "IsACEBranch": "False",
+        "IsMarhabaBranch": "False",
+        "IsMaskACV": "False",
+        "IsDisplayProvider": "True",
+        "LocationOffsiteSaleInd": "False",
+        "BuiltInd": "False",
+        "Navigation": "Present",
+        "CubicInchDisplacement": null,
+        "OBDIIDocumentImageID": "0",
+        "StorageLocationBranch": "706",
+        "StorageLocationBranchLink": "706~US",
+        "ShowDamageLinkMsg": "False",
+        "ShowDamageLinkMsgForTitleMax": "False",
+        "StorageLocationLatitude": "34.07912",
+        "StorageLocationLongitude": "-84.73218",
+        "YearMakeModelSeries": "2015 AUDI A6 2.0T PREMIUM",
+        "MinimumBidAmount": "0",
+        "VersionId": "10",
+        "PublicAuctionInd": "True",
+        "IsSpecialty": "False",
+        "OperableInd": "True",
+        "DisplLiters": "2.0L",
+        "IsExcludedFromDDR": "False",
+        "EmailTextForShare": "Checkoutthis 2015 AUDI A6 atIAAbeforeitsscheduledauctionon 6/16/2026.",
+        "ConditionReportURL": null,
+        "HeavyVehicleFeeMsgInd": "False",
+        "IsGSAStock": "False",
+        "ShippingEligibility": "True",
+        "ShippingEligibilityTransport": "True",
+        "DisplayPremiumReport": "False",
+        "ShowConditionReportURL": "True"
+      },
+      "vehicle_information": {
+        "StockHash": "45033389",
+        "SellingBranch": "Atlanta North (GA)",
+        "VINStatus": "WAUGFAFC5FN021634 (OK)",
+        "Loss": "Collision",
+        "PrimaryDamage": "Front End",
+        "TitleSaleDoc": "SALVAGE (Georgia)",
+        "StartCode": "Run & Drive",
+        "KeySlashFob": "Present",
+        "Odometer": "105,635 mi (Actual)",
+        "Airbags": "Intact"
+      },
+      "vehicle_description": {
+        "VINStatus": "WAUGFAFC5FN021634 (OK)",
+        "VehicleScore": "41",
+        "Vehicle": "Automobile",
+        "BodyStyle": "SEDAN",
+        "Engine": "2.0L I-4 DI, DOHC, VVT, TURBO, 220HP",
+        "Transmission": "Automatic Transmission",
+        "DriveLineType": "All Wheel Drive",
+        "FuelType": "Gasoline",
+        "Cylinders": "4 Cylinders",
+        "RestraintSystem": "Front impact airbag driver;Front side impact airbag driver;Overhead airbags;Front impact airbag passenger;Front side impact airbag passenger;Knee airbag",
+        "ExteriorInterior": "Silver/ Unknown",
+        "Options": "Console Display",
+        "ManufacturedIn": "Germany",
+        "VehicleClass": "Sedan",
+        "Model": "A6",
+        "Series": "2.0T PREMIUM"
+      },
+      "sale_information": {
+        "SellingBranch": "Atlanta North (GA)",
+        "VehiclesVehicleLocation": "At the branch",
+        "AuctionDateTime": "6/16/2026 1:30:00 PM +00:00",
+        "Lane": "A - #123",
+        "Aisle": "B   - 6",
+        "ActualCashValue": "$9,823 USD",
+        "EstimatedRepairCost": "$7,078 USD",
+        "Seller": "Progressive Casualty Insurance",
+        "SellerType": "Insurance",
+        "TitleSaleDoc": "SALVAGE (Georgia)"
+      },
+      "bid_increment": 25
+    },
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2013-audi-a8-l-quattro-WAURGAFD9DN032177",
+    "vin": "WAURGAFD9DN032177",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "54294986",
+    "ad": "2026-06-16T17:00:00+00:00",
+    "title": "2013 AUDI A8 L QUATTRO",
+    "year": 2013,
+    "make": "AUDI",
+    "model": "A8",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 20:00",
+      "full_date": "2026-06-16T17:00:00+00:00",
+      "diff_minutes": 1032,
+      "ad": "2026-06-16T17:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 17,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T17:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": null,
+      "current_bid2_usd": 0,
+      "buy_now_usd": 1100,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 225,
+        "to": 3200,
+        "text": "$225 - $3,200"
+      }
+    },
+    "location": {
+      "display": "Kansas City (KS)",
+      "send_from": "Savannah",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "ENHANCED VEHICLES",
+        "label": "Enhanced vehicles",
+        "class_hint": "warning"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Undercarriage",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 169298,
+      "km": 272458
+    },
+    "vehicle_specs": {
+      "exterior_color": "Black",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "DEALER ONLY CLEAN TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/06a617f3455d4281bf7aaecef40ed36b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/59470e19b97d4bf59bce1bc3ccba63c3_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a81f02a613504b93a39a5cb30a969369_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea4d46020f674b1c9697e8236e07cb97_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a7c4e9fdaa384293bf74e7417ed8d840_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f32d8f4cc1a84ec6a3be63ffc9a32840_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/cede44579dab41a29aff5f83ccbe7c9d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/49368f6715f44045aafc7df9b9b6220b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ce435f53a93f4b56a0a62e3506c6a7f9_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c8f7c7d21b490c92f14ae5e04f97c3_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/adfb46fd1e2d4381ae5c808f1405137c_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/26a469b8afbf46b4b4fcb26b199f10a3_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/06a617f3455d4281bf7aaecef40ed36b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/06a617f3455d4281bf7aaecef40ed36b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/06a617f3455d4281bf7aaecef40ed36b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/59470e19b97d4bf59bce1bc3ccba63c3_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/59470e19b97d4bf59bce1bc3ccba63c3_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/59470e19b97d4bf59bce1bc3ccba63c3_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a81f02a613504b93a39a5cb30a969369_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a81f02a613504b93a39a5cb30a969369_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a81f02a613504b93a39a5cb30a969369_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea4d46020f674b1c9697e8236e07cb97_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea4d46020f674b1c9697e8236e07cb97_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea4d46020f674b1c9697e8236e07cb97_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a7c4e9fdaa384293bf74e7417ed8d840_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a7c4e9fdaa384293bf74e7417ed8d840_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a7c4e9fdaa384293bf74e7417ed8d840_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f32d8f4cc1a84ec6a3be63ffc9a32840_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f32d8f4cc1a84ec6a3be63ffc9a32840_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f32d8f4cc1a84ec6a3be63ffc9a32840_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/cede44579dab41a29aff5f83ccbe7c9d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/cede44579dab41a29aff5f83ccbe7c9d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/cede44579dab41a29aff5f83ccbe7c9d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/49368f6715f44045aafc7df9b9b6220b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/49368f6715f44045aafc7df9b9b6220b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/49368f6715f44045aafc7df9b9b6220b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ce435f53a93f4b56a0a62e3506c6a7f9_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ce435f53a93f4b56a0a62e3506c6a7f9_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ce435f53a93f4b56a0a62e3506c6a7f9_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c8f7c7d21b490c92f14ae5e04f97c3_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c8f7c7d21b490c92f14ae5e04f97c3_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c8f7c7d21b490c92f14ae5e04f97c3_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/adfb46fd1e2d4381ae5c808f1405137c_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/adfb46fd1e2d4381ae5c808f1405137c_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/adfb46fd1e2d4381ae5c808f1405137c_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/26a469b8afbf46b4b4fcb26b199f10a3_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/26a469b8afbf46b4b4fcb26b199f10a3_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/26a469b8afbf46b4b4fcb26b199f10a3_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2015-audi-a8-l-quattro-WAU3GAFD6FN010582",
+    "vin": "WAU3GAFD6FN010582",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "53055836",
+    "ad": "2026-06-16T19:00:00+00:00",
+    "title": "2015 AUDI A8 L QUATTRO",
+    "year": 2015,
+    "make": "AUDI",
+    "model": "A8",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 16, 2026 22:00",
+      "full_date": "2026-06-16T19:00:00+00:00",
+      "diff_minutes": 1152,
+      "ad": "2026-06-16T19:00:00+00:00",
+      "countdown": {
+        "days": 0,
+        "hours": 19,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-16T19:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": null,
+      "current_bid2_usd": 0,
+      "buy_now_usd": 3900,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 950,
+        "to": 5800,
+        "text": "$950 - $5,800"
+      }
+    },
+    "location": {
+      "display": "Rancho Cucamonga (CA)",
+      "send_from": "LA",
+      "state": null
+    },
+    "seller": {
+      "name": "Farmers insurance",
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Rear end",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 211661,
+      "km": 340635
+    },
+    "vehicle_specs": {
+      "exterior_color": "Black",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "SALVAGE CERTIFICATE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c85420e0e36f44a18c8a33a0da8a8ef0_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/132bf29406494a629a311db976454ccb_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aef62a828ab94e13af7d780605601178_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d53f0c85807145f28bf11af95f8a23f9_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fe95da7a1c074cba8b7e7245446ffb89_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bc9e16c01497440396974ce08fe7f748_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/53007e4194b34859b2e501dd68347d39_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c5f0e6db26ad41dcac4ab5121500f7eb_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17a0694d0a5b4d6eb62632d9961e023a_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/975d929d37584c42b39ace71cbb8fae6_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/dbfc781616f2400c8490a93d087ec69e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/56814ac84854491ba737d36452171c4a_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c85420e0e36f44a18c8a33a0da8a8ef0_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c85420e0e36f44a18c8a33a0da8a8ef0_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c85420e0e36f44a18c8a33a0da8a8ef0_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/132bf29406494a629a311db976454ccb_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/132bf29406494a629a311db976454ccb_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/132bf29406494a629a311db976454ccb_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aef62a828ab94e13af7d780605601178_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aef62a828ab94e13af7d780605601178_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/aef62a828ab94e13af7d780605601178_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d53f0c85807145f28bf11af95f8a23f9_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d53f0c85807145f28bf11af95f8a23f9_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d53f0c85807145f28bf11af95f8a23f9_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fe95da7a1c074cba8b7e7245446ffb89_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fe95da7a1c074cba8b7e7245446ffb89_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/fe95da7a1c074cba8b7e7245446ffb89_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bc9e16c01497440396974ce08fe7f748_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bc9e16c01497440396974ce08fe7f748_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/bc9e16c01497440396974ce08fe7f748_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/53007e4194b34859b2e501dd68347d39_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/53007e4194b34859b2e501dd68347d39_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/53007e4194b34859b2e501dd68347d39_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c5f0e6db26ad41dcac4ab5121500f7eb_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c5f0e6db26ad41dcac4ab5121500f7eb_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c5f0e6db26ad41dcac4ab5121500f7eb_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17a0694d0a5b4d6eb62632d9961e023a_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17a0694d0a5b4d6eb62632d9961e023a_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17a0694d0a5b4d6eb62632d9961e023a_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/975d929d37584c42b39ace71cbb8fae6_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/975d929d37584c42b39ace71cbb8fae6_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/975d929d37584c42b39ace71cbb8fae6_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/dbfc781616f2400c8490a93d087ec69e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/dbfc781616f2400c8490a93d087ec69e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/dbfc781616f2400c8490a93d087ec69e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/56814ac84854491ba737d36452171c4a_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/56814ac84854491ba737d36452171c4a_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/56814ac84854491ba737d36452171c4a_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2013-audi-a8-l-quattro-WAUR2AFDXDN024426",
+    "vin": "WAUR2AFDXDN024426",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "50761956",
+    "ad": "2026-06-17T17:00:00+00:00",
+    "title": "2013 AUDI A8 L QUATTRO",
+    "year": 2013,
+    "make": "AUDI",
+    "model": "A8",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 17, 2026 20:00",
+      "full_date": "2026-06-17T17:00:00+00:00",
+      "diff_minutes": 2472,
+      "ad": "2026-06-17T17:00:00+00:00",
+      "countdown": {
+        "days": 1,
+        "hours": 17,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-17T17:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": null,
+      "current_bid2_usd": 0,
+      "buy_now_usd": 4400,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 225,
+        "to": 3200,
+        "text": "$225 - $3,200"
+      }
+    },
+    "location": {
+      "display": "Tanner (AL)",
+      "send_from": "Savannah",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "Unknown",
+        "label": "Unknown",
+        "class_hint": "warning"
+      },
+      "has_key": false,
+      "loss": null,
+      "primary_damage": "Minor dent/scratches",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 90618,
+      "km": 145835
+    },
+    "vehicle_specs": {
+      "exterior_color": "White",
+      "engine": {
+        "raw": "4.0L 8",
+        "size_l": "4.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "RECOVERED THEFT - CLEAN",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/9ad909adcc2b47f0b9b180093ec60b3e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/d8fe706fa35c4adcbeefa9ac35c9e31f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b4f6b3ebbe114fef8519e68694bd4e58_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7542635bae2945e3a915adcad69a48f5_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/0a80956bf8a6432f9b3bf78cbb54bf12_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f72e43f9d8a54a75a7ce36ea6f628006_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/160771f2e3854fe38a594771997d3eb4_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4140aa15b7bf40c39c8b4ea77645e9ec_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/809b3e5cf9844879898695d702e35f55_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2778d557eae468fb17e876cc3d40d1e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/ebbebe2c20f94a399672e572c3a7c680_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1b52c81cf66944ad8f69bb45ae444446_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/9ad909adcc2b47f0b9b180093ec60b3e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/9ad909adcc2b47f0b9b180093ec60b3e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/9ad909adcc2b47f0b9b180093ec60b3e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/d8fe706fa35c4adcbeefa9ac35c9e31f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/d8fe706fa35c4adcbeefa9ac35c9e31f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/d8fe706fa35c4adcbeefa9ac35c9e31f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b4f6b3ebbe114fef8519e68694bd4e58_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b4f6b3ebbe114fef8519e68694bd4e58_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b4f6b3ebbe114fef8519e68694bd4e58_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7542635bae2945e3a915adcad69a48f5_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7542635bae2945e3a915adcad69a48f5_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7542635bae2945e3a915adcad69a48f5_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/0a80956bf8a6432f9b3bf78cbb54bf12_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/0a80956bf8a6432f9b3bf78cbb54bf12_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/0a80956bf8a6432f9b3bf78cbb54bf12_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f72e43f9d8a54a75a7ce36ea6f628006_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f72e43f9d8a54a75a7ce36ea6f628006_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f72e43f9d8a54a75a7ce36ea6f628006_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/160771f2e3854fe38a594771997d3eb4_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/160771f2e3854fe38a594771997d3eb4_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/160771f2e3854fe38a594771997d3eb4_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4140aa15b7bf40c39c8b4ea77645e9ec_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4140aa15b7bf40c39c8b4ea77645e9ec_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/4140aa15b7bf40c39c8b4ea77645e9ec_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/809b3e5cf9844879898695d702e35f55_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/809b3e5cf9844879898695d702e35f55_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/809b3e5cf9844879898695d702e35f55_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2778d557eae468fb17e876cc3d40d1e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2778d557eae468fb17e876cc3d40d1e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b2778d557eae468fb17e876cc3d40d1e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/ebbebe2c20f94a399672e572c3a7c680_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/ebbebe2c20f94a399672e572c3a7c680_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/ebbebe2c20f94a399672e572c3a7c680_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1b52c81cf66944ad8f69bb45ae444446_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1b52c81cf66944ad8f69bb45ae444446_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1b52c81cf66944ad8f69bb45ae444446_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2013-audi-a8-l-quattro-WAURGAFD0DN006731",
+    "vin": "WAURGAFD0DN006731",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "53128876",
+    "ad": "2026-06-17T19:00:00+00:00",
+    "title": "2013 AUDI A8 L QUATTRO",
+    "year": 2013,
+    "make": "AUDI",
+    "model": "A8",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 17, 2026 22:00",
+      "full_date": "2026-06-17T19:00:00+00:00",
+      "diff_minutes": 2592,
+      "ad": "2026-06-17T19:00:00+00:00",
+      "countdown": {
+        "days": 1,
+        "hours": 19,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-17T19:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": null,
+      "current_bid2_usd": 0,
+      "buy_now_usd": 1150,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 225,
+        "to": 3200,
+        "text": "$225 - $3,200"
+      }
+    },
+    "location": {
+      "display": "Las Vegas West (NV)",
+      "send_from": "LA",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Front end",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 202057,
+      "km": 325178
+    },
+    "vehicle_specs": {
+      "exterior_color": "Silver",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/eef29bc121264633a82d040107489b18_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/41612c5589994cb5b4628374a8cb7bd4_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/169562ea0162496ab060cec9f869f23d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/97efb8c512d54f75854c7ccdb08a4b34_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3baced493c84b6faae9beafc3d63aec_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ac1f323eb6246ff965d16e1128f9d67_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/902b720b017d40c280bcd431728feb36_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b29952b2599b419aa237495665ead45e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/74a0285e7d4345a8ac77c233bffbf695_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c6598f1cde8445c39132f4a1dc57db8d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17e20afd66474fba8c8e49e85ac94e54_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a5d9f458e3894405ba6d9a0e9c9956d9_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/eef29bc121264633a82d040107489b18_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/eef29bc121264633a82d040107489b18_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/eef29bc121264633a82d040107489b18_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/41612c5589994cb5b4628374a8cb7bd4_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/41612c5589994cb5b4628374a8cb7bd4_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/41612c5589994cb5b4628374a8cb7bd4_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/169562ea0162496ab060cec9f869f23d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/169562ea0162496ab060cec9f869f23d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/169562ea0162496ab060cec9f869f23d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/97efb8c512d54f75854c7ccdb08a4b34_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/97efb8c512d54f75854c7ccdb08a4b34_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/97efb8c512d54f75854c7ccdb08a4b34_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3baced493c84b6faae9beafc3d63aec_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3baced493c84b6faae9beafc3d63aec_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b3baced493c84b6faae9beafc3d63aec_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ac1f323eb6246ff965d16e1128f9d67_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ac1f323eb6246ff965d16e1128f9d67_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/6ac1f323eb6246ff965d16e1128f9d67_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/902b720b017d40c280bcd431728feb36_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/902b720b017d40c280bcd431728feb36_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/902b720b017d40c280bcd431728feb36_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b29952b2599b419aa237495665ead45e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b29952b2599b419aa237495665ead45e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b29952b2599b419aa237495665ead45e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/74a0285e7d4345a8ac77c233bffbf695_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/74a0285e7d4345a8ac77c233bffbf695_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/74a0285e7d4345a8ac77c233bffbf695_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c6598f1cde8445c39132f4a1dc57db8d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c6598f1cde8445c39132f4a1dc57db8d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c6598f1cde8445c39132f4a1dc57db8d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17e20afd66474fba8c8e49e85ac94e54_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17e20afd66474fba8c8e49e85ac94e54_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/17e20afd66474fba8c8e49e85ac94e54_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a5d9f458e3894405ba6d9a0e9c9956d9_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a5d9f458e3894405ba6d9a0e9c9956d9_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/a5d9f458e3894405ba6d9a0e9c9956d9_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2014-audi-a8-l-tdi-quattro-WAURMAFD8EN002419",
+    "vin": "WAURMAFD8EN002419",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "48919046",
+    "ad": "2026-06-17T19:00:00+00:00",
+    "title": "2014 AUDI A8 L TDI QUATTRO",
+    "year": 2014,
+    "make": "AUDI",
+    "model": "A8",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 17, 2026 22:00",
+      "full_date": "2026-06-17T19:00:00+00:00",
+      "diff_minutes": 2592,
+      "ad": "2026-06-17T19:00:00+00:00",
+      "countdown": {
+        "days": 1,
+        "hours": 19,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-17T19:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 2300,
+      "current_bid2_usd": 2300,
+      "buy_now_usd": 5500,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 200,
+        "to": 4293,
+        "text": "$200 - $4,293"
+      }
+    },
+    "location": {
+      "display": "Las Vegas West (NV)",
+      "send_from": "LA",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Minor dent/scratches",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 152000,
+      "km": 244620
+    },
+    "vehicle_specs": {
+      "exterior_color": "Gray",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Diesel",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/366de735198745e5a3da22e3e350eaaf_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e6477e794c304ba59cee39e99ef4da88_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/65e49a1a1922401ea4e21350b76355d0_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/464a7350af3a49f48433e19897928aa8_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7630e298c2c243f29819eeb6d0968086_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e56f75b0a194aac948caa6bdd38490e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f5c34312957549d7acf5cc812c9e2dad_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1fcf28f3c01f4e75a7d67b8c5b159b71_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e8fd6b2db180488897b08767564eaef1_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9c73a5008aa40738e518e4d16399748_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/557b1cbbec37462facacae01ad790129_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/c29ca829f4684eefa6af82c26c08c67b_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/366de735198745e5a3da22e3e350eaaf_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/366de735198745e5a3da22e3e350eaaf_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/366de735198745e5a3da22e3e350eaaf_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e6477e794c304ba59cee39e99ef4da88_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e6477e794c304ba59cee39e99ef4da88_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e6477e794c304ba59cee39e99ef4da88_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/65e49a1a1922401ea4e21350b76355d0_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/65e49a1a1922401ea4e21350b76355d0_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/65e49a1a1922401ea4e21350b76355d0_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/464a7350af3a49f48433e19897928aa8_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/464a7350af3a49f48433e19897928aa8_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/464a7350af3a49f48433e19897928aa8_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7630e298c2c243f29819eeb6d0968086_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7630e298c2c243f29819eeb6d0968086_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/7630e298c2c243f29819eeb6d0968086_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e56f75b0a194aac948caa6bdd38490e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e56f75b0a194aac948caa6bdd38490e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/6e56f75b0a194aac948caa6bdd38490e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f5c34312957549d7acf5cc812c9e2dad_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f5c34312957549d7acf5cc812c9e2dad_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/f5c34312957549d7acf5cc812c9e2dad_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1fcf28f3c01f4e75a7d67b8c5b159b71_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1fcf28f3c01f4e75a7d67b8c5b159b71_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/1fcf28f3c01f4e75a7d67b8c5b159b71_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e8fd6b2db180488897b08767564eaef1_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e8fd6b2db180488897b08767564eaef1_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/e8fd6b2db180488897b08767564eaef1_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9c73a5008aa40738e518e4d16399748_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9c73a5008aa40738e518e4d16399748_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/b9c73a5008aa40738e518e4d16399748_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/557b1cbbec37462facacae01ad790129_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/557b1cbbec37462facacae01ad790129_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/557b1cbbec37462facacae01ad790129_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/c29ca829f4684eefa6af82c26c08c67b_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/c29ca829f4684eefa6af82c26c08c67b_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0426/c29ca829f4684eefa6af82c26c08c67b_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2015-audi-a8-l-quattro-WAU3GAFD6FN015829",
+    "vin": "WAU3GAFD6FN015829",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "54274876",
+    "ad": "2026-06-18T14:00:00+00:00",
+    "title": "2015 AUDI A8 L QUATTRO",
+    "year": 2015,
+    "make": "AUDI",
+    "model": "A8",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 18, 2026 17:00",
+      "full_date": "2026-06-18T14:00:00+00:00",
+      "diff_minutes": 3732,
+      "ad": "2026-06-18T14:00:00+00:00",
+      "countdown": {
+        "days": 2,
+        "hours": 14,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": false,
+      "auction_at": "2026-06-18T14:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 125,
+      "current_bid2_usd": 125,
+      "buy_now_usd": null,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 950,
+        "to": 5800,
+        "text": "$950 - $5,800"
+      }
+    },
+    "location": {
+      "display": "Macon (GA)",
+      "send_from": "Savannah",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Side",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 179509,
+      "km": 288891
+    },
+    "vehicle_specs": {
+      "exterior_color": "Black",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERT OF TITLE-SALVAGE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c76c148bbb104c97a3f34145577d2fe9_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea9cb5322d8f49da9387f9762eae1c2d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/54062da40550433bbd98b02c4a5cb335_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f85ac9ff6d2b40a5a01bb79c0c8deb77_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af3a55f9f954152a74593bff1644e90_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/da1ffc80befa40c7b963a988e8abc3b2_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b2af31ca06ee4dd8bce5721ba3a6a24b_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/96780cafe8344e17b6b64821e76c1f39_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5e150b9d839d48a5aa00f0c4ba5a5559_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7a36a9480d7644998c57b334c257d952_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/91ccda08091a44e09ff2f62f2265e086_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c0cf00b9cb420385ece6bccbbaaf2d_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c76c148bbb104c97a3f34145577d2fe9_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c76c148bbb104c97a3f34145577d2fe9_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/c76c148bbb104c97a3f34145577d2fe9_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea9cb5322d8f49da9387f9762eae1c2d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea9cb5322d8f49da9387f9762eae1c2d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/ea9cb5322d8f49da9387f9762eae1c2d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/54062da40550433bbd98b02c4a5cb335_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/54062da40550433bbd98b02c4a5cb335_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/54062da40550433bbd98b02c4a5cb335_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f85ac9ff6d2b40a5a01bb79c0c8deb77_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f85ac9ff6d2b40a5a01bb79c0c8deb77_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/f85ac9ff6d2b40a5a01bb79c0c8deb77_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af3a55f9f954152a74593bff1644e90_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af3a55f9f954152a74593bff1644e90_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/4af3a55f9f954152a74593bff1644e90_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/da1ffc80befa40c7b963a988e8abc3b2_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/da1ffc80befa40c7b963a988e8abc3b2_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/da1ffc80befa40c7b963a988e8abc3b2_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b2af31ca06ee4dd8bce5721ba3a6a24b_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b2af31ca06ee4dd8bce5721ba3a6a24b_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/b2af31ca06ee4dd8bce5721ba3a6a24b_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/96780cafe8344e17b6b64821e76c1f39_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/96780cafe8344e17b6b64821e76c1f39_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/96780cafe8344e17b6b64821e76c1f39_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5e150b9d839d48a5aa00f0c4ba5a5559_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5e150b9d839d48a5aa00f0c4ba5a5559_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/5e150b9d839d48a5aa00f0c4ba5a5559_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7a36a9480d7644998c57b334c257d952_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7a36a9480d7644998c57b334c257d952_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/7a36a9480d7644998c57b334c257d952_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/91ccda08091a44e09ff2f62f2265e086_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/91ccda08091a44e09ff2f62f2265e086_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/91ccda08091a44e09ff2f62f2265e086_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c0cf00b9cb420385ece6bccbbaaf2d_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c0cf00b9cb420385ece6bccbbaaf2d_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0526/d3c0cf00b9cb420385ece6bccbbaaf2d_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  },
+  {
+    "slug_vin": "2015-audi-a8-l-quattro-WAU3GAFD6FN031318",
+    "vin": "WAU3GAFD6FN031318",
+    "platform": "copart",
+    "platform_id": 1,
+    "lot_number": "56268606",
+    "ad": "2026-06-18T17:00:00+00:00",
+    "title": "2015 AUDI A8 L QUATTRO",
+    "year": 2015,
+    "make": "AUDI",
+    "model": "A8",
+    "type": null,
+    "subLot": false,
+    "auction": {
+      "state": "open",
+      "formatted": "Jun 18, 2026 20:00",
+      "full_date": "2026-06-18T17:00:00+00:00",
+      "diff_minutes": 3912,
+      "ad": "2026-06-18T17:00:00+00:00",
+      "countdown": {
+        "days": 2,
+        "hours": 17,
+        "minutes": 12
+      },
+      "is_timed": false,
+      "is_buy_now": true,
+      "auction_at": "2026-06-18T17:00:00+00:00",
+      "timed_end_at": null,
+      "last_sold_day": null,
+      "last_sold_status": null,
+      "sold_buy_now": false,
+      "sold_timed": false
+    },
+    "pricing": {
+      "current_bid_usd": 700,
+      "current_bid2_usd": 700,
+      "buy_now_usd": 7500,
+      "last_sold_price_usd": null,
+      "estimated_cost": {
+        "from": 950,
+        "to": 5800,
+        "text": "$950 - $5,800"
+      }
+    },
+    "location": {
+      "display": "Dallas South (TX)",
+      "send_from": "Houston",
+      "state": null
+    },
+    "seller": {
+      "name": null,
+      "type": "insurance"
+    },
+    "condition": {
+      "run_condition": {
+        "value": "RUNS AND DRIVES",
+        "label": "Runs and drives",
+        "class_hint": "success"
+      },
+      "has_key": true,
+      "loss": null,
+      "primary_damage": "Minor dent/scratches",
+      "secondary_damage": null
+    },
+    "odometer": {
+      "mi": 142055,
+      "km": 228615
+    },
+    "vehicle_specs": {
+      "exterior_color": "Black",
+      "engine": {
+        "raw": "3.0L 6",
+        "size_l": "3.0",
+        "hp": null,
+        "layout": null
+      },
+      "transmission": "Automatic",
+      "fuel_type": "Gas",
+      "drive_type": "ALL WHEEL DRIVE",
+      "body_style": null,
+      "airbags": null,
+      "restraint_system": null
+    },
+    "sale_document": {
+      "name": "CERTIFICATE OF TITLE",
+      "type": "success",
+      "export": true,
+      "registration": true,
+      "is_pending": false
+    },
+    "media": {
+      "thumbs_count": 12,
+      "has_video": false,
+      "has_360": false,
+      "thumbs": [
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/70cd6c1009a54426b8da0a751b570574_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/6acc4798b17f4663a734393d2bdccd8f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ef03d3736285499380fe126b3853f38a_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8bb7b8991389451caecd33875f9b7b8d_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ab7929c8fc8444e29b91a8c396db9510_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/06550a41f23f43d9bf8ae2ea307d76d1_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/af061d62f68a461da18474ceabac497e_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/54c8ceb6bcde4ff7be338206403ea451_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/590839ce4d344192ab2d77f05b061e5f_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/89be24ce482142f0b9bae2a2ed6ff4b6_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d821f1c51e114776a9da91f469f379ef_ful.jpg",
+        "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9288f5a29d0b4f0e9424ee95bb8468a1_vhrs.jpg"
+      ],
+      "items": [
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/70cd6c1009a54426b8da0a751b570574_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/70cd6c1009a54426b8da0a751b570574_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/70cd6c1009a54426b8da0a751b570574_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/6acc4798b17f4663a734393d2bdccd8f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/6acc4798b17f4663a734393d2bdccd8f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/6acc4798b17f4663a734393d2bdccd8f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ef03d3736285499380fe126b3853f38a_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ef03d3736285499380fe126b3853f38a_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ef03d3736285499380fe126b3853f38a_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8bb7b8991389451caecd33875f9b7b8d_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8bb7b8991389451caecd33875f9b7b8d_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/8bb7b8991389451caecd33875f9b7b8d_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ab7929c8fc8444e29b91a8c396db9510_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ab7929c8fc8444e29b91a8c396db9510_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/ab7929c8fc8444e29b91a8c396db9510_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/06550a41f23f43d9bf8ae2ea307d76d1_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/06550a41f23f43d9bf8ae2ea307d76d1_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/06550a41f23f43d9bf8ae2ea307d76d1_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/af061d62f68a461da18474ceabac497e_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/af061d62f68a461da18474ceabac497e_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/af061d62f68a461da18474ceabac497e_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/54c8ceb6bcde4ff7be338206403ea451_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/54c8ceb6bcde4ff7be338206403ea451_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/54c8ceb6bcde4ff7be338206403ea451_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/590839ce4d344192ab2d77f05b061e5f_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/590839ce4d344192ab2d77f05b061e5f_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/590839ce4d344192ab2d77f05b061e5f_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/89be24ce482142f0b9bae2a2ed6ff4b6_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/89be24ce482142f0b9bae2a2ed6ff4b6_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/89be24ce482142f0b9bae2a2ed6ff4b6_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d821f1c51e114776a9da91f469f379ef_ful.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d821f1c51e114776a9da91f469f379ef_hrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/d821f1c51e114776a9da91f469f379ef_hrs.jpg"
+        },
+        {
+          "type": "image",
+          "thumb": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9288f5a29d0b4f0e9424ee95bb8468a1_vhrs.jpg",
+          "full": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9288f5a29d0b4f0e9424ee95bb8468a1_vhrs.jpg",
+          "large": "https://cs.copart.com/v1/AUTH_svc.pdoc00001/lpp/0626/9288f5a29d0b4f0e9424ee95bb8468a1_vhrs.jpg"
+        }
+      ]
+    },
+    "details": null,
+    "facility": {
+      "id": null,
+      "state": null,
+      "zip": null,
+      "lat": null,
+      "lng": null,
+      "office_name": null
+    },
+    "distance": null
+  }
+]
