@@ -13,9 +13,12 @@ async function bootstrap() {
 
   app.enableCors();
 
-  // Add deployment ID to all responses
+  // Add deployment ID to all responses + prevent caching
   app.use((req, res, next) => {
     res.setHeader('X-Deploy-Id', deployId);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     next();
   });
 
