@@ -9,6 +9,8 @@ export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(filters: VehicleFilterDto): Promise<PaginatedResponseDto<any>> {
+    const dbHost = process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown';
+    console.log(`[CatalogService.findAll] DB host: ${dbHost}`);
     const where: Prisma.VehicleWhereInput = {
       publicationStatus: 'PUBLISHED',
     };
