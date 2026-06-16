@@ -101,7 +101,6 @@ async function syncVehicles() {
             create: {
               provider: platform,
               externalLotId: lotNumber,
-              payloadJsonb: v,
             },
           },
           media: firstImage ? {
