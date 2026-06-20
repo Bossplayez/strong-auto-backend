@@ -229,7 +229,7 @@ export class CopartService {
 
     // Extract images from media.items
     const mediaUrls = (raw.media?.items ?? [])
-      .map((img: any) => img.full ?? img.thumb ?? '')
+      .map((img: any) => (typeof img === 'string' ? img : img.large ?? img.full ?? img.thumb ?? ''))
       .filter(Boolean);
 
     // Extract pricing
