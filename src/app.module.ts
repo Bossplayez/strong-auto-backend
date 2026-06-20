@@ -22,6 +22,7 @@ import { FilesModule } from './files/files.module';
 import { AuditModule } from './audit/audit.module';
 import { SettingsModule } from './settings/settings.module';
 import { HealthModule } from './health/health.module';
+import { validateEnv } from './config/env.validation';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { HealthModule } from './health/health.module';
       isGlobal: true,
       ignoreEnvFile: true,
       envFilePath: [], // explicitly empty - never load .env files
+      validate: validateEnv,
     }),
 
     // Global rate limiting — default: 60 req/min per IP

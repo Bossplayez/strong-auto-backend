@@ -1,7 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2Service } from './r2.service';
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
@@ -19,6 +25,7 @@ export class FilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly r2: R2Service,
   ) {}
 
   async upload(
@@ -40,17 +47,21 @@ export class FilesService {
     const ext = file.originalname.split('.').pop() ?? 'bin';
     const uuid = crypto.randomUUID();
     const storageKey = `uploads/${new Date().toISOString().slice(0, 7)}/${uuid}.${ext}`;
-    const bucket = this.config.get('STORAGE_BUCKET', 'strong-auto-uploads');
+    const bucket = this.config.get('R2_BUCKET_NAME', 'strong-auto-uploads');
 
     // Checksum
-    const checksum = crypto
-      .createHash('md5')
-      .update(file.buffer)
-      .digest('hex');
+    const checksum = crypto.createHash('md5').update(file.buffer).digest('hex');
 
-    // TODO: Upload to S3/MinIO/R2 using storageKey
-    // For now, we store the record and assume local/mock storage
-    this.logger.log(`Uploading file: ${file.originalname} → ${storageKey}`);
+    // Upload to R2 (with local fallback)
+    const uploadResult = await this.r2.upload(
+      file.buffer,
+      storageKey,
+      file.mimetype,
+    );
+
+    this.logger.log(
+      `Uploaded file: ${file.originalname} → ${storageKey} (${uploadResult.isLocal ? 'local' : 'R2'})`,
+    );
 
     const record = await this.prisma.file.create({
       data: {
@@ -64,14 +75,9 @@ export class FilesService {
       },
     });
 
-    const cdnBase = this.config.get(
-      'CDN_BASE_URL',
-      'https://cdn.strongauto.com',
-    );
-
     return {
       id: record.id,
-      url: `${cdnBase}/${storageKey}`,
+      url: uploadResult.url,
       mimeType: record.mimeType ?? file.mimetype,
       size: record.size,
     };
@@ -84,14 +90,11 @@ export class FilesService {
       throw new NotFoundException(`File "${id}" not found`);
     }
 
-    const cdnBase = this.config.get(
-      'CDN_BASE_URL',
-      'https://cdn.strongauto.com',
-    );
+    const url = this.r2.getPublicUrl(file.storageKey);
 
     return {
       ...file,
-      url: `${cdnBase}/${file.storageKey}`,
+      url,
     };
   }
 }

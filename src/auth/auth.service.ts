@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../notifications/email.service';
 import {
   RegisterDto,
   LoginDto,
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ─── REGISTER ──────────────────────────────────────────────
@@ -80,7 +82,8 @@ export class AuthService {
       `User registered: ${user.id}, verification token created`,
     );
 
-    // TODO: send verification email via NotificationsService
+    // Send verification email
+    await this.emailService.sendVerificationEmail(user.email, verificationToken);
 
     return this.generateTokenPair(user.id, user.email, user.userType);
   }
@@ -173,7 +176,8 @@ export class AuthService {
 
     this.logger.log(`Password reset token created for user: ${user.id}`);
 
-    // TODO: send reset email via NotificationsService
+    // Send password reset email
+    await this.emailService.sendPasswordResetEmail(user.email, resetToken);
 
     return { message: 'If the email exists, a reset link has been sent' };
   }
