@@ -13,9 +13,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   RegisterDto,
   LoginDto,
-  RefreshDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  RefreshDto,
 } from './dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -87,8 +87,6 @@ export class AuthService {
 
   // ─── LOGIN ─────────────────────────────────────────────────
   async login(dto: LoginDto): Promise<TokenPair> {
-    const dbHost = process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'unknown';
-    console.log(`[AuthService.login] DB host: ${dbHost}`);
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
@@ -116,7 +114,7 @@ export class AuthService {
   }
 
   // ─── REFRESH ───────────────────────────────────────────────
-  async refresh(dto: RefreshDto): Promise<TokenPair> {
+  async refresh(dto: { refreshToken: string }): Promise<TokenPair> {
     const tokenHash = crypto
       .createHash('sha256')
       .update(dto.refreshToken)

@@ -37,8 +37,6 @@ async function ensureAdmin() {
     });
     console.log('[ensure-admin] Verified:', JSON.stringify(verified));
     
-    // Also log DB connection info
-    console.log('[ensure-admin] DB URL host:', process.env.DATABASE_URL?.split('@')[1]?.split(':')[0] || 'unknown');
     const vehicleCount = await prisma.vehicle.count();
     console.log('[ensure-admin] Vehicle count in this DB:', vehicleCount);
   } catch (e) {

@@ -10,6 +10,20 @@ export interface JwtPayload {
   userType: string;
 }
 
+// Custom extractor: prefer cookie, fall back to Authorization header
+function extractToken(req: any): string | null {
+  // 1. Try httpOnly cookie
+  if (req?.cookies?.access_token) {
+    return req.cookies.access_token as string;
+  }
+  // 2. Fall back to Bearer header (for admin/API clients)
+  const authHeader = req?.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
+  return null;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
@@ -17,7 +31,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([extractToken]),
       ignoreExpiration: false,
       secretOrKey: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
     });

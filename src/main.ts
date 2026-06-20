@@ -1,17 +1,51 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, HttpException, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import * as Sentry from '@sentry/node';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
+  // Sentry initialization (no-op if SENTRY_DSN is not set)
+  const SENTRY_DSN = process.env.SENTRY_DSN;
+  if (SENTRY_DSN && SENTRY_DSN !== 'disabled') {
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: 0.1,
+      beforeSend(event, hint) {
+        const exception = hint?.originalException;
+        if (exception instanceof HttpException) {
+          // Skip 4xx errors — they are expected application errors, not bugs
+          const status = exception.getStatus();
+          if (status >= 400 && status < 500) {
+            return null;
+          }
+        }
+        return event;
+      },
+    });
+    Logger.log('Sentry initialized', 'Sentry');
+  } else {
+    Logger.log('SENTRY_DSN not set — Sentry disabled', 'Sentry');
+  }
+
   const app = await NestFactory.create(AppModule);
+
+  // Security headers via Helmet
+  app.use(helmet());
+
+  // Parse cookies for httpOnly JWT auth
+  app.use(cookieParser());
 
   // Unique deployment ID (silent — available via X-Deploy-Id header)
   const deployId = process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_SNAPSHOT_ID || `unknown-${Date.now()}`;
 
   const allowedOrigins = [
-    'https://strong-auto-frontend.vercel.app',
+    'https://strong-auto-frontend-zeta.vercel.app',
+    'http://localhost:3000',
     process.env.FRONTEND_URL,
     process.env.RAILWAY_PUBLIC_DOMAIN,
   ].filter(Boolean) as string[];

@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CopartService } from './copart.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -7,6 +8,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('Auction Import')
 @Controller('auction')
+@Throttle({ auction: { ttl: 60_000, limit: 30 } })
 export class CopartController {
   constructor(private readonly copartService: CopartService) {}
 
