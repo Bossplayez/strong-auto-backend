@@ -378,6 +378,8 @@ model VehicleSpec {
   sellerName    String?   @map("seller_name")
   lotNumber     String?   @map("lot_number")
   auctionDate   DateTime? @map("auction_date")
+  saleStatus    String?   @map("sale_status")
+  currentBid    Int?      @map("current_bid")
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
