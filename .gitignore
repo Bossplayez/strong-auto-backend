@@ -28,7 +28,6 @@ coverage/
 
 # Prisma
 prisma/*.db
-prisma/migrations/
 
 # Temp
 tmp/
