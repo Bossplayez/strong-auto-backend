@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
+import { normalizeFuelType, normalizeDriveType, normalizeBodyType } from '../common/normalization';
 
 @Injectable()
 export class CopartService {
@@ -257,10 +258,10 @@ export class CopartService {
       vin: raw.vin,
       odometerValue: raw.odometer?.km ? Number(raw.odometer.km) : undefined,
       odometerUnit: 'km',
-      bodyType: specs.body_style,
-      fuelType: specs.fuel_type,
+      bodyType: normalizeBodyType(specs.body_style) ?? undefined,
+      fuelType: normalizeFuelType(specs.fuel_type) ?? undefined,
       transmission: specs.transmission,
-      driveType: specs.drive_type,
+      driveType: normalizeDriveType(specs.drive_type) ?? undefined,
       damagePrimary: condition.primary_damage,
       damageSecondary: condition.secondary_damage,
       hasKeys: condition.has_key,
