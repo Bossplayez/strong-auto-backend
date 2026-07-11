@@ -30,7 +30,7 @@ function setAuthCookies(res: Response, accessToken: string, refreshToken: string
   const common = {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'lax' as const,
+    sameSite: 'none' as const,
     path: '/',
   };
   res.cookie(ACCESS_COOKIE, accessToken, {

@@ -11,9 +11,9 @@ export enum UserType {
 }
 
 export enum VehicleSourceType {
+  INTERNAL = 'INTERNAL',
   COPART = 'COPART',
   IAAI = 'IAAI',
-  MANUAL = 'MANUAL',
 }
 
 export enum VehicleRegion {

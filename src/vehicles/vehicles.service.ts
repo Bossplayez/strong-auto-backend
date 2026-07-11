@@ -30,7 +30,7 @@ export class VehiclesService {
     year: number;
     priceAmount: number;
     currency?: string;
-    sourceType?: string;
+    sourceType?: 'INTERNAL' | 'COPART' | 'IAAI';
     sourceRegion?: string;
     vin?: string;
     odometerValue?: number;
@@ -56,7 +56,7 @@ export class VehiclesService {
         year: data.year,
         priceAmount: data.priceAmount,
         currency: data.currency ?? 'USD',
-        sourceType: (data.sourceType as any) ?? 'INTERNAL',
+        sourceType: data.sourceType ?? 'INTERNAL',
         sourceRegion: (data.sourceRegion as any) ?? 'USA',
         publicationStatus: 'PUBLISHED',
         publishedAt: new Date(),

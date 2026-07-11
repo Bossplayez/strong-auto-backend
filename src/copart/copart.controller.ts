@@ -57,21 +57,30 @@ export class CopartController {
   // =====================
 
   @Post('sync/copart')
-  @ApiOperation({ summary: 'Trigger Copart import sync' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Trigger Copart import sync (admin)' })
   @ApiResponse({ status: 200, description: 'Import job started' })
   async syncCopart() {
     return this.copartService.syncByPlatform('copart');
   }
 
   @Post('sync/iaai')
-  @ApiOperation({ summary: 'Trigger IAAI import sync' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Trigger IAAI import sync (admin)' })
   @ApiResponse({ status: 200, description: 'Import job started' })
   async syncIaai() {
     return this.copartService.syncByPlatform('iaai');
   }
 
   @Post('sync')
-  @ApiOperation({ summary: 'Trigger both Copart and IAAI sync' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Trigger both Copart and IAAI sync (admin)' })
   @ApiResponse({ status: 200, description: 'Import jobs started' })
   async syncAll() {
     const [copart, iaai] = await Promise.all([

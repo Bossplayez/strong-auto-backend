@@ -38,7 +38,7 @@ export class CatalogService {
     if (filters.fuelType) where.fuelType = filters.fuelType;
     if (filters.transmission) where.transmission = filters.transmission;
     if (filters.driveType) where.driveType = filters.driveType;
-    if (filters.sourceType) where.sourceType = filters.sourceType as any;
+    if (filters.sourceType) where.sourceType = filters.sourceType as 'INTERNAL' | 'COPART' | 'IAAI';
     if (filters.sourceRegion) where.sourceRegion = filters.sourceRegion as any;
     if (filters.availabilityStatus) {
       where.availabilityStatus = filters.availabilityStatus as any;
@@ -112,29 +112,91 @@ export class CatalogService {
   }
 
   async getFilterOptions() {
-    const [makes, bodyTypes, fuelTypes] = await this.prisma.$transaction([
+    const where: Prisma.VehicleWhereInput = {
+      publicationStatus: 'PUBLISHED',
+      availabilityStatus: { in: ['AVAILABLE', 'RESERVED'] },
+    };
+
+    // Price range excludes zero (unknown price) vehicles
+    const priceWhere = { ...where, priceAmount: { gt: 0 } };
+
+    const [
+      makes,
+      models,
+      bodyTypes,
+      fuelTypes,
+      transmissions,
+      driveTypes,
+      aggregates,
+      priceAggregates,
+    ] = await this.prisma.$transaction([
       this.prisma.vehicle.findMany({
-        where: { publicationStatus: 'PUBLISHED' },
+        where,
         select: { make: true },
         distinct: ['make'],
         orderBy: { make: 'asc' },
       }),
       this.prisma.vehicle.findMany({
-        where: { publicationStatus: 'PUBLISHED', bodyType: { not: null } },
+        where,
+        select: { model: true },
+        distinct: ['model'],
+        orderBy: { model: 'asc' },
+      }),
+      this.prisma.vehicle.findMany({
+        where: { ...where, bodyType: { not: null } },
         select: { bodyType: true },
         distinct: ['bodyType'],
       }),
       this.prisma.vehicle.findMany({
-        where: { publicationStatus: 'PUBLISHED', fuelType: { not: null } },
+        where: { ...where, fuelType: { not: null } },
         select: { fuelType: true },
         distinct: ['fuelType'],
+      }),
+      this.prisma.vehicle.findMany({
+        where: { ...where, transmission: { not: null } },
+        select: { transmission: true },
+        distinct: ['transmission'],
+      }),
+      this.prisma.vehicle.findMany({
+        where: { ...where, driveType: { not: null } },
+        select: { driveType: true },
+        distinct: ['driveType'],
+      }),
+      this.prisma.vehicle.aggregate({
+        where,
+        _min: { year: true, odometerValue: true },
+        _max: { year: true, odometerValue: true },
+      }),
+      this.prisma.vehicle.aggregate({
+        where: priceWhere,
+        _min: { priceAmount: true },
+        _max: { priceAmount: true },
       }),
     ]);
 
     return {
       makes: makes.map((m) => m.make),
+      models: models.map((m) => m.model),
       bodyTypes: bodyTypes.map((b) => b.bodyType).filter(Boolean),
       fuelTypes: fuelTypes.map((f) => f.fuelType).filter(Boolean),
+      transmissions: transmissions.map((t) => t.transmission).filter(Boolean),
+      driveTypes: driveTypes.map((d) => d.driveType).filter(Boolean),
+      yearRange: {
+        min: aggregates._min.year ?? 0,
+        max: aggregates._max.year ?? 0,
+      },
+      priceRange: {
+        min: priceAggregates._min.priceAmount
+          ? Number(priceAggregates._min.priceAmount)
+          : 0,
+        max: priceAggregates._max.priceAmount
+          ? Number(priceAggregates._max.priceAmount)
+          : 0,
+      },
+      mileageRange: {
+        min: aggregates._min.odometerValue ?? 0,
+        max: aggregates._max.odometerValue ?? 0,
+      },
     };
   }
 
@@ -190,7 +252,7 @@ export class CatalogService {
       throw new NotFoundException('Автомобіль не знайдено');
     }
 
-    if (vehicle.sourceType !== 'COPART') {
+    if (vehicle.sourceType !== 'COPART' && vehicle.sourceType !== 'IAAI') {
       throw new BadRequestException('Ставки доступні лише для аукціонних авто');
     }
 

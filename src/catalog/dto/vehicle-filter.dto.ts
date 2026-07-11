@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsInt, IsEnum, Min } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsEnum, IsIn, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -76,14 +76,14 @@ export class VehicleFilterDto extends PaginationQueryDto {
   @IsString()
   driveType?: string;
 
-  @ApiPropertyOptional({ enum: ['COPART', 'IAAI', 'MANUAL'] })
+  @ApiPropertyOptional({ enum: ['INTERNAL', 'COPART', 'IAAI'] })
   @IsOptional()
-  @IsString()
+  @IsIn(['INTERNAL', 'COPART', 'IAAI'])
   sourceType?: string;
 
-  @ApiPropertyOptional({ enum: ['USA', 'CANADA', 'UAE', 'EUROPE', 'KOREA', 'GEORGIA'] })
+  @ApiPropertyOptional({ enum: ['USA', 'EUROPE', 'UKRAINE'] })
   @IsOptional()
-  @IsString()
+  @IsIn(['USA', 'EUROPE', 'UKRAINE'])
   sourceRegion?: string;
 
   @ApiPropertyOptional({ enum: ['AVAILABLE', 'RESERVED', 'SOLD'] })

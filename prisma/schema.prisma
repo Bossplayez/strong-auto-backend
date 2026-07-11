@@ -32,6 +32,7 @@ enum UserType {
 enum VehicleSourceType {
   INTERNAL
   COPART
+  IAAI
 }
 
 enum VehicleRegion {
