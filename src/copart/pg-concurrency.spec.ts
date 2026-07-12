@@ -6,7 +6,7 @@
  * the database layer.
  *
  * Prerequisites:
- * - PostgreSQL running on localhost:5433
+ * - PostgreSQL running on localhost:5434
  * - Database "033r1_test" with user "test" / password "test"
  * - Migrations applied via `npx prisma migrate deploy`
  *
@@ -22,7 +22,7 @@ import { validateEnv } from '../config/env.validation';
 
 // Use the disposable PostgreSQL for integration tests
 // connection_limit=1 reduces contention with other test suites
-const TEST_DB_URL = 'postgresql://test:test@localhost:5433/033r1_test?connection_limit=5&pool_timeout=30';
+const TEST_DB_URL = 'postgresql://test:test@localhost:5434/033p_test?connection_limit=5&pool_timeout=30';
 
 describe('PostgreSQL Integration — lease, fencing & global budget', () => {
   let leaseService: ProviderLeaseService;
@@ -361,5 +361,156 @@ describe('PostgreSQL Integration — lease, fencing & global budget', () => {
     // Verify job is ABANDONED
     const job = await prisma.importJob.findUnique({ where: { id: 'job-stale' } });
     expect(job!.status).toBe('ABANDONED');
+  });
+
+  // ── Phase 1 (033P): Atomic recovery and claim serialization ──
+
+  // 15. Concurrent recovery and fresh claim produce a valid final owner
+  //     whose job is NOT abandoned.
+  it('15. recovery and fresh claim concurrent → valid final owner, job not abandoned', async () => {
+    // Setup: an expired lease + a stale RUNNING job + a new RUNNING job
+    await leaseService.claim('copart', 'token-old', 50, 'job-old');
+    await prisma.importJob.create({
+      data: { id: 'job-old', provider: 'copart', mode: 'test', status: 'RUNNING' },
+    });
+    await prisma.importJob.create({
+      data: { id: 'job-new', provider: 'copart', mode: 'test', status: 'RUNNING' },
+    });
+
+    await new Promise((r) => setTimeout(r, 100)); // let lease expire
+
+    // Worker A: claimWithRecovery for a new job
+    // Worker B: recoverStaleJobs independently
+    const [claimResult, recoverResult] = await Promise.all([
+      leaseService.claimWithRecovery('copart', 'token-new', 5000, 'job-new'),
+      leaseService.recoverStaleJobs('copart', 'recovery-job'),
+    ]);
+
+    // The claim must succeed
+    expect(claimResult.claimed).toBe(true);
+    expect(claimResult.fencingToken).toBeGreaterThan(0);
+
+    // The new job must NOT be abandoned
+    const newJob = await prisma.importJob.findUnique({ where: { id: 'job-new' } });
+    expect(newJob?.status).toBe('RUNNING');
+
+    // The old stale job must be ABANDONED (recovered by either operation)
+    const oldJob = await prisma.importJob.findUnique({ where: { id: 'job-old' } });
+    expect(oldJob?.status).toBe('ABANDONED');
+
+    // Only one should have recovered it (no double-abandon)
+    const totalRecoveries =
+      claimResult.recoveredJobIds.filter((id) => id === 'job-old').length +
+      recoverResult.recoveredJobIds.filter((id) => id === 'job-old').length;
+    expect(totalRecoveries).toBe(1);
+  });
+
+  // 16. Two concurrent recoveries abandon a stale job exactly once
+  it('16. two concurrent recoveries abandon stale job exactly once', async () => {
+    await leaseService.claim('copart', 'token-old', 50, 'job-stale-16');
+    await prisma.importJob.create({
+      data: { id: 'job-stale-16', provider: 'copart', mode: 'test', status: 'RUNNING' },
+    });
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const [r1, r2] = await Promise.all([
+      leaseService.recoverStaleJobs('copart', 'rec-1'),
+      leaseService.recoverStaleJobs('copart', 'rec-2'),
+    ]);
+
+    const totalRecoveries =
+      r1.recoveredJobIds.filter((id) => id === 'job-stale-16').length +
+      r2.recoveredJobIds.filter((id) => id === 'job-stale-16').length;
+
+    expect(totalRecoveries).toBe(1);
+
+    const job = await prisma.importJob.findUnique({ where: { id: 'job-stale-16' } });
+    expect(job?.status).toBe('ABANDONED');
+  });
+
+  // 17. Release racing with recovery has a deterministic safe result
+  it('17. release racing with recovery → deterministic safe result', async () => {
+    await leaseService.claim('copart', 'token-A', 5000, 'job-17');
+    await prisma.importJob.create({
+      data: { id: 'job-17', provider: 'copart', mode: 'test', status: 'RUNNING' },
+    });
+
+    // Race release vs recovery
+    await Promise.all([
+      leaseService.release('copart', 'token-A', 1),
+      leaseService.recoverStaleJobs('copart', 'rec-17'),
+    ]);
+
+    // After release, lease row exists but is available (ownerToken=''),
+    // recovery may or may not have seen it as expired. Either way:
+    // - The job may be RUNNING (recovery saw live lease) or ABANDONED (saw expired)
+    // - The lease row is available (not deleted)
+    const lease = await prisma.providerLease.findUnique({ where: { provider: 'copart' } });
+    expect(lease).not.toBeNull(); // Row must still exist (not deleted)
+    expect(lease!.ownerToken).toBe(''); // Available
+
+    // If recovery happened, job is ABANDONED. If not, still RUNNING.
+    // Both outcomes are safe and deterministic.
+    const job = await prisma.importJob.findUnique({ where: { id: 'job-17' } });
+    expect(['RUNNING', 'ABANDONED']).toContain(job?.status);
+  });
+
+  // 18. Reclaim increments the fence exactly once (no double-increment)
+  it('18. reclaim increments fence exactly once', async () => {
+    await leaseService.claim('copart', 'token-1', 50, 'job-18');
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Two concurrent reclaims after expiry
+    const [r1, r2] = await Promise.all([
+      leaseService.claim('copart', 'token-2', 5000, 'job-18b'),
+      leaseService.claim('copart', 'token-3', 5000, 'job-18c'),
+    ]);
+
+    // Exactly one wins
+    const winners = [r1, r2].filter((r) => r.claimed);
+    expect(winners.length).toBe(1);
+
+    // Fence must be exactly 2 (incremented from 1)
+    expect(winners[0].fencingToken).toBe(2);
+
+    // The coordination row still exists
+    const lease = await prisma.providerLease.findUnique({ where: { provider: 'copart' } });
+    expect(lease).not.toBeNull();
+    expect(lease!.fencingToken).toBe(2);
+  });
+
+  // 19. 100 race iterations: no valid live job is ever marked ABANDONED
+  it('19. 100 race iterations — no valid live job is marked ABANDONED', async () => {
+    for (let i = 0; i < 100; i++) {
+      // Truncate for clean state
+      await prisma.$executeRawUnsafe('TRUNCATE TABLE provider_leases RESTART IDENTITY CASCADE');
+      await prisma.$executeRawUnsafe('TRUNCATE TABLE import_jobs RESTART IDENTITY CASCADE');
+
+      const jobId = `race-job-${i}`;
+      const token = `token-${i}`;
+
+      // Claim with a live (non-expiring) lease
+      const claim = await leaseService.claimWithRecovery('copart', token, 30000, jobId);
+      expect(claim.claimed).toBe(true);
+
+      // Create the job AFTER claiming
+      await prisma.importJob.create({
+        data: { id: jobId, provider: 'copart', mode: 'test', status: 'RUNNING' },
+      });
+
+      // Concurrently: try to recover + try to claim from another worker
+      const [, otherClaim] = await Promise.all([
+        leaseService.recoverStaleJobs('copart', `other-${i}`),
+        leaseService.claimWithRecovery('copart', `other-token-${i}`, 100, `other-job-${i}`),
+      ]);
+
+      // The live job must NOT be abandoned
+      const job = await prisma.importJob.findUnique({ where: { id: jobId } });
+      expect(job?.status).toBe('RUNNING');
+
+      // The other claim must fail (lease is still live)
+      expect(otherClaim.claimed).toBe(false);
+    }
   });
 });

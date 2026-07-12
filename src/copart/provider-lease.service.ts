@@ -40,6 +40,11 @@ export interface LeaseReleaseResult {
   released: boolean;
 }
 
+/** Result of a combined claim-with-recovery operation. */
+export interface ClaimWithRecoveryResult extends LeaseClaimResult {
+  recoveredJobIds: string[];
+}
+
 /** Internal row shape from Prisma. */
 interface LeaseRow {
   id: string;
@@ -73,14 +78,53 @@ export class ProviderLeaseService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Ensure a durable coordination row exists for the provider, then
+   * lock it for the current transaction.
+   *
+   * This method guarantees that `SELECT ... FOR UPDATE` always finds
+   * a row, even on first-ever use or after a release.
+   *
+   * Must be called inside a transaction.
+   */
+  private async ensureAndLockLeaseRow(
+    tx: any,
+    provider: ProviderId,
+  ): Promise<LeaseRow | null> {
+    // Ensure row exists (INSERT ON CONFLICT DO NOTHING)
+    await tx.$executeRaw`
+      INSERT INTO provider_leases (id, provider, owner_token, fencing_token, acquired_at, heartbeat_at, expires_at)
+      VALUES (gen_random_uuid(), ${provider}, '', 0, NOW(), NOW(), '1970-01-01'::timestamp)
+      ON CONFLICT (provider) DO NOTHING
+    `;
+
+    // Lock the row
+    const rows = await tx.$queryRaw<any[]>`
+      SELECT
+        id,
+        provider,
+        owner_token   AS "ownerToken",
+        fencing_token AS "fencingToken",
+        acquired_at   AS "acquiredAt",
+        heartbeat_at  AS "heartbeatAt",
+        expires_at    AS "expiresAt",
+        import_job_id AS "importJobId"
+      FROM provider_leases WHERE provider = ${provider} FOR UPDATE
+    `;
+
+    return rows[0] ?? null;
+  }
+
+  /**
    * Attempt to claim a lease for the given provider.
    *
-   * - If no lease exists: create one with fencing_token = 1.
-   * - If lease exists and expired: reclaim with fencing_token + 1.
-   * - If lease exists and owned by same token: idempotent renewal.
-   * - If lease exists and owned by different token (not expired): fail.
+   * Uses a durable coordination row pattern: the row always exists
+   * (created via INSERT ON CONFLICT DO NOTHING), so SELECT FOR UPDATE
+   * always finds a lockable row.
    *
-   * Returns the public lease state (without owner token) on success.
+   * - If no prior owner: claim with fencing_token = 1.
+   * - If expired: reclaim with fencing_token + 1.
+   * - If same owner: idempotent renewal.
+   * - If different owner (not expired): deny.
    */
   async claim(
     provider: ProviderId,
@@ -90,44 +134,32 @@ export class ProviderLeaseService {
   ): Promise<LeaseClaimResult> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Lock the provider row for the duration of this transaction
-        // Alias columns to camelCase for TypeScript access
-        const rows = await tx.$queryRaw<any[]>`
-          SELECT
-            id,
-            provider,
-            owner_token   AS "ownerToken",
-            fencing_token AS "fencingToken",
-            acquired_at   AS "acquiredAt",
-            heartbeat_at  AS "heartbeatAt",
-            expires_at    AS "expiresAt",
-            import_job_id AS "importJobId"
-          FROM provider_leases WHERE provider = ${provider} FOR UPDATE
-        `;
+        const existing = await this.ensureAndLockLeaseRow(tx, provider);
 
-        const existing = rows[0];
+        // Gracefully handle the seeded placeholder row
+        const hasOwner = existing && existing.ownerToken !== '';
         const now = new Date();
-        const expired = existing ? existing.expiresAt.getTime() < now.getTime() : true;
+        const expired = !hasOwner || (existing!.expiresAt.getTime() < now.getTime());
 
-        // Case 1: No existing lease — create new
-        if (!existing) {
-          const created = await tx.providerLease.create({
+        // Case 1: No prior owner (seeded placeholder or truly empty)
+        if (!hasOwner) {
+          const updated = await tx.providerLease.update({
+            where: { provider },
             data: {
-              provider,
               ownerToken,
-              fencingToken: 1,
+              fencingToken: existing!.fencingToken > 0 ? existing!.fencingToken + 1 : 1,
               acquiredAt: now,
               heartbeatAt: now,
               expiresAt: new Date(now.getTime() + ttlMs),
               importJobId: importJobId ?? null,
             },
           });
-          this.logger.log(`Lease claimed for ${provider} (new, fence=1)`);
+          this.logger.log(`Lease claimed for ${provider} (new, fence=${updated.fencingToken})`);
           return {
             claimed: true,
             ownerToken,
-            fencingToken: created.fencingToken,
-            lease: toPublicState(created),
+            fencingToken: updated.fencingToken,
+            lease: toPublicState(updated),
             conflictingLease: null,
           };
         }
@@ -138,7 +170,7 @@ export class ProviderLeaseService {
             where: { provider },
             data: {
               ownerToken,
-              fencingToken: existing.fencingToken + 1,
+              fencingToken: existing!.fencingToken + 1,
               acquiredAt: now,
               heartbeatAt: now,
               expiresAt: new Date(now.getTime() + ttlMs),
@@ -146,7 +178,7 @@ export class ProviderLeaseService {
             },
           });
           this.logger.log(
-            `Lease reclaimed for ${provider} (expired, fence=${updated.fencingToken}, was ${existing.fencingToken})`,
+            `Lease reclaimed for ${provider} (expired, fence=${updated.fencingToken}, was ${existing!.fencingToken})`,
           );
           return {
             claimed: true,
@@ -158,13 +190,13 @@ export class ProviderLeaseService {
         }
 
         // Case 3: Same owner re-claiming (idempotent)
-        if (existing.ownerToken === ownerToken) {
+        if (existing!.ownerToken === ownerToken) {
           const updated = await tx.providerLease.update({
             where: { provider },
             data: {
               heartbeatAt: now,
               expiresAt: new Date(now.getTime() + ttlMs),
-              importJobId: importJobId ?? existing.importJobId,
+              importJobId: importJobId ?? existing!.importJobId,
             },
           });
           return {
@@ -178,18 +210,17 @@ export class ProviderLeaseService {
 
         // Case 4: Active lease held by different owner — deny
         this.logger.warn(
-          `Lease claim denied for ${provider}: held by another owner until ${existing.expiresAt.toISOString()}`,
+          `Lease claim denied for ${provider}: held by another owner`,
         );
         return {
           claimed: false,
           ownerToken: null,
           fencingToken: null,
           lease: null,
-          conflictingLease: toPublicState(existing),
+          conflictingLease: toPublicState(existing!),
         };
       });
     } catch (error) {
-      // Serialization failure or other DB error — treat as claim failure
       this.logger.error(`Lease claim error for ${provider}: ${error}`);
       return {
         claimed: false,
@@ -197,6 +228,155 @@ export class ProviderLeaseService {
         fencingToken: null,
         lease: null,
         conflictingLease: null,
+      };
+    }
+  }
+
+  /**
+   * Combined claim + recovery in a single atomic transaction.
+   *
+   * This closes the recovery race: claim and recovery cannot
+   * interleave because both happen while holding the same
+   * `SELECT FOR UPDATE` lock on the provider coordination row.
+   *
+   * Contract:
+   * 1. Begin transaction.
+   * 2. Ensure durable coordination row exists.
+   * 3. Lock the row FOR UPDATE.
+   * 4. Evaluate owner, fencing token, expiry.
+   * 5. If reclaiming: mark prior stale jobs ABANDONED while holding
+   *    the same lock.
+   * 6. Claim/reclaim the lease.
+   * 7. Commit.
+   */
+  async claimWithRecovery(
+    provider: ProviderId,
+    ownerToken: string,
+    ttlMs: number,
+    importJobId: string,
+  ): Promise<ClaimWithRecoveryResult> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const existing = await this.ensureAndLockLeaseRow(tx, provider);
+
+        const hasOwner = existing && existing.ownerToken !== '';
+        const now = new Date();
+        const expired = !hasOwner || (existing!.expiresAt.getTime() < now.getTime());
+
+        // Cannot claim: active lease by different owner
+        if (hasOwner && !expired && existing!.ownerToken !== ownerToken) {
+          this.logger.warn(
+            `claimWithRecovery denied for ${provider}: held by another owner`,
+          );
+          return {
+            claimed: false,
+            ownerToken: null,
+            fencingToken: null,
+            lease: null,
+            conflictingLease: toPublicState(existing!),
+            recoveredJobIds: [],
+          };
+        }
+
+        // Same owner idempotent re-claim — no recovery needed
+        if (hasOwner && !expired && existing!.ownerToken === ownerToken) {
+          const updated = await tx.providerLease.update({
+            where: { provider },
+            data: {
+              heartbeatAt: now,
+              expiresAt: new Date(now.getTime() + ttlMs),
+              importJobId: importJobId ?? existing!.importJobId,
+            },
+          });
+          return {
+            claimed: true,
+            ownerToken,
+            fencingToken: updated.fencingToken,
+            lease: toPublicState(updated),
+            conflictingLease: null,
+            recoveredJobIds: [],
+          };
+        }
+
+        // Claim or reclaim
+        const newFence = !hasOwner
+          ? (existing!.fencingToken > 0 ? existing!.fencingToken + 1 : 1)
+          : existing!.fencingToken + 1;
+
+        const updated = await tx.providerLease.update({
+          where: { provider },
+          data: {
+            ownerToken,
+            fencingToken: newFence,
+            acquiredAt: now,
+            heartbeatAt: now,
+            expiresAt: new Date(now.getTime() + ttlMs),
+            importJobId,
+          },
+        });
+
+        this.logger.log(
+          `claimWithRecovery for ${provider}: claimed (fence=${newFence}), recovering stale jobs...`,
+        );
+
+        // ── Recovery: abandon stale jobs while holding the lock ──
+        const recoveredJobIds: string[] = [];
+
+        const candidates = await tx.importJob.findMany({
+          where: {
+            provider,
+            status: { in: ['RUNNING', 'PENDING'] },
+          },
+          select: { id: true },
+        });
+
+        for (const job of candidates) {
+          // Don't abandon the job we're claiming for
+          if (job.id === importJobId) continue;
+
+          const result = await tx.importJob.updateMany({
+            where: {
+              id: job.id,
+              status: { in: ['RUNNING', 'PENDING'] },
+            },
+            data: {
+              status: 'ABANDONED',
+              finishedAt: now,
+              summaryJsonb: {
+                recovered: true,
+                recoveredAt: now.toISOString(),
+                recoveredByJobId: importJobId,
+                reason: 'Lease absent or expired — job abandoned by atomic claim-with-recovery',
+              } as any,
+            },
+          });
+
+          if (result.count > 0) {
+            recoveredJobIds.push(job.id);
+            this.logger.warn(
+              `Recovered stale job ${job.id} for ${provider} (atomic)`,
+            );
+          }
+        }
+
+        return {
+          claimed: true,
+          ownerToken,
+          fencingToken: newFence,
+          lease: toPublicState(updated),
+          conflictingLease: null,
+          recoveredJobIds,
+        };
+      });
+    } catch (error) {
+      this.logger.error(`claimWithRecovery error for ${provider}: ${error}`);
+      return {
+        claimed: false,
+        ownerToken: null,
+        fencingToken: null,
+        lease: null,
+        conflictingLease: null,
+        recoveredJobIds: [],
       };
     }
   }
@@ -240,8 +420,13 @@ export class ProviderLeaseService {
   }
 
   /**
-   * Release a lease. Only succeeds if caller is the current owner.
-   * Idempotent: releasing an already-released or non-existent lease returns { released: true }.
+   * Release a lease by marking the coordination row as available.
+   *
+   * The row is NOT deleted — it must remain lockable for future
+   * claim/recovery operations. Only the matching owner+fence can
+   * release.
+   *
+   * Idempotent: releasing an already-released lease is a no-op success.
    */
   async release(
     provider: ProviderId,
@@ -249,15 +434,19 @@ export class ProviderLeaseService {
     fencingToken: number,
   ): Promise<LeaseReleaseResult> {
     try {
-      const result = await this.prisma.providerLease.deleteMany({
+      await this.prisma.providerLease.updateMany({
         where: {
           provider,
           ownerToken,
           fencingToken,
         },
+        data: {
+          ownerToken: '',
+          expiresAt: new Date(0),
+          heartbeatAt: new Date(0),
+          importJobId: null,
+        },
       });
-
-      // deleteMany returns count even if 0 — idempotent success
       return { released: true };
     } catch (error) {
       this.logger.error(`Lease release error for ${provider}: ${error}`);
@@ -361,15 +550,13 @@ export class ProviderLeaseService {
   }
 
   /**
-   * Recover stale jobs based on LEASE TRUTH, not job age.
+   * Recover stale jobs using LEASE TRUTH.
    *
-   * A PENDING/RUNNING job is recovered only when its corresponding
-   * lease is absent or expired. A valid non-expired lease protects
-   * a long-running job regardless of job age.
+   * Locks the provider coordination row FOR UPDATE, then evaluates
+   * which jobs are stale (no valid lease protecting them).
    *
-   * This method is typically called inside the claim() transaction
-   * after reclaiming an expired lease. The new fencing token has
-   * already been set, invalidating the prior owner.
+   * This is safe against concurrent claim/release/recovery because
+   * it serializes on the same row lock as claim().
    *
    * Idempotent: only updates jobs still in RUNNING/PENDING.
    */
@@ -377,59 +564,62 @@ export class ProviderLeaseService {
     provider: ProviderId,
     recoveredByJobId?: string,
   ): Promise<{ recoveredJobIds: string[] }> {
-    // Get the current lease state (after claim/reclaim)
-    const lease = await this.prisma.providerLease.findUnique({
-      where: { provider },
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const lease = await this.ensureAndLockLeaseRow(tx, provider);
 
-    // If there's a valid non-expired lease for a different job,
-    // do NOT recover that job
-    const now = new Date();
-    const leaseExpired = !lease || lease.expiresAt <= now;
+        const hasOwner = lease && lease.ownerToken !== '';
+        const now = new Date();
+        const leaseExpired = !hasOwner || lease!.expiresAt.getTime() <= now.getTime();
 
-    // Find all PENDING/RUNNING jobs for this provider
-    const candidates = await this.prisma.importJob.findMany({
-      where: {
-        provider,
-        status: { in: ['RUNNING', 'PENDING'] },
-      },
-      select: { id: true },
-    });
+        // Find all PENDING/RUNNING jobs for this provider
+        const candidates = await tx.importJob.findMany({
+          where: {
+            provider,
+            status: { in: ['RUNNING', 'PENDING'] },
+          },
+          select: { id: true },
+        });
 
-    const recoveredIds: string[] = [];
+        const recoveredIds: string[] = [];
 
-    for (const job of candidates) {
-      // Protect the job associated with the current active lease
-      if (lease && !leaseExpired && lease.importJobId === job.id) {
-        continue;
-      }
+        for (const job of candidates) {
+          // Protect the job associated with the current active lease
+          if (hasOwner && !leaseExpired && lease!.importJobId === job.id) {
+            continue;
+          }
 
-      const result = await this.prisma.importJob.updateMany({
-        where: {
-          id: job.id,
-          status: { in: ['RUNNING', 'PENDING'] },
-        },
-        data: {
-          status: 'ABANDONED',
-          finishedAt: new Date(),
-          summaryJsonb: {
-            recovered: true,
-            recoveredAt: now.toISOString(),
-            recoveredByJobId: recoveredByJobId ?? null,
-            reason: 'Lease absent or expired — job abandoned by lease-truth recovery',
-          } as any,
-        },
+          const result = await tx.importJob.updateMany({
+            where: {
+              id: job.id,
+              status: { in: ['RUNNING', 'PENDING'] },
+            },
+            data: {
+              status: 'ABANDONED',
+              finishedAt: now,
+              summaryJsonb: {
+                recovered: true,
+                recoveredAt: now.toISOString(),
+                recoveredByJobId: recoveredByJobId ?? null,
+                reason: 'Lease absent or expired — job abandoned by lease-truth recovery',
+              } as any,
+            },
+          });
+
+          if (result.count > 0) {
+            recoveredIds.push(job.id);
+            this.logger.warn(
+              `Recovered stale job ${job.id} for ${provider} — marked ABANDONED (lease-truth)`,
+            );
+          }
+        }
+
+        return { recoveredJobIds: recoveredIds };
       });
-
-      if (result.count > 0) {
-        recoveredIds.push(job.id);
-        this.logger.warn(
-          `Recovered stale job ${job.id} for ${provider} — marked ABANDONED (lease-truth)`,
-        );
-      }
+    } catch (error) {
+      this.logger.error(`recoverStaleJobs error for ${provider}: ${error}`);
+      return { recoveredJobIds: [] };
     }
-
-    return { recoveredJobIds: recoveredIds };
   }
 }
 

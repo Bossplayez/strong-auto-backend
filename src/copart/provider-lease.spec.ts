@@ -30,25 +30,49 @@ function makeLeaseRow(overrides: Partial<any> = {}) {
 }
 
 function makePrismaMock(existingLease: any | null = null) {
-  const leaseStore: any = existingLease ? { ...existingLease } : null;
+  let leaseStore: any = existingLease ? { ...existingLease } : null;
+
+  /**
+   * Shared importJob mock — the same reference is exposed on both
+   * the top-level prisma mock and the transaction tx mock.
+   */
+  const importJobMock = {
+    findMany: jest.fn().mockResolvedValue([]),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+  };
+
+  /**
+   * Helper: ensure the lease store has a row (simulating the
+   * INSERT ON CONFLICT DO NOTHING + SELECT FOR UPDATE pattern).
+   * Returns the current row for FOR UPDATE simulation.
+   */
+  function ensureRow(): any | null {
+    if (!leaseStore) {
+      // Simulate INSERT ON CONFLICT DO NOTHING creating a placeholder
+      leaseStore = {
+        id: 'seed-row',
+        provider: 'copart',
+        ownerToken: '',
+        fencingToken: 0,
+        acquiredAt: new Date(0),
+        heartbeatAt: new Date(0),
+        expiresAt: new Date(0),
+        importJobId: null,
+      };
+    }
+    return { ...leaseStore };
+  }
 
   return {
     _leaseStore: leaseStore,
     providerLease: {
       findUnique: jest.fn(async () => {
-        return leaseStore ? { ...leaseStore } : null;
+        return leaseStore && leaseStore.ownerToken !== '' ? { ...leaseStore } : null;
       }),
       create: jest.fn(async ({ data }: any) => {
-        // Create fills the store from scratch
         const newLease = { ...data, id: 'new-id' };
-        // Mutate the store object in place if it exists, otherwise replace
-        if (leaseStore) {
-          Object.keys(leaseStore).forEach(k => delete leaseStore[k]);
-          Object.assign(leaseStore, newLease);
-        } else {
-          // In tests, we don't really need to persist — the create returns the data
-          return newLease;
-        }
+        Object.keys(leaseStore).forEach(k => delete leaseStore[k]);
+        Object.assign(leaseStore, newLease);
         return { ...leaseStore };
       }),
       update: jest.fn(async ({ where: { provider }, data }: any) => {
@@ -58,8 +82,8 @@ function makePrismaMock(existingLease: any | null = null) {
       }),
       updateMany: jest.fn(async ({ where, data }: any) => {
         if (!leaseStore) return { count: 0 };
-        // Check conditions
-        if (where.ownerToken && leaseStore.ownerToken !== where.ownerToken) return { count: 0 };
+        // An empty ownerToken in where means "released" row — won't match
+        if (where.ownerToken !== undefined && (leaseStore.ownerToken !== where.ownerToken || leaseStore.ownerToken === '')) return { count: 0 };
         if (where.fencingToken !== undefined && leaseStore.fencingToken !== where.fencingToken) return { count: 0 };
         Object.assign(leaseStore, data);
         return { count: 1 };
@@ -71,36 +95,45 @@ function makePrismaMock(existingLease: any | null = null) {
         return { count: 1 };
       }),
     },
-    importJob: {
-      findMany: jest.fn().mockResolvedValue([]),
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
-    $queryRaw: jest.fn().mockResolvedValue([]),
+    importJob: importJobMock,
+    $queryRaw: jest.fn(async () => {
+      return leaseStore ? [{ ...leaseStore }] : [];
+    }),
+    $executeRaw: jest.fn(async () => {
+      ensureRow();
+      return 1;
+    }),
     $transaction: jest.fn(async (fn: (tx: any) => Promise<any>) => {
-      // Simulate transaction — pass the mock as tx
       const tx = {
+        $executeRaw: jest.fn(async () => {
+          ensureRow();
+          return 1;
+        }),
         $queryRaw: jest.fn(async () => {
           // Return current lease for FOR UPDATE
-          return leaseStore ? [{ ...leaseStore }] : [];
+          const row = ensureRow();
+          return [row];
         }),
         providerLease: {
           create: jest.fn(async ({ data }: any) => {
             const newLease = { ...data, id: 'new-id' };
-            // Write through to store
-            if (leaseStore) {
-              Object.keys(leaseStore).forEach(k => delete leaseStore[k]);
-              Object.assign(leaseStore, newLease);
-            } else {
-              // Can't assign to null — in tests this is fine because
-              // the test only checks the return value
-            }
-            return newLease;
+            Object.keys(leaseStore).forEach(k => delete leaseStore[k]);
+            Object.assign(leaseStore, newLease);
+            return { ...leaseStore };
           }),
           update: jest.fn(async ({ where: { provider }, data }: any) => {
             Object.assign(leaseStore, data);
             return { ...leaseStore };
           }),
+          updateMany: jest.fn(async ({ where, data }: any) => {
+            if (!leaseStore) return { count: 0 };
+            if (where.ownerToken !== undefined && (leaseStore.ownerToken !== where.ownerToken || leaseStore.ownerToken === '')) return { count: 0 };
+            if (where.fencingToken !== undefined && leaseStore.fencingToken !== where.fencingToken) return { count: 0 };
+            Object.assign(leaseStore, data);
+            return { count: 1 };
+          }),
         },
+        importJob: importJobMock,
       };
       return fn(tx);
     }),
@@ -254,11 +287,15 @@ describe('ProviderLeaseService', () => {
 
     // Stale owner-A tries to release with old fence 1
     const result = await service.release('copart', 'owner-A', 1);
-    // Release returns released: true (idempotent), but does NOT delete the new owner's lease
+    // Release returns released: true (idempotent), but does NOT affect the new owner's lease
     expect(result.released).toBe(true);
-    // Verify the lease was NOT deleted (deleteMany matched 0 rows)
-    expect(prisma.providerLease.deleteMany).toHaveBeenCalledWith({
+    // Verify the release attempted to match owner-A/fence-1 but matched 0 rows
+    expect(prisma.providerLease.updateMany).toHaveBeenCalledWith({
       where: { provider: 'copart', ownerToken: 'owner-A', fencingToken: 1 },
+      data: expect.objectContaining({
+        ownerToken: '',
+        importJobId: null,
+      }),
     });
   });
 
@@ -297,9 +334,11 @@ describe('ProviderLeaseService', () => {
       },
       importJob: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
       $queryRaw: jest.fn(),
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $transaction: jest.fn(async (fn: any) => {
         // Each transaction sees the CURRENT state of sharedLease
         const tx = {
+          $executeRaw: jest.fn().mockResolvedValue(1),
           $queryRaw: jest.fn(async () => [{ ...sharedLease }]),
           providerLease: {
             create: jest.fn(async ({ data }: any) => { Object.assign(sharedLease, data); return { ...sharedLease }; }),

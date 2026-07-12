@@ -212,8 +212,8 @@ export class CopartService {
         return;
       }
 
-      // ── Claim lease ──
-      const claimResult = await this.leaseService.claim(
+      // ── Claim lease WITH recovery (atomic — single transaction) ──
+      const claimResult = await this.leaseService.claimWithRecovery(
         providerId,
         ownerToken,
         leaseTtlMs,
@@ -243,8 +243,11 @@ export class CopartService {
 
       currentFencingToken = claimResult.fencingToken;
 
-      // Recover stale jobs from the previous (expired) lease owner
-      await this.leaseService.recoverStaleJobs(providerId, jobId);
+      if (claimResult.recoveredJobIds.length > 0) {
+        this.logger.log(
+          `Atomic recovery abandoned ${claimResult.recoveredJobIds.length} stale job(s) for ${platform}`,
+        );
+      }
 
       // ── Check budget before starting ──
       const budgetCheck = await this.budgetService.canMakeRoutineRequest();

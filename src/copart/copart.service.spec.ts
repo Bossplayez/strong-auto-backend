@@ -117,14 +117,17 @@ function makeVehiclesMock() {
 
 /** Mock ProviderLeaseService with withLeasedTransaction support. */
 function makeLeaseMock(overrides: any = {}) {
+  const defaultClaimResult = {
+    claimed: true,
+    ownerToken: 'test-owner-token',
+    fencingToken: 1,
+    lease: { provider: 'copart', fencingToken: 1, isExpired: false },
+    conflictingLease: null,
+    recoveredJobIds: [] as string[],
+  };
   return {
-    claim: jest.fn().mockResolvedValue({
-      claimed: true,
-      ownerToken: 'test-owner-token',
-      fencingToken: 1,
-      lease: { provider: 'copart', fencingToken: 1, isExpired: false },
-      conflictingLease: null,
-    }),
+    claim: jest.fn().mockResolvedValue(defaultClaimResult),
+    claimWithRecovery: jest.fn().mockResolvedValue(defaultClaimResult),
     renew: jest.fn().mockResolvedValue({ renewed: true, expiresAt: new Date(Date.now() + 60000) }),
     release: jest.fn().mockResolvedValue({ released: true }),
     verifyOwnership: jest.fn().mockResolvedValue(true),
