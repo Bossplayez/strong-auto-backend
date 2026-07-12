@@ -33,3 +33,4 @@ prisma/*.db
 tmp/
 temp/
 .vercel
+probe-artifact.json
