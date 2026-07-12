@@ -19,6 +19,9 @@ import {
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { CopartService } from '../copart/copart.service';
+import { ProviderLeaseService } from '../copart/provider-lease.service';
+import { RequestBudgetService } from '../copart/request-budget.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -43,6 +46,9 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly copartService: CopartService,
+    private readonly leaseService: ProviderLeaseService,
+    private readonly budgetService: RequestBudgetService,
+    private readonly prisma: PrismaService,
   ) {}
 
   // =====================
@@ -277,6 +283,152 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Paginated list of import jobs' })
   async listImportJobs(@Query() query: PaginationQueryDto): Promise<any> {
     return this.adminService.listImportJobs(query.page, query.pageSize);
+  }
+
+  // =====================
+  // Operational Status (Task 033R Phase 4)
+  // =====================
+
+  @Get('import/status')
+  @ApiOperation({ summary: 'Get operational import status for all providers (admin)' })
+  @ApiResponse({ status: 200, description: 'Operational status per provider' })
+  async getImportStatus(): Promise<any> {
+    const providers: ('copart' | 'iaai')[] = ['copart', 'iaai'];
+    const results: any[] = [];
+
+    for (const provider of providers) {
+      const [leaseState, budgetUsage, lastJob] = await Promise.all([
+        this.leaseService.getState(provider),
+        this.budgetService.getUsage(provider),
+        this.prisma.importJob.findFirst({
+          where: { provider },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+            finishedAt: true,
+            summaryJsonb: true,
+            errorMessage: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+
+      // Extract sanitized last terminal reason from summary
+      const summary = lastJob?.summaryJsonb as any;
+      const lastTerminalReason = summary?.terminalReason ?? null;
+      const sanitizedSummary = summary ? {
+        terminalReason: summary.terminalReason ?? null,
+        created: summary.created ?? null,
+        updated: summary.updated ?? null,
+        skipped: summary.skipped ?? null,
+        errors: summary.errors ?? null,
+        pagesCompleted: summary.pagesCompleted ?? null,
+        pagesAttempted: summary.pagesAttempted ?? null,
+        itemsReceived: summary.itemsReceived ?? null,
+      } : null;
+
+      results.push({
+        provider,
+        lease: leaseState ? {
+          fencingToken: leaseState.fencingToken,
+          acquiredAt: leaseState.acquiredAt,
+          heartbeatAt: leaseState.heartbeatAt,
+          expiresAt: leaseState.expiresAt,
+          isExpired: leaseState.isExpired,
+          importJobId: leaseState.importJobId,
+        } : null,
+        isStale: leaseState ? leaseState.isExpired : false,
+        lastJob: lastJob ? {
+          id: lastJob.id,
+          status: lastJob.status,
+          startedAt: lastJob.startedAt,
+          finishedAt: lastJob.finishedAt,
+          createdAt: lastJob.createdAt,
+          errorMessage: lastJob.errorMessage,
+          terminalReason: lastTerminalReason,
+          sanitizedSummary,
+        } : null,
+        budget: {
+          billingMonth: budgetUsage.billingMonth,
+          totalAttempts: budgetUsage.totalAttempts,
+          budget: budgetUsage.budget,
+          reserve: budgetUsage.reserve,
+          availableForRoutineWork: budgetUsage.availableForRoutineWork,
+          percentageUsed: budgetUsage.percentageUsed,
+          isWarning: budgetUsage.isWarning,
+          isHardStop: budgetUsage.isHardStop,
+        },
+      });
+    }
+
+    return { providers: results };
+  }
+
+  @Get('import/status/:provider')
+  @ApiOperation({ summary: 'Get operational import status for a single provider (admin)' })
+  @ApiResponse({ status: 200, description: 'Operational status for the provider' })
+  async getImportStatusByProvider(@Param('provider') provider: string): Promise<any> {
+    if (provider !== 'copart' && provider !== 'iaai') {
+      return { error: 'Invalid provider. Must be copart or iaai.' };
+    }
+
+    const p = provider as 'copart' | 'iaai';
+    const [leaseState, budgetUsage, lastJob] = await Promise.all([
+      this.leaseService.getState(p),
+      this.budgetService.getUsage(p),
+      this.prisma.importJob.findFirst({
+        where: { provider: p },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      provider: p,
+      lease: leaseState ? {
+        fencingToken: leaseState.fencingToken,
+        acquiredAt: leaseState.acquiredAt,
+        heartbeatAt: leaseState.heartbeatAt,
+        expiresAt: leaseState.expiresAt,
+        isExpired: leaseState.isExpired,
+        importJobId: leaseState.importJobId,
+      } : null,
+      isStale: leaseState ? leaseState.isExpired : false,
+      lastJob,
+      budget: budgetUsage,
+    };
+  }
+
+  @Post('import/recover/:provider')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Trigger stale job recovery for a provider (admin, explicit)' })
+  @ApiResponse({ status: 200, description: 'Recovery result' })
+  async triggerRecovery(@Param('provider') provider: string): Promise<any> {
+    if (provider !== 'copart' && provider !== 'iaai') {
+      return { error: 'Invalid provider. Must be copart or iaai.' };
+    }
+
+    const p = provider as 'copart' | 'iaai';
+    // Recovery is lease-aware: only recovers jobs with no active lease owner
+    const leaseState = await this.leaseService.getState(p);
+    if (leaseState && !leaseState.isExpired) {
+      return {
+        recovered: false,
+        reason: 'Lease is currently active — cannot recover while a valid owner exists',
+        lease: {
+          expiresAt: leaseState.expiresAt,
+          isExpired: false,
+        },
+      };
+    }
+
+    const result = await this.leaseService.recoverStaleJobs(p);
+    return {
+      recovered: true,
+      recoveredJobIds: result.recoveredJobIds,
+      count: result.recoveredJobIds.length,
+    };
   }
 
   // =====================

@@ -6,6 +6,7 @@ import { LeadsModule } from '../leads/leads.module';
 import { CopartModule } from '../copart/copart.module';
 import { BroadcastsModule } from '../broadcasts/broadcasts.module';
 import { AuditModule } from '../audit/audit.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AuditModule } from '../audit/audit.module';
     CopartModule,
     BroadcastsModule,
     AuditModule,
+    PrismaModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],
