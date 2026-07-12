@@ -22,15 +22,23 @@ type TerminalReason =
   | 'completed'
   | 'max_pages_reached'
   | 'empty_page'
-  | 'short_page'
   | 'repeated_page'
   | 'malformed_response'
   | 'deadline_exceeded'
   | 'non_retryable_http_error'
   | 'all_pages_failed';
 
-/** Ordered lot-number signature for a single fetched page. */
-type PageSignature = string[];
+/**
+ * Order-independent page identity: a sorted set of normalized provider
+ * lot IDs extracted from the page's `data` array.
+ *
+ * Only provider lot IDs are used — mutable fields like bid, price,
+ * title, or item order are excluded.  Multiplicity is preserved via
+ * repetition in the sorted array (duplicate lot IDs within a single
+ * page are retained so that a page with [A, A, B] is distinct from
+ * a page with [A, B]).
+ */
+type PageIdentity = string[];
 
 /** Counts of failures by kind, for the extended summary. */
 interface FailureCounts {
@@ -184,7 +192,7 @@ export class CopartService {
       let deadlineReached = false;
       let terminalReason: TerminalReason | null = null;
       let repeatedPage: { laterPage: number; earlierPage: number } | null = null;
-      const pageSignatures: Map<number, PageSignature> = new Map();
+      const pageIdentities: Map<number, PageIdentity> = new Map();
       const failureCounts: FailureCounts = { timeout: 0, rateLimit: 0, server: 0, network: 0 };
       let pagesAttempted = 0;
       let pagesCompleted = 0;
@@ -268,20 +276,17 @@ export class CopartService {
           break;
         }
 
-        // ── Duplicate page detection ──
-        // Build ordered lot-number signature for this page
-        const currentPageSignature: PageSignature = data
-          .map((item) => {
-            if (item === null || typeof item !== 'object') return '__non_object__';
-            const ln = item.lot_number;
-            return ln !== null && ln !== undefined ? String(ln) : '__missing_lot_id__';
-          });
+        // ── Duplicate page detection (order-independent) ──
+        // Build a sorted, normalized lot-ID set from the page.
+        // The same lot IDs in a different order produce the same
+        // identity, so a reordered repeat is caught.
+        const currentPageId: PageIdentity = buildPageIdentity(data);
 
-        // Check against all previously seen page signatures
+        // Check against all previously seen page identities
         let isDuplicatePage = false;
         let duplicateOfPage = 0;
-        for (const [prevPage, prevSig] of pageSignatures) {
-          if (signaturesEqual(currentPageSignature, prevSig)) {
+        for (const [prevPage, prevId] of pageIdentities) {
+          if (identitiesEqual(currentPageId, prevId)) {
             isDuplicatePage = true;
             duplicateOfPage = prevPage;
             break;
@@ -297,7 +302,7 @@ export class CopartService {
           break;
         }
 
-        pageSignatures.set(page, currentPageSignature);
+        pageIdentities.set(page, currentPageId);
 
         // ── Item-level validation: filter out items missing lot_number ──
         const validItems: Record<string, any>[] = [];
@@ -327,12 +332,12 @@ export class CopartService {
           `Fetched ${data.length} vehicles from page ${page} (${validItems.length} valid, total: ${lots.length}) [attempts: ${result.attempts}]`,
         );
 
-        // ── Short page: terminal signal (fewer items than BATCH_SIZE) ──
-        if (data.length < this.BATCH_SIZE) {
-          terminalReason = terminalReason ?? 'short_page';
-          break;
-        }
-
+        // NOTE: Short-page termination has been intentionally removed.
+        // The provider's pagination contract is unverified — a short
+        // page may simply mean the API returned fewer items, not that
+        // we've reached the end.  Continue until an explicit stop
+        // signal (empty page, repeated page, configured max, deadline,
+        // malformed response, or terminal provider failure).
         page++;
       }
 
@@ -674,14 +679,36 @@ export class CopartService {
   }
 }
 
-// ── Module-level helper: compare two ordered lot-number signatures ──
+// ── Module-level helpers: order-independent page identity ──
+
 /**
- * Compare two page signatures for equality.
- * Only used within a single job's sequential pagination to detect
- * if the provider returns the same ordered lot identifiers twice.
- * This is NOT a concurrency-safe ordering guarantee.
+ * Build a deterministic, order-independent page identity from a page
+ * of provider items.
+ *
+ * - Extracts `lot_number` from each object item and normalizes to string.
+ * - Non-object items and missing lot IDs are included as sentinel
+ *   values to preserve multiplicity (the count matters).
+ * - The resulting array is sorted lexicographically so that two pages
+ *   with the same lot IDs in different orders produce the same identity.
+ * - Duplicate lot IDs within a single page are preserved (multiplicity
+ *   is meaningful): [A, A, B] ≠ [A, B].
  */
-function signaturesEqual(a: PageSignature, b: PageSignature): boolean {
+function buildPageIdentity(items: unknown[]): PageIdentity {
+  const ids: string[] = items.map((item) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      return '__non_object__';
+    }
+    const ln = (item as Record<string, unknown>).lot_number;
+    return ln !== null && ln !== undefined ? String(ln) : '__missing_lot_id__';
+  });
+  return ids.sort();
+}
+
+/**
+ * Compare two page identities for equality.
+ * Both must be sorted arrays of the same length with identical elements.
+ */
+function identitiesEqual(a: PageIdentity, b: PageIdentity): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) return false;
