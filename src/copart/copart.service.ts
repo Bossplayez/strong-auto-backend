@@ -26,7 +26,17 @@ type TerminalReason =
   | 'malformed_response'
   | 'deadline_exceeded'
   | 'non_retryable_http_error'
-  | 'all_pages_failed';
+  | 'all_pages_failed'
+  | 'configuration_error';
+
+/** Stable machine-readable failure codes for non-success job outcomes. */
+type FailureCode =
+  | 'provider_credentials_missing'
+  | 'budget_exhausted'
+  | 'lease_lost'
+  | 'provider_http_error'
+  | 'provider_malformed_response'
+  | 'internal_error';
 
 /**
  * Order-independent page identity: a sorted set of normalized provider
@@ -155,13 +165,32 @@ export class CopartService {
       const apiKey = this.config.get('RAPIDAPI_KEY');
 
       if (!apiKey) {
-        this.logger.warn('RAPIDAPI_KEY not configured, skipping actual sync');
+        this.logger.warn('Provider credentials not configured — finalizing job as FAILED');
         await this.prisma.importJob.update({
           where: { id: jobId },
           data: {
-            status: 'SUCCESS',
+            status: 'FAILED',
             finishedAt: new Date(),
-            summaryJsonb: { created, updated, skipped, errors, note: 'No RAPIDAPI_KEY configured' } as any,
+            summaryJsonb: {
+              provider: platform,
+              created: 0,
+              updated: 0,
+              skipped: 0,
+              errors: 0,
+              pagesAttempted: 0,
+              pagesCompleted: 0,
+              itemsReceived: 0,
+              retryCount: 0,
+              failureCounts: { timeout: 0, rateLimit: 0, server: 0, network: 0 },
+              pageFailures: [],
+              deadlineReached: false,
+              repeatedPage: null,
+              terminalReason: 'configuration_error',
+              failureCode: 'provider_credentials_missing',
+              note: 'Provider credentials not configured',
+              jobDurationMs: Date.now() - jobStartMs,
+              maxPagesConfig: this.maxPages,
+            } as any,
           },
         });
         return;

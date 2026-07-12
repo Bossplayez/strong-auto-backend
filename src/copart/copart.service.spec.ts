@@ -706,7 +706,7 @@ describe('CopartService — behavioral tests', () => {
 describe('CopartService — no API key configured', () => {
   afterEach(() => jest.clearAllMocks());
 
-  it('skips sync and returns SUCCESS with note when RAPIDAPI_KEY is missing', async () => {
+  it('missing RAPIDAPI_KEY finalizes as FAILED with configuration_error', async () => {
     const config = makeConfigService();
     (config.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'RAPIDAPI_KEY') return undefined;
@@ -725,9 +725,20 @@ describe('CopartService — no API key configured', () => {
 
     await service.processImportJobWithPlatform('job-1', 'copart');
 
+    // Zero provider requests
     expect(mockedProviderFetch).not.toHaveBeenCalled();
-    expect(getLastStatus(prisma)).toBe('SUCCESS');
+    // Zero persistence writes
+    expect(prisma.vehicleRawImport.create).not.toHaveBeenCalled();
+    expect(prisma.vehicleSourceBinding.create).not.toHaveBeenCalled();
+    // Status must be FAILED (not SUCCESS)
+    expect(getLastStatus(prisma)).toBe('FAILED');
     const summary = getLastSummary(prisma);
-    expect(summary?.note).toContain('No RAPIDAPI_KEY');
+    expect(summary?.terminalReason).toBe('configuration_error');
+    expect(summary?.failureCode).toBe('provider_credentials_missing');
+    expect(summary?.created).toBe(0);
+    // No secret leakage
+    const summaryStr = JSON.stringify(summary);
+    expect(summaryStr).not.toContain('RAPIDAPI_KEY');
+    expect(summaryStr).not.toContain('x-rapidapi-key');
   });
 });
