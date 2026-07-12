@@ -296,10 +296,12 @@ export class AdminController {
     const providers: ('copart' | 'iaai')[] = ['copart', 'iaai'];
     const results: any[] = [];
 
+    // Global budget is shared — fetch once
+    const globalBudget = await this.budgetService.getUsage();
+
     for (const provider of providers) {
-      const [leaseState, budgetUsage, lastJob] = await Promise.all([
+      const [leaseState, lastJob] = await Promise.all([
         this.leaseService.getState(provider),
-        this.budgetService.getUsage(provider),
         this.prisma.importJob.findFirst({
           where: { provider },
           orderBy: { createdAt: 'desc' },
@@ -315,7 +317,6 @@ export class AdminController {
         }),
       ]);
 
-      // Extract sanitized last terminal reason from summary
       const summary = lastJob?.summaryJsonb as any;
       const lastTerminalReason = summary?.terminalReason ?? null;
       const sanitizedSummary = summary ? {
@@ -350,20 +351,27 @@ export class AdminController {
           terminalReason: lastTerminalReason,
           sanitizedSummary,
         } : null,
-        budget: {
-          billingMonth: budgetUsage.billingMonth,
-          totalAttempts: budgetUsage.totalAttempts,
-          budget: budgetUsage.budget,
-          reserve: budgetUsage.reserve,
-          availableForRoutineWork: budgetUsage.availableForRoutineWork,
-          percentageUsed: budgetUsage.percentageUsed,
-          isWarning: budgetUsage.isWarning,
-          isHardStop: budgetUsage.isHardStop,
-        },
       });
     }
 
-    return { providers: results };
+    return {
+      providers: results,
+      globalBudget: {
+        billingMonth: globalBudget.billingMonth,
+        allocated: globalBudget.allocated,
+        confirmed: globalBudget.confirmed,
+        completedSuccess: globalBudget.completedSuccess,
+        unresolved: globalBudget.unresolved,
+        budget: globalBudget.budget,
+        reserve: globalBudget.reserve,
+        availableForRoutine: globalBudget.availableForRoutine,
+        percentageUsed: globalBudget.percentageUsed,
+        isWarning: globalBudget.isWarning,
+        isRoutineBlocked: globalBudget.isRoutineBlocked,
+        isAbsoluteBlocked: globalBudget.isAbsoluteBlocked,
+        providerBreakdowns: globalBudget.providers,
+      },
+    };
   }
 
   @Get('import/status/:provider')
@@ -375,9 +383,8 @@ export class AdminController {
     }
 
     const p = provider as 'copart' | 'iaai';
-    const [leaseState, budgetUsage, lastJob] = await Promise.all([
+    const [leaseState, lastJob] = await Promise.all([
       this.leaseService.getState(p),
-      this.budgetService.getUsage(p),
       this.prisma.importJob.findFirst({
         where: { provider: p },
         orderBy: { createdAt: 'desc' },
@@ -396,7 +403,6 @@ export class AdminController {
       } : null,
       isStale: leaseState ? leaseState.isExpired : false,
       lastJob,
-      budget: budgetUsage,
     };
   }
 

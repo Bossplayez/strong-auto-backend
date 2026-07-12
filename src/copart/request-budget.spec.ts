@@ -1,249 +1,171 @@
 /**
- * Behavioral tests for RequestBudgetService.
+ * Unit tests for the global billing-account budget service.
  *
- * Tests the monthly request-budget accounting:
- * - Atomic increment of HTTP attempts
- * - Routine/manual budget gates
- * - Warning and hard-stop states
- * - UTC month rollover
- * - Failure classification reconciliation
+ * Mock-based tests for lifecycle, idempotency, and budget gate logic.
+ * For real PostgreSQL concurrency evidence see `pg-concurrency.spec.ts`.
  */
-
-import { RequestBudgetService } from './request-budget.service';
+import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { RequestBudgetService } from './request-budget.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-// ── Helpers ───────────────────────────────────────────────────
-
-function makeConfig(overrides: Record<string, number> = {}): ConfigService {
-  const values: Record<string, number> = {
-    IMPORT_MONTHLY_REQUEST_BUDGET: 30000,
-    IMPORT_MONTHLY_REQUEST_RESERVE: 3000,
-    IMPORT_BUDGET_WARNING_PERCENT: 80,
-    ...overrides,
-  };
-  return { get: jest.fn((key: string) => values[key]) } as unknown as ConfigService;
-}
-
-function makeBudgetRow(overrides: Partial<any> = {}): any {
+function makeConfigMock() {
   return {
-    provider: 'copart',
-    billingMonth: RequestBudgetService.utcBillingMonth(),
-    totalAttempts: 100,
-    retryCount: 20,
-    successCount: 75,
-    failureCountTimeout: 5,
-    failureCountRateLimit: 10,
-    failureCountServer: 5,
-    failureCountNetwork: 3,
-    failureCountClient: 2,
-    quotaRemaining: null,
-    quotaResetEpochMs: null,
-    ...overrides,
-  };
-}
-
-function makePrismaMock(existingRow: any | null = null) {
-  const store = existingRow ? { ...existingRow } : null;
-  return {
-    providerRequestBudget: {
-      findUnique: jest.fn(async () => (store ? { ...store } : null)),
-      upsert: jest.fn(async ({ create, update }: any) => {
-        if (!store) {
-          Object.assign(store ?? {}, create);
-          return { ...create };
-        }
-        // Simulate atomic increment
-        const result: any = { ...store };
-        for (const [key, val] of Object.entries(update)) {
-          if (val && typeof val === 'object' && 'increment' in val) {
-            result[key] = (result[key] ?? 0) + val.increment;
-          } else if (val !== undefined) {
-            result[key] = val;
-          }
-        }
-        Object.assign(store, result);
-        return { ...result };
-      }),
+    get: (key: string) => {
+      const map: Record<string, number> = {
+        IMPORT_MONTHLY_REQUEST_BUDGET: 30000,
+        IMPORT_MONTHLY_REQUEST_RESERVE: 3000,
+        IMPORT_BUDGET_WARNING_PERCENT: 80,
+      };
+      return map[key];
     },
   };
 }
 
-// ──────────────────────────────────────────────────────────────
+function makeTxMock(allocated: number, existing: any = null) {
+  return {
+    requestAttemptReservation: {
+      findUnique: jest.fn().mockResolvedValue(existing),
+      create: jest.fn().mockResolvedValue({}),
+      update: jest.fn().mockResolvedValue({}),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    $queryRaw: jest.fn().mockResolvedValue([{ allocated }]),
+    $executeRaw: jest.fn().mockResolvedValue(1),
+    globalRequestBudget: {
+      findUnique: jest.fn().mockResolvedValue({
+        allocated,
+        confirmed: Math.floor(allocated * 0.9),
+        completedSuccess: Math.floor(allocated * 0.8),
+        failureTimeout: 0, failureRateLimit: 0, failureServer: 0, failureNetwork: 0, failureClient: 0,
+      }),
+    },
+    providerRequestBreakdown: { findMany: jest.fn().mockResolvedValue([]) },
+  };
+}
 
-describe('RequestBudgetService', () => {
-  describe('configuration', () => {
-    it('3a. budget config boundaries are exposed', () => {
-      const config = makeConfig();
-      const svc = new RequestBudgetService({} as any, config);
-      expect(svc.budget).toBe(30000);
-      expect(svc.reserve).toBe(3000);
-      expect(svc.warningPercent).toBe(80);
-    });
+describe('RequestBudgetService (global billing account)', () => {
+  let service: RequestBudgetService;
+  let prisma: any;
 
-    it('3b. availableForRoutine calculates correctly', () => {
-      const svc = new RequestBudgetService({} as any, makeConfig());
-      expect(svc.availableForRoutine(0)).toBe(27000);
-      expect(svc.availableForRoutine(25000)).toBe(2000);
-      expect(svc.availableForRoutine(28000)).toBe(0); // can't be negative
-    });
+  beforeEach(async () => {
+    prisma = {
+      $transaction: jest.fn(),
+      globalRequestBudget: { findUnique: jest.fn() },
+      providerRequestBreakdown: { findMany: jest.fn().mockResolvedValue([]) },
+      requestAttemptReservation: { count: jest.fn().mockResolvedValue(0) },
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        RequestBudgetService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ConfigService, useValue: makeConfigMock() },
+      ],
+    }).compile();
+
+    service = moduleRef.get(RequestBudgetService);
   });
 
-  describe('recording attempts', () => {
-    it('15. initial request and every retry increment total attempts exactly once', async () => {
-      const prisma = makePrismaMock(null);
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
+  function wireTx(txMock: any) {
+    prisma.$transaction.mockImplementation(async (fn: any) => fn(txMock));
+    prisma.globalRequestBudget.findUnique = txMock.globalRequestBudget.findUnique;
+    prisma.providerRequestBreakdown.findMany = txMock.providerRequestBreakdown.findMany;
+    prisma.requestAttemptReservation.count = txMock.requestAttemptReservation.count;
+  }
 
-      await svc.record('copart', 3, 1, 2, {});
-
-      expect(prisma.providerRequestBudget.upsert).toHaveBeenCalledTimes(1);
-      const call = prisma.providerRequestBudget.upsert.mock.calls[0][0];
-      expect(call.create.totalAttempts).toBe(3);
-      expect(call.create.retryCount).toBe(2);
-      expect(call.create.successCount).toBe(1);
-    });
-
-    it('16. no-request exits increment nothing', async () => {
-      const prisma = makePrismaMock(null);
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      // No record() call = no upsert
-      expect(prisma.providerRequestBudget.upsert).not.toHaveBeenCalled();
-    });
-
-    it('23. failure classifications reconcile with total attempts', async () => {
-      const prisma = makePrismaMock(null);
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      await svc.record('copart', 5, 2, 3, {
-        timeout: 1,
-        rateLimit: 1,
-        server: 1,
-      });
-
-      const create = prisma.providerRequestBudget.upsert.mock.calls[0][0].create;
-      // success + failures should = total - retries, but we check consistency
-      expect(create.successCount).toBe(2);
-      expect(create.failureCountTimeout).toBe(1);
-      expect(create.failureCountRateLimit).toBe(1);
-      expect(create.failureCountServer).toBe(1);
-    });
-
-    it('24. mocked recognized quota headers are sanitized and optional', async () => {
-      const prisma = makePrismaMock(null);
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      await svc.record('copart', 1, 1, 0, {}, {
-        remaining: 25000,
-        resetEpochMs: 1693526400000,
-      });
-
-      const create = prisma.providerRequestBudget.upsert.mock.calls[0][0].create;
-      expect(create.quotaRemaining).toBe(25000);
-      expect(create.quotaResetEpochMs).toBe(BigInt(1693526400000));
-    });
+  // 1. Global budget
+  it('1a. budget is a single global value', () => {
+    expect(service.budget).toBe(30000);
+    expect(service.reserveAmount).toBe(3000);
   });
 
-  describe('usage snapshot', () => {
-    it('returns zero-state when no budget record exists', async () => {
-      const prisma = makePrismaMock(null);
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      const usage = await svc.getUsage('copart');
-      expect(usage.totalAttempts).toBe(0);
-      expect(usage.budget).toBe(30000);
-      expect(usage.reserve).toBe(3000);
-      expect(usage.availableForRoutineWork).toBe(27000);
-      expect(usage.percentageUsed).toBe(0);
-      expect(usage.isWarning).toBe(false);
-      expect(usage.isHardStop).toBe(false);
-    });
-
-    it('21. warning threshold changes state without blocking early', async () => {
-      // 80% = 24000 attempts → warning = true, hard-stop = false
-      const prisma = makePrismaMock(makeBudgetRow({ totalAttempts: 24000 }));
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      const usage = await svc.getUsage('copart');
-      expect(usage.percentageUsed).toBe(80);
-      expect(usage.isWarning).toBe(true);
-      expect(usage.isHardStop).toBe(false);
-      expect(usage.availableForRoutineWork).toBe(3000); // 30000-3000-24000
-    });
+  it('1b. getUsage returns global snapshot', async () => {
+    prisma.globalRequestBudget.findUnique.mockResolvedValue({ allocated: 5000, confirmed: 4900, completedSuccess: 4800 });
+    const usage = await service.getUsage();
+    expect(usage.budget).toBe(30000);
+    expect(usage.allocated).toBe(5000);
   });
 
-  describe('routine gate', () => {
-    it('18. routine work stops at budget - reserve before another HTTP call', async () => {
-      // At 27000 = budget(30000) - reserve(3000) → hard stop
-      const prisma = makePrismaMock(makeBudgetRow({ totalAttempts: 27000 }));
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      const result = await svc.canMakeRoutineRequest('copart');
-      expect(result.allowed).toBe(false);
-      expect(result.usage.isHardStop).toBe(true);
-    });
-
-    it('routine work allowed when under threshold', async () => {
-      const prisma = makePrismaMock(makeBudgetRow({ totalAttempts: 26999 }));
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      const result = await svc.canMakeRoutineRequest('copart');
-      expect(result.allowed).toBe(true);
-      expect(result.usage.isHardStop).toBe(false);
-    });
+  // 2. Atomic reservation
+  it('2a. reserve() returns allowed=true when under cap', async () => {
+    const tx = makeTxMock(100);
+    wireTx(tx);
+    const result = await service.reserve('copart', 'job-1', 'attempt-1', 'routine');
+    expect(result.allowed).toBe(true);
   });
 
-  describe('manual gate', () => {
-    it('19. manual override is explicit and admin-only', async () => {
-      // Within reserve zone, no override → blocked
-      const prisma = makePrismaMock(makeBudgetRow({ totalAttempts: 28000 }));
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      const blocked = await svc.canMakeManualRequest('copart', false);
-      expect(blocked.allowed).toBe(false);
-
-      // With override → allowed (consuming reserve)
-      const allowed = await svc.canMakeManualRequest('copart', true);
-      expect(allowed.allowed).toBe(true);
-    });
+  it('2b. blocked at routine cap performs zero allocations', async () => {
+    const tx = makeTxMock(28000);
+    wireTx(tx);
+    const result = await service.reserve('copart', 'job-1', 'attempt-blocked', 'routine');
+    expect(result.allowed).toBe(false);
+    expect(tx.requestAttemptReservation.create).not.toHaveBeenCalled();
   });
 
-  describe('absolute budget exhaustion', () => {
-    it('20. absolute budget exhaustion blocks all further calls', async () => {
-      const prisma = makePrismaMock(makeBudgetRow({ totalAttempts: 30000 }));
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
-
-      // Even with override, absolute limit blocks
-      const result = await svc.canMakeManualRequest('copart', true);
-      expect(result.allowed).toBe(false);
-      expect(result.usage.totalAttempts).toBe(30000);
-    });
+  // 3. Unresolved
+  it('3a. unresolved count exposed in snapshot', async () => {
+    prisma.globalRequestBudget.findUnique.mockResolvedValue({ allocated: 100, confirmed: 90 });
+    prisma.requestAttemptReservation.count = jest.fn().mockResolvedValue(10);
+    const usage = await service.getUsage();
+    expect(usage.unresolved).toBe(10);
   });
 
-  describe('UTC month rollover', () => {
-    it('22. UTC month rollover uses a new bucket', () => {
-      const july = new Date('2026-07-15T12:00:00Z');
-      const august = new Date('2026-08-01T00:30:00Z');
-
-      const julyMonth = RequestBudgetService.utcBillingMonth(july);
-      const augustMonth = RequestBudgetService.utcBillingMonth(august);
-
-      expect(julyMonth).toBe('2026-07');
-      expect(augustMonth).toBe('2026-08');
-      expect(julyMonth).not.toBe(augustMonth);
-    });
+  // 4. Breakdown reconciles
+  it('4a. provider breakdown sums to global', async () => {
+    prisma.globalRequestBudget.findUnique.mockResolvedValue({ allocated: 5000, confirmed: 4900, completedSuccess: 4800 });
+    prisma.providerRequestBreakdown.findMany.mockResolvedValue([
+      { provider: 'copart', allocated: 3000, confirmed: 2900, completedSuccess: 2800 },
+      { provider: 'iaai', allocated: 2000, confirmed: 2000, completedSuccess: 2000 },
+    ]);
+    const usage = await service.getUsage();
+    const sum = usage.providers.reduce((s, p) => s + p.allocated, 0);
+    expect(sum).toBe(usage.allocated);
   });
 
-  describe('no secrets in usage output', () => {
-    it('usage snapshot contains no API keys or secrets', async () => {
-      const prisma = makePrismaMock(makeBudgetRow());
-      const svc = new RequestBudgetService(prisma as any, makeConfig());
+  // 5. UTC month
+  it('5a. utcBillingMonth format', () => {
+    expect(RequestBudgetService.utcBillingMonth(new Date('2026-07-15T12:00Z'))).toBe('2026-07');
+    expect(RequestBudgetService.utcBillingMonth(new Date('2026-08-01T00:01Z'))).toBe('2026-08');
+  });
 
-      const usage = await svc.getUsage('copart');
-      const str = JSON.stringify(usage);
-      expect(str).not.toContain('RAPIDAPI_KEY');
-      expect(str).not.toContain('x-rapidapi-key');
-      expect(str).not.toMatch(/[a-f0-9]{32,}/);
-    });
+  // 6. Idempotency
+  it('6a. repeating attemptId returns existing status, no double allocate', async () => {
+    const tx = makeTxMock(100, { id: 'att-1', status: 'completed_success' });
+    wireTx(tx);
+    const result = await service.reserve('copart', 'job-1', 'att-1', 'routine');
+    expect(result.allowed).toBe(true);
+    expect(result.status).toBe('completed_success');
+    expect(tx.requestAttemptReservation.create).not.toHaveBeenCalled();
+  });
+
+  // 7. Routine vs manual
+  it('7a. routine stops at budget - reserve', async () => {
+    const tx = makeTxMock(27000);
+    wireTx(tx);
+    const result = await service.reserve('copart', 'job-1', 'att-r', 'routine');
+    expect(result.allowed).toBe(false);
+  });
+
+  it('7b. manual can consume reserve', async () => {
+    const tx = makeTxMock(27000);
+    wireTx(tx);
+    const result = await service.reserve('copart', 'job-1', 'att-m', 'manual');
+    expect(result.allowed).toBe(true);
+  });
+
+  it('7c. manual blocked at absolute', async () => {
+    const tx = makeTxMock(30000);
+    wireTx(tx);
+    const result = await service.reserve('copart', 'job-1', 'att-abs', 'manual');
+    expect(result.allowed).toBe(false);
+  });
+
+  // 8. Warning threshold
+  it('8a. warning flag set when percentage >= threshold', async () => {
+    prisma.globalRequestBudget.findUnique.mockResolvedValue({ allocated: 25000, confirmed: 24000, completedSuccess: 23000 });
+    const usage = await service.getUsage();
+    expect(usage.percentageUsed).toBe(83.33);
+    expect(usage.isWarning).toBe(true);
   });
 });

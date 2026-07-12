@@ -804,25 +804,67 @@ model ProviderLease {
   @@map("provider_leases")
 }
 
-model ProviderRequestBudget {
-  id                    String   @id @default(uuid()) @map("id")
-  provider              String   @map("provider")
-  billingMonth          String   @map("billing_month")
-  totalAttempts         Int      @default(0) @map("total_attempts")
-  retryCount            Int      @default(0) @map("retry_count")
-  successCount          Int      @default(0) @map("success_count")
-  failureCountTimeout   Int      @default(0) @map("failure_count_timeout")
-  failureCountRateLimit Int      @default(0) @map("failure_count_rate_limit")
-  failureCountServer    Int      @default(0) @map("failure_count_server")
-  failureCountNetwork   Int      @default(0) @map("failure_count_network")
-  failureCountClient    Int      @default(0) @map("failure_count_client")
-  quotaRemaining        Int?     @map("quota_remaining")
-  quotaResetEpochMs     BigInt?  @map("quota_reset_epoch_ms")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+/// Global monthly billing-account aggregate — one shared RapidAPI cap.
+/// At most one row per UTC billing month. Enforces the configured
+/// budget + reserve across all providers (Copart + IAAI combined).
+model GlobalRequestBudget {
+  id                String   @id @default(uuid()) @map("id")
+  billingMonth      String   @unique @map("billing_month")
+  allocated         Int      @default(0) @map("allocated")
+  confirmed         Int      @default(0) @map("confirmed")
+  completedSuccess  Int      @default(0) @map("completed_success")
+  failureTimeout    Int      @default(0) @map("failure_timeout")
+  failureRateLimit  Int      @default(0) @map("failure_rate_limit")
+  failureServer     Int      @default(0) @map("failure_server")
+  failureNetwork    Int      @default(0) @map("failure_network")
+  failureClient     Int      @default(0) @map("failure_client")
+  quotaRemaining    Int?     @map("quota_remaining")
+  quotaResetEpochMs BigInt?  @map("quota_reset_epoch_ms")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("global_request_budgets")
+}
+
+/// Per-provider breakdown — denormalized counters that reconcile to
+/// GlobalRequestBudget. No independent allowance; for observability only.
+model ProviderRequestBreakdown {
+  id               String   @id @default(uuid()) @map("id")
+  provider         String   @map("provider")
+  billingMonth     String   @map("billing_month")
+  allocated        Int      @default(0) @map("allocated")
+  confirmed        Int      @default(0) @map("confirmed")
+  completedSuccess Int      @default(0) @map("completed_success")
+  failureTimeout   Int      @default(0) @map("failure_timeout")
+  failureRateLimit Int      @default(0) @map("failure_rate_limit")
+  failureServer    Int      @default(0) @map("failure_server")
+  failureNetwork   Int      @default(0) @map("failure_network")
+  failureClient    Int      @default(0) @map("failure_client")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@unique([provider, billingMonth])
-  @@map("provider_request_budgets")
+  @@map("provider_request_breakdowns")
+}
+
+/// Individual attempt reservation for idempotent pre-fetch allocation.
+/// Each HTTP attempt (initial + retry) gets a unique ID and is tracked
+/// through allocated → confirmed → completed lifecycle.
+model RequestAttemptReservation {
+  id           String    @id @map("id")
+  billingMonth String    @map("billing_month")
+  provider     String    @map("provider")
+  jobId        String?   @map("job_id")
+  mode         String    @map("mode")
+  status       String    @default("allocated") @map("status")
+  failureKind  String?   @map("failure_kind")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  confirmedAt  DateTime? @map("confirmed_at")
+  completedAt  DateTime? @map("completed_at")
+
+  @@index([billingMonth, provider])
+  @@index([billingMonth, status])
+  @@map("request_attempt_reservations")
 }
 
 model ProviderWebhook {

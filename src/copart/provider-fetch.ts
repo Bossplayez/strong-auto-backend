@@ -78,6 +78,8 @@ export function parseRetryAfter(
   return null;
 }
 
+export type PreRequestHook = () => Promise<{ allowed: boolean; reason?: string }>;
+
 export async function providerFetch<T = unknown>(
   url: string,
   headers: Record<string, string>,
@@ -85,12 +87,29 @@ export async function providerFetch<T = unknown>(
   logger: Logger,
   jitter: JitterFn = defaultJitter,
   fetchImpl: typeof fetch = fetch,
+  preRequestHook?: PreRequestHook,
 ): Promise<ProviderFetchOutcome<T>> {
   const maxAttempts = config.maxRetryAttempts + 1;
   let lastFailure: FetchFailure | null = null;
   let consecutiveErrors = 0;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // ── Pre-request hook: budget gate before each HTTP attempt ──
+    if (preRequestHook) {
+      const gate = await preRequestHook();
+      if (!gate.allowed) {
+        return {
+          ok: false,
+          failure: {
+            kind: 'ABORTED',
+            message: `Budget blocked: ${gate.reason ?? 'quota exceeded'}`,
+            retryable: false,
+          },
+          attempts: attempt - 1,
+        };
+      }
+    }
+
     const now = Date.now();
     const remainingJob = config.jobDeadlineMs - now;
 

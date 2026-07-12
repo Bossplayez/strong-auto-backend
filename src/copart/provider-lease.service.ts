@@ -91,8 +91,18 @@ export class ProviderLeaseService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         // Lock the provider row for the duration of this transaction
-        const rows = await tx.$queryRaw<LeaseRow[]>`
-          SELECT * FROM provider_leases WHERE provider = ${provider} FOR UPDATE
+        // Alias columns to camelCase for TypeScript access
+        const rows = await tx.$queryRaw<any[]>`
+          SELECT
+            id,
+            provider,
+            owner_token   AS "ownerToken",
+            fencing_token AS "fencingToken",
+            acquired_at   AS "acquiredAt",
+            heartbeat_at  AS "heartbeatAt",
+            expires_at    AS "expiresAt",
+            import_job_id AS "importJobId"
+          FROM provider_leases WHERE provider = ${provider} FOR UPDATE
         `;
 
         const existing = rows[0];
@@ -279,6 +289,63 @@ export class ProviderLeaseService {
   }
 
   /**
+   * Execute a function inside a short DB transaction that locks and
+   * verifies the lease row. Returns the function's result or null if
+   * the caller is not the valid owner.
+   *
+   * Network I/O must NOT happen inside this transaction.
+   */
+  async withLeasedTransaction<T>(
+    provider: ProviderId,
+    ownerToken: string,
+    fencingToken: number,
+    fn: (tx: any) => Promise<T>,
+  ): Promise<T | null> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Lock the lease row (raw SQL for FOR UPDATE)
+        const rows = await tx.$queryRaw<any[]>`
+          SELECT
+            owner_token   AS "ownerToken",
+            fencing_token AS "fencingToken",
+            expires_at    AS "expiresAt"
+          FROM provider_leases
+          WHERE provider = ${provider}
+          FOR UPDATE
+        `;
+
+        const lease = rows[0];
+        if (!lease) return null;
+
+        // 2. Verify owner + fence + not expired (aliased from raw query)
+        const now = new Date();
+        if (
+          lease.ownerToken !== ownerToken ||
+          lease.fencingToken !== fencingToken ||
+          new Date(lease.expiresAt).getTime() <= now.getTime()
+        ) {
+          return null;
+        }
+
+        // 3. Execute the function with the transaction client
+        const result = await fn(tx);
+
+        // 4. Update heartbeat within the same transaction
+        const newExpiresAt = new Date(now.getTime() + 60000);
+        await tx.providerLease.update({
+          where: { provider },
+          data: { heartbeatAt: now, expiresAt: newExpiresAt },
+        });
+
+        return result;
+      });
+    } catch (error) {
+      this.logger.error(`Leased transaction error for ${provider}: ${error}`);
+      return null;
+    }
+  }
+
+  /**
    * Get the current public lease state for a provider.
    * Returns null if no lease exists.
    * Never exposes the owner token.
@@ -294,19 +361,34 @@ export class ProviderLeaseService {
   }
 
   /**
-   * Recover stale jobs when a lease is reclaimed.
+   * Recover stale jobs based on LEASE TRUTH, not job age.
    *
-   * Finds any RUNNING/PENDING ImportJob for the given provider
-   * and marks it as ABANDONED with a sanitized recovery reason.
+   * A PENDING/RUNNING job is recovered only when its corresponding
+   * lease is absent or expired. A valid non-expired lease protects
+   * a long-running job regardless of job age.
+   *
+   * This method is typically called inside the claim() transaction
+   * after reclaiming an expired lease. The new fencing token has
+   * already been set, invalidating the prior owner.
    *
    * Idempotent: only updates jobs still in RUNNING/PENDING.
-   * Does NOT copy provider payloads.
    */
   async recoverStaleJobs(
     provider: ProviderId,
     recoveredByJobId?: string,
   ): Promise<{ recoveredJobIds: string[] }> {
-    const staleJobs = await this.prisma.importJob.findMany({
+    // Get the current lease state (after claim/reclaim)
+    const lease = await this.prisma.providerLease.findUnique({
+      where: { provider },
+    });
+
+    // If there's a valid non-expired lease for a different job,
+    // do NOT recover that job
+    const now = new Date();
+    const leaseExpired = !lease || lease.expiresAt <= now;
+
+    // Find all PENDING/RUNNING jobs for this provider
+    const candidates = await this.prisma.importJob.findMany({
       where: {
         provider,
         status: { in: ['RUNNING', 'PENDING'] },
@@ -316,7 +398,12 @@ export class ProviderLeaseService {
 
     const recoveredIds: string[] = [];
 
-    for (const job of staleJobs) {
+    for (const job of candidates) {
+      // Protect the job associated with the current active lease
+      if (lease && !leaseExpired && lease.importJobId === job.id) {
+        continue;
+      }
+
       const result = await this.prisma.importJob.updateMany({
         where: {
           id: job.id,
@@ -327,9 +414,9 @@ export class ProviderLeaseService {
           finishedAt: new Date(),
           summaryJsonb: {
             recovered: true,
-            recoveredAt: new Date().toISOString(),
+            recoveredAt: now.toISOString(),
             recoveredByJobId: recoveredByJobId ?? null,
-            reason: 'Lease reclaimed by new owner — previous job abandoned',
+            reason: 'Lease absent or expired — job abandoned by lease-truth recovery',
           } as any,
         },
       });
@@ -337,7 +424,7 @@ export class ProviderLeaseService {
       if (result.count > 0) {
         recoveredIds.push(job.id);
         this.logger.warn(
-          `Recovered stale job ${job.id} for ${provider} — marked ABANDONED`,
+          `Recovered stale job ${job.id} for ${provider} — marked ABANDONED (lease-truth)`,
         );
       }
     }

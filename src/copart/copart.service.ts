@@ -10,7 +10,7 @@ import {
 } from './provider-fetch';
 import { validateProviderResponse, type MalformedReason } from './response-validator';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
-import { RequestBudgetService } from './request-budget.service';
+import { RequestBudgetService, type GlobalUsageSnapshot, type FailureKind } from './request-budget.service';
 
 interface PageFailure {
   page: number;
@@ -174,7 +174,7 @@ export class CopartService {
     let lastHeartbeatMs = Date.now();
 
     // ── Budget gate state ──
-    let budgetExhausted = false;
+    // budgetExhausted removed
     let budgetUsage: Awaited<ReturnType<RequestBudgetService['getUsage']>> | null = null;
 
     try {
@@ -247,10 +247,10 @@ export class CopartService {
       await this.leaseService.recoverStaleJobs(providerId, jobId);
 
       // ── Check budget before starting ──
-      const budgetCheck = await this.budgetService.canMakeRoutineRequest(providerId);
+      const budgetCheck = await this.budgetService.canMakeRoutineRequest();
       if (!budgetCheck.allowed) {
-        this.logger.warn(`Budget hard-stop for ${platform}: ${budgetCheck.usage.totalAttempts}/${budgetCheck.usage.budget} (reserve: ${budgetCheck.usage.reserve})`);
-        budgetExhausted = true;
+        this.logger.warn(`Budget hard-stop for ${platform}: ${budgetCheck.usage.allocated}/${budgetCheck.usage.budget} (reserve: ${budgetCheck.usage.reserve})`);
+        // budgetExhausted
       }
       budgetUsage = budgetCheck.usage;
 
@@ -288,7 +288,7 @@ export class CopartService {
 
       while (page <= this.maxPages) {
         // ── Budget gate: stop routine work before consuming reserve ──
-        if (budgetExhausted) {
+        if (budgetUsage?.isRoutineBlocked) {
           terminalReason = terminalReason ?? 'all_pages_failed';
           this.logger.warn(`Stopping pagination: budget exhausted (routine reserve protection)`);
           break;
@@ -333,17 +333,31 @@ export class CopartService {
         pagesAttempted++;
 
         // ── Budget gate: check before making HTTP request ──
-        const routineBudgetCheck = await this.budgetService.canMakeRoutineRequest(providerId);
+        const routineBudgetCheck = await this.budgetService.canMakeRoutineRequest();
         if (!routineBudgetCheck.allowed) {
-          budgetExhausted = true;
+          // budgetExhausted
           budgetUsage = routineBudgetCheck.usage;
           this.logger.warn(
-            `Budget hard-stop at page ${page}: ${routineBudgetCheck.usage.totalAttempts}/${routineBudgetCheck.usage.budget} (reserve: ${routineBudgetCheck.usage.reserve})`,
+            `Budget hard-stop at page ${page}: ${routineBudgetCheck.usage.allocated}/${routineBudgetCheck.usage.budget} (reserve: ${routineBudgetCheck.usage.reserve})`,
           );
           terminalReason = 'all_pages_failed';
           break;
         }
         budgetUsage = routineBudgetCheck.usage;
+
+        // ── Create budget pre-request hook for retry-level gating ──
+        const fetchAttemptCounter = { n: 0 };
+        const budgetPreRequestHook = async () => {
+          fetchAttemptCounter.n++;
+          const attemptId = `${jobId}-p${page}-a${fetchAttemptCounter.n}-${crypto.randomUUID()}`;
+          const reservation = await this.budgetService.reserve(providerId, jobId, attemptId, 'routine');
+          if (!reservation.allowed) {
+            budgetUsage = reservation.usage;
+            return { allowed: false, reason: reservation.reason };
+          }
+          (budgetPreRequestHook as any)._lastAttemptId = attemptId;
+          return { allowed: true };
+        };
 
         const url = `${this.RAPIDAPI_BASE}/vehicles?platform=${platform}&page=${page}&limit=${this.BATCH_SIZE}`;
         this.logger.log(`Fetching ${platform} page ${page}/${this.maxPages} (remaining: ${Math.floor(remaining / 1000)}s)`);
@@ -353,27 +367,27 @@ export class CopartService {
           headers,
           { ...fetchConfig, jobDeadlineMs },
           this.logger,
+          undefined,
+          undefined,
+          budgetPreRequestHook,
         );
 
-        // ── Budget accounting: record actual HTTP attempts ──
-        const success = result.ok ? 1 : 0;
-        const retries = result.attempts - 1;
-        const failureDelta: Record<string, number> = {};
-        if (!result.ok) {
-          const f = result.failure;
-          if (f.kind === 'HTTP_429') failureDelta.rateLimit = 1;
-          else if (f.kind === 'HTTP_5XX') failureDelta.server = 1;
-          else if (f.kind === 'NETWORK_ERROR') failureDelta.network = 1;
-          else if (f.kind === 'HTTP_4XX') failureDelta.client = 1;
-          else if (f.kind === 'ABORTED' || f.kind === 'DEADLINE_EXCEEDED') failureDelta.timeout = 1;
+        // ── Confirm + complete the budget reservation ──
+        const lastAttemptId = (budgetPreRequestHook as any)._lastAttemptId as string | undefined;
+        if (lastAttemptId) {
+          await this.budgetService.confirm(lastAttemptId);
+          const fetchSuccess = result.ok;
+          let failureKind: FailureKind | undefined;
+          if (!fetchSuccess) {
+            const f = result.failure;
+            if (f.kind === 'HTTP_429') failureKind = 'rateLimit';
+            else if (f.kind === 'HTTP_5XX') failureKind = 'server';
+            else if (f.kind === 'NETWORK_ERROR') failureKind = 'network';
+            else if (f.kind === 'HTTP_4XX') failureKind = 'client';
+            else if (f.kind === 'ABORTED' || f.kind === 'DEADLINE_EXCEEDED') failureKind = 'timeout';
+          }
+          await this.budgetService.complete(lastAttemptId, fetchSuccess, failureKind);
         }
-        await this.budgetService.record(
-          providerId,
-          result.attempts,
-          success,
-          retries,
-          failureDelta,
-        );
 
         if (!result.ok) {
           const f = result.failure;
@@ -563,52 +577,59 @@ export class CopartService {
         }
       }
 
-      // ── Verify ownership before finalization (fencing) ──
-      const ownsBeforeFinalize = await this.leaseService.verifyOwnership(
+      // ── Verify ownership before finalization using leased transaction (Phase 2) ──
+      const finalizeResult = await this.leaseService.withLeasedTransaction(
         providerId,
         ownerToken,
         currentFencingToken,
+        async (tx) => {
+          const jobDurationMs = Date.now() - jobStartMs;
+          await tx.importJob.update({
+            where: { id: jobId },
+            data: {
+              status: errors > 0 && created + updated === 0 ? 'FAILED' : errors > 0 ? 'PARTIAL_SUCCESS' : 'SUCCESS',
+              finishedAt: new Date(),
+              summaryJsonb: {
+                provider: platform,
+                created,
+                updated,
+                skipped,
+                errors,
+                pagesAttempted,
+                pagesCompleted,
+                itemsReceived,
+                retryCount,
+                failureCounts,
+                pageFailures,
+                deadlineReached,
+                repeatedPage,
+                terminalReason,
+                jobDurationMs,
+                maxPagesConfig: this.maxPages,
+                budgetUsage: budgetUsage ? {
+                  allocated: budgetUsage.allocated,
+                  budget: budgetUsage.budget,
+                  reserve: budgetUsage.reserve,
+                  confirmed: budgetUsage.confirmed,
+                  completedSuccess: budgetUsage.completedSuccess,
+                  unresolved: budgetUsage.unresolved,
+                  percentageUsed: budgetUsage.percentageUsed,
+                  isWarning: budgetUsage.isWarning,
+                  isRoutineBlocked: budgetUsage.isRoutineBlocked,
+                  isAbsoluteBlocked: budgetUsage.isAbsoluteBlocked,
+                } : null,
+              } as any,
+            },
+          });
+          return { finalized: true };
+        },
       );
-      if (!ownsBeforeFinalize) {
+
+      if (finalizeResult === null) {
         this.logger.error(`Lost lease ownership for ${platform} before finalization — cannot write terminal status`);
         // Cannot safely finalize — another owner may be writing
         return;
       }
-
-      const jobDurationMs = Date.now() - jobStartMs;
-      await this.prisma.importJob.update({
-        where: { id: jobId },
-        data: {
-          status: errors > 0 && created + updated === 0 ? 'FAILED' : errors > 0 ? 'PARTIAL_SUCCESS' : 'SUCCESS',
-          finishedAt: new Date(),
-          summaryJsonb: {
-            provider: platform,
-            created,
-            updated,
-            skipped,
-            errors,
-            pagesAttempted,
-            pagesCompleted,
-            itemsReceived,
-            retryCount,
-            failureCounts,
-            pageFailures,
-            deadlineReached,
-            repeatedPage,
-            terminalReason,
-            jobDurationMs,
-            maxPagesConfig: this.maxPages,
-            budgetUsage: budgetUsage ? {
-              totalAttempts: budgetUsage.totalAttempts,
-              budget: budgetUsage.budget,
-              reserve: budgetUsage.reserve,
-              percentageUsed: budgetUsage.percentageUsed,
-              isWarning: budgetUsage.isWarning,
-              isHardStop: budgetUsage.isHardStop,
-            } : null,
-          } as any,
-        },
-      });
 
       // ── Release lease after successful finalization ──
       await this.leaseService.release(providerId, ownerToken, currentFencingToken);

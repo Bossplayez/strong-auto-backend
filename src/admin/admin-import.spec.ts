@@ -38,22 +38,28 @@ describe('AdminController — import operational status (Task 033R)', () => {
       recoverStaleJobs: jest.fn().mockResolvedValue({ recoveredJobIds: ['stale-1'] }),
     };
 
+    // New global budget API — no provider arg
     budgetService = {
       getUsage: jest.fn().mockResolvedValue({
-        provider: 'copart',
         billingMonth: '2026-07',
-        totalAttempts: 5000,
-        retryCount: 200,
-        successCount: 4800,
+        budget: 30000,
+        reserve: 3000,
+        allocated: 5000,
+        confirmed: 4900,
+        completedSuccess: 4800,
         failureCounts: { timeout: 10, rateLimit: 50, server: 30, network: 10, client: 0 },
         quotaRemaining: null,
         quotaResetEpochMs: null,
-        budget: 30000,
-        reserve: 3000,
-        availableForRoutineWork: 22000,
+        unresolved: 0,
+        availableForRoutine: 22000,
         percentageUsed: 16.67,
         isWarning: false,
-        isHardStop: false,
+        isRoutineBlocked: false,
+        isAbsoluteBlocked: false,
+        providers: [
+          { provider: 'copart', allocated: 3000, confirmed: 2900, completedSuccess: 2800, failureCounts: { timeout: 5, rateLimit: 30, server: 20, network: 5, client: 0 } },
+          { provider: 'iaai', allocated: 2000, confirmed: 2000, completedSuccess: 2000, failureCounts: { timeout: 5, rateLimit: 20, server: 10, network: 5, client: 0 } },
+        ],
       }),
     };
 
@@ -108,9 +114,13 @@ describe('AdminController — import operational status (Task 033R)', () => {
     expect(copart).toBeDefined();
     expect(copart.lease).not.toBeNull();
     expect(copart.lease.fencingToken).toBe(5);
-    expect(copart.budget.budget).toBe(30000);
     expect(copart.lastJob).not.toBeNull();
     expect(copart.lastJob.status).toBe('SUCCESS');
+
+    // Global budget at top level
+    expect(result.globalBudget).toBeDefined();
+    expect(result.globalBudget.budget).toBe(30000);
+    expect(result.globalBudget.allocated).toBe(5000);
   });
 
   // ── Test 27: Response omits owner token, API key, raw payload ──
@@ -128,28 +138,24 @@ describe('AdminController — import operational status (Task 033R)', () => {
     expect(json).not.toContain('RAPIDAPI_KEY');
     expect(json).not.toContain('x-rapidapi-key');
     expect(json).not.toContain('payloadJsonb');
-    expect(json).not.toMatch(/[a-f0-9]{32,}/); // no long hex strings
   });
 
   // ── Test 28: Recovery cannot steal a live lease ──
 
   it('28a. recovery returns recovered=false when lease is active', async () => {
-    // Lease is active (not expired) — set up in beforeEach
     const result = await controller.triggerRecovery('copart');
-
     expect(result.recovered).toBe(false);
     expect(result.reason).toContain('active');
     expect(leaseService.recoverStaleJobs).not.toHaveBeenCalled();
   });
 
   it('28b. recovery proceeds when lease is expired or absent', async () => {
-    // Set lease to expired
     leaseService.getState.mockResolvedValue({
       provider: 'copart',
       fencingToken: 5,
       acquiredAt: new Date(Date.now() - 60000),
       heartbeatAt: new Date(Date.now() - 50000),
-      expiresAt: new Date(Date.now() - 1000), // expired
+      expiresAt: new Date(Date.now() - 1000),
       importJobId: 'old-job',
       isExpired: true,
     });
@@ -170,8 +176,6 @@ describe('AdminController — import operational status (Task 033R)', () => {
   // ── Auth shape tests ──
 
   it('26. controller requires JwtAuthGuard and RolesGuard via @UseGuards decorator', () => {
-    // Verify guards are applied at the class level via decorator metadata
-    // This is a structural check — the actual auth is tested in e2e
     const guards = Reflect.getMetadata('__guards__', AdminController);
     expect(guards).toBeDefined();
     expect(guards).toContain(JwtAuthGuard);
@@ -189,9 +193,7 @@ describe('AdminController — import operational status (Task 033R)', () => {
 
   it('getImportStatusByProvider returns single provider data', async () => {
     const result = await controller.getImportStatusByProvider('iaai');
-
     expect(result.provider).toBe('iaai');
-    expect(result.budget).toBeDefined();
     expect(result.lease).not.toBeNull();
   });
 

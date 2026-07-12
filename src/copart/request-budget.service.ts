@@ -4,52 +4,77 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { ProviderId } from './provider-lease.service';
 
 /**
- * Classified failure counts matching provider-fetch failure kinds.
+ * Failure classification matching provider-fetch failure kinds.
  */
-interface BudgetFailureCounts {
-  timeout: number;
-  rateLimit: number;
-  server: number;
-  network: number;
-  client: number;
-}
+export type FailureKind = 'timeout' | 'rateLimit' | 'server' | 'network' | 'client';
 
 /**
- * Public usage snapshot — no secrets, no raw response data.
+ * Allocation/reservation mode.
+ * - routine: background sync, must respect reserve
+ * - manual: admin-triggered, may consume reserve with explicit override
  */
-export interface BudgetUsageSnapshot {
-  provider: string;
+export type AllocationMode = 'routine' | 'manual';
+
+/**
+ * Status of an individual attempt reservation.
+ */
+export type ReservationStatus = 'allocated' | 'confirmed' | 'completed_success' | 'completed_failure';
+
+/**
+ * Public global usage snapshot — no secrets, no raw response data.
+ */
+export interface GlobalUsageSnapshot {
   billingMonth: string;
-  totalAttempts: number;
-  retryCount: number;
-  successCount: number;
-  failureCounts: BudgetFailureCounts;
-  quotaRemaining: number | null;
-  quotaResetEpochMs: number | null;
   budget: number;
   reserve: number;
-  availableForRoutineWork: number;
+  allocated: number;
+  confirmed: number;
+  completedSuccess: number;
+  failureCounts: { timeout: number; rateLimit: number; server: number; network: number; client: number };
+  quotaRemaining: number | null;
+  quotaResetEpochMs: number | null;
+  unresolved: number;
+  availableForRoutine: number;
   percentageUsed: number;
   isWarning: boolean;
-  isHardStop: boolean;
+  isRoutineBlocked: boolean;
+  isAbsoluteBlocked: boolean;
+  providers: ProviderBreakdown[];
+}
+
+export interface ProviderBreakdown {
+  provider: string;
+  allocated: number;
+  confirmed: number;
+  completedSuccess: number;
+  failureCounts: { timeout: number; rateLimit: number; server: number; network: number; client: number };
 }
 
 /**
- * Result of recording provider request attempts.
+ * Result of an atomic reservation attempt.
  */
-interface RecordResult {
-  recorded: boolean;
-  currentUsage: BudgetUsageSnapshot;
+export interface ReservationResult {
+  allowed: boolean;
+  attemptId: string;
+  status: ReservationStatus;
+  reason?: string;
+  usage: GlobalUsageSnapshot;
 }
 
 /**
- * Persistent monthly request-budget accounting.
+ * Global billing-account budget service.
  *
- * Counts every actual outbound provider HTTP attempt (including retries)
- * exactly once. Does not count cache hits, validation failures before
- * request, blocked lease claims, or deadline checks that make no HTTP call.
+ * Enforces one shared monthly RapidAPI cap across Copart + IAAI.
+ * Uses PostgreSQL row-level locking for atomic reservation.
  *
- * Uses atomic increment via Prisma updateMany with atomic operations.
+ * Lifecycle per attempt:
+ * 1. reserve() — atomically allocate capacity (allocated++)
+ * 2. confirm() — mark as reached provider (confirmed++)
+ * 3. complete() — record outcome (completedSuccess++ or failureXxx++)
+ *
+ * Unresolved allocations (allocated but not confirmed) remain charged
+ * conservatively — they are never auto-refunded because the provider
+ * may have received the request.
  */
 @Injectable()
 export class RequestBudgetService {
@@ -60,172 +85,336 @@ export class RequestBudgetService {
     private readonly config: ConfigService,
   ) {}
 
-  /** Current UTC billing month in YYYY-MM format. */
   static utcBillingMonth(now: Date = new Date()): string {
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 
-  /** Configured budget for the month. */
   get budget(): number {
     return this.config.get<number>('IMPORT_MONTHLY_REQUEST_BUDGET')!;
   }
 
-  /** Configured reserve (routine work must stop before consuming). */
-  get reserve(): number {
+  get reserveAmount(): number {
     return this.config.get<number>('IMPORT_MONTHLY_REQUEST_RESERVE')!;
   }
 
-  /** Warning threshold percentage. */
   get warningPercent(): number {
     return this.config.get<number>('IMPORT_BUDGET_WARNING_PERCENT')!;
   }
 
-  /** Available for routine work = budget - reserve - used. */
-  availableForRoutine(used: number): number {
-    return Math.max(0, this.budget - this.reserve - used);
-  }
-
   /**
-   * Record actual provider HTTP attempts atomically.
+   * Atomically reserve one request attempt against the global cap.
    *
-   * Each call to providerFetch that makes a real HTTP request counts
-   * as one "attempt" — the initial request plus each retry.
+   * Idempotent: repeating the same attemptId returns the existing
+   * reservation without incrementing counters.
    *
-   * @param provider - 'copart' | 'iaai'
-   * @param attempts - Total HTTP attempts made (1 for success, N for retries+success)
-   * @param success - 1 if the final attempt succeeded, 0 otherwise
-   * @param retries - Number of retry attempts (attempts - 1)
-   * @param failureDelta - Incremental failure counts by kind
-   * @param quotaHeaders - Optional: { remaining?, resetEpochMs? } from response headers
+   * Concurrent callers contend on the same global monthly aggregate
+   * via SELECT FOR UPDATE inside a transaction.
    */
-  async record(
+  async reserve(
     provider: ProviderId,
-    attempts: number,
-    success: number,
-    retries: number,
-    failureDelta: Partial<BudgetFailureCounts>,
-    quotaHeaders?: { remaining?: number; resetEpochMs?: number },
-  ): Promise<RecordResult> {
-    const billingMonth = RequestBudgetService.utcBillingMonth();
-
-    // Use upsert to handle first request of the month
-    await this.prisma.providerRequestBudget.upsert({
-      where: {
-        provider_billingMonth: { provider, billingMonth },
-      },
-      create: {
-        provider,
-        billingMonth,
-        totalAttempts: attempts,
-        retryCount: retries,
-        successCount: success,
-        failureCountTimeout: failureDelta.timeout ?? 0,
-        failureCountRateLimit: failureDelta.rateLimit ?? 0,
-        failureCountServer: failureDelta.server ?? 0,
-        failureCountNetwork: failureDelta.network ?? 0,
-        failureCountClient: failureDelta.client ?? 0,
-        quotaRemaining: quotaHeaders?.remaining ?? null,
-        quotaResetEpochMs: quotaHeaders?.resetEpochMs
-          ? BigInt(quotaHeaders.resetEpochMs)
-          : null,
-      },
-      update: {
-        totalAttempts: { increment: attempts },
-        retryCount: { increment: retries },
-        successCount: { increment: success },
-        failureCountTimeout: { increment: failureDelta.timeout ?? 0 },
-        failureCountRateLimit: { increment: failureDelta.rateLimit ?? 0 },
-        failureCountServer: { increment: failureDelta.server ?? 0 },
-        failureCountNetwork: { increment: failureDelta.network ?? 0 },
-        failureCountClient: { increment: failureDelta.client ?? 0 },
-        quotaRemaining: quotaHeaders?.remaining ?? undefined,
-        quotaResetEpochMs: quotaHeaders?.resetEpochMs
-          ? BigInt(quotaHeaders.resetEpochMs)
-          : undefined,
-      },
-    });
-
-    const currentUsage = await this.getUsage(provider);
-
-    return { recorded: true, currentUsage };
-  }
-
-  /**
-   * Get the current usage snapshot for a provider.
-   * Creates no rows — returns zero-state if no budget record exists.
-   */
-  async getUsage(provider: ProviderId): Promise<BudgetUsageSnapshot> {
+    jobId: string | null,
+    attemptId: string,
+    mode: AllocationMode = 'routine',
+  ): Promise<ReservationResult> {
     const billingMonth = RequestBudgetService.utcBillingMonth();
     const budget = this.budget;
-    const reserve = this.reserve;
+    const reserve = this.reserveAmount;
 
-    const row = await this.prisma.providerRequestBudget.findUnique({
-      where: {
-        provider_billingMonth: { provider, billingMonth },
-      },
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Ensure the global budget row exists
+        await tx.$executeRaw`
+          INSERT INTO "global_request_budgets" ("id", "billing_month", "allocated", "created_at", "updated_at")
+          VALUES (gen_random_uuid(), ${billingMonth}, 0, NOW(), NOW())
+          ON CONFLICT ("billing_month") DO NOTHING
+        `;
 
-    const totalAttempts = row?.totalAttempts ?? 0;
-    const failureCounts: BudgetFailureCounts = {
-      timeout: row?.failureCountTimeout ?? 0,
-      rateLimit: row?.failureCountRateLimit ?? 0,
-      server: row?.failureCountServer ?? 0,
-      network: row?.failureCountNetwork ?? 0,
-      client: row?.failureCountClient ?? 0,
-    };
-    const percentageUsed = budget > 0 ? Math.round((totalAttempts / budget) * 10000) / 100 : 0;
+        // 2. Lock the global budget row FOR UPDATE (serializes concurrent callers)
+        const globalRows = await tx.$queryRaw<{ allocated: number }[]>`
+          SELECT allocated FROM "global_request_budgets"
+          WHERE "billing_month" = ${billingMonth}
+          FOR UPDATE
+        `;
 
-    return {
-      provider,
-      billingMonth,
-      totalAttempts,
-      retryCount: row?.retryCount ?? 0,
-      successCount: row?.successCount ?? 0,
-      failureCounts,
-      quotaRemaining: row?.quotaRemaining ?? null,
-      quotaResetEpochMs: row?.quotaResetEpochMs ? Number(row.quotaResetEpochMs) : null,
-      budget,
-      reserve,
-      availableForRoutineWork: Math.max(0, budget - reserve - totalAttempts),
-      percentageUsed,
-      isWarning: percentageUsed >= this.warningPercent,
-      isHardStop: totalAttempts >= budget - reserve,
-    };
+        const currentAllocated = globalRows[0]?.allocated ?? 0;
+
+        // 3. Check idempotency AFTER acquiring lock (prevents race)
+        const existing = await tx.requestAttemptReservation.findUnique({
+          where: { id: attemptId },
+        });
+
+        if (existing) {
+          const usage = await this.buildSnapshot(tx, billingMonth, budget, this.reserveAmount);
+          return {
+            allowed: true,
+            attemptId,
+            status: existing.status as ReservationStatus,
+            usage,
+          };
+        }
+
+        // 3. Determine effective cap based on mode
+        const routineCap = budget - reserve;
+        const effectiveCap = mode === 'manual' ? budget : routineCap;
+
+        if (currentAllocated >= effectiveCap) {
+          const usage = await this.buildSnapshot(tx, billingMonth, budget, this.reserveAmount);
+          return {
+            allowed: false,
+            attemptId,
+            status: 'allocated',
+            reason: mode === 'manual'
+              ? 'Absolute budget cap reached'
+              : 'Routine reserve reached — manual override required',
+            usage,
+          };
+        }
+
+        // 4. Atomically increment global + breakdown + insert reservation
+        await tx.$executeRaw`
+          UPDATE "global_request_budgets"
+          SET "allocated" = "allocated" + 1, "updated_at" = NOW()
+          WHERE "billing_month" = ${billingMonth}
+        `;
+
+        await tx.$executeRaw`
+          INSERT INTO "provider_request_breakdowns" ("id", "provider", "billing_month", "allocated", "created_at", "updated_at")
+          VALUES (gen_random_uuid(), ${provider}, ${billingMonth}, 1, NOW(), NOW())
+          ON CONFLICT ("provider", "billing_month")
+          DO UPDATE SET "allocated" = "provider_request_breakdowns"."allocated" + 1, "updated_at" = NOW()
+        `;
+
+        await tx.requestAttemptReservation.create({
+          data: {
+            id: attemptId,
+            billingMonth,
+            provider,
+            jobId,
+            mode,
+            status: 'allocated',
+          },
+        });
+
+        const usage = await this.buildSnapshot(tx, billingMonth, budget, this.reserveAmount);
+        return {
+          allowed: true,
+          attemptId,
+          status: 'allocated',
+          usage,
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Reservation error: ${error}`);
+      const usage = await this.getUsage();
+      return {
+        allowed: false,
+        attemptId,
+        status: 'allocated',
+        reason: 'Database error during reservation',
+        usage,
+      };
+    }
   }
 
   /**
-   * Check if routine (background) work can make another HTTP request.
-   * Stops when used >= budget - reserve.
+   * Confirm that an attempt reached the provider fetch boundary.
    */
-  async canMakeRoutineRequest(provider: ProviderId): Promise<{ allowed: boolean; usage: BudgetUsageSnapshot }> {
-    const usage = await this.getUsage(provider);
-    return {
-      allowed: !usage.isHardStop,
-      usage,
-    };
+  async confirm(attemptId: string): Promise<void> {
+    const billingMonth = RequestBudgetService.utcBillingMonth();
+
+    await this.prisma.$transaction(async (tx) => {
+      const reservation = await tx.requestAttemptReservation.findUnique({
+        where: { id: attemptId },
+      });
+
+      if (!reservation) return;
+      if (reservation.status !== 'allocated') return;
+
+      await tx.requestAttemptReservation.update({
+        where: { id: attemptId },
+        data: { status: 'confirmed', confirmedAt: new Date() },
+      });
+
+      await tx.$executeRaw`
+        UPDATE "global_request_budgets"
+        SET "confirmed" = "confirmed" + 1, "updated_at" = NOW()
+        WHERE "billing_month" = ${billingMonth}
+      `;
+
+      await tx.$executeRaw`
+        UPDATE "provider_request_breakdowns"
+        SET "confirmed" = "provider_request_breakdowns"."confirmed" + 1, "updated_at" = NOW()
+        WHERE "provider" = ${reservation.provider} AND "billing_month" = ${billingMonth}
+      `;
+    });
   }
 
   /**
-   * Check if a manual/admin job with explicit override can proceed.
-   * Override allows consuming the reserve.
-   * Absolute budget exhaustion blocks ALL calls.
+   * Record the outcome of a completed attempt.
+   */
+  async complete(
+    attemptId: string,
+    success: boolean,
+    failureKind?: FailureKind,
+    quotaHeaders?: { remaining?: number; resetEpochMs?: number },
+  ): Promise<void> {
+    const billingMonth = RequestBudgetService.utcBillingMonth();
+
+    await this.prisma.$transaction(async (tx) => {
+      const reservation = await tx.requestAttemptReservation.findUnique({
+        where: { id: attemptId },
+      });
+
+      if (!reservation) return;
+      if (reservation.status === 'completed_success' || reservation.status === 'completed_failure') return;
+
+      const newStatus = success ? 'completed_success' : 'completed_failure';
+
+      await tx.requestAttemptReservation.update({
+        where: { id: attemptId },
+        data: {
+          status: newStatus,
+          failureKind: success ? null : (failureKind ?? null),
+          completedAt: new Date(),
+        },
+      });
+
+      // Update global counters
+      if (success) {
+        await tx.$executeRaw`
+          UPDATE "global_request_budgets"
+          SET "completed_success" = "completed_success" + 1, "updated_at" = NOW()
+          WHERE "billing_month" = ${billingMonth}
+        `;
+        await tx.$executeRaw`
+          UPDATE "provider_request_breakdowns"
+          SET "completed_success" = "provider_request_breakdowns"."completed_success" + 1, "updated_at" = NOW()
+          WHERE "provider" = ${reservation.provider} AND "billing_month" = ${billingMonth}
+        `;
+      } else if (failureKind) {
+        // Use $executeRawUnsafe for dynamic column names (validated enum)
+        const validColumns = new Set(['failure_timeout', 'failure_rate_limit', 'failure_server', 'failure_network', 'failure_client']);
+        const column = `failure_${failureKind}`;
+        if (validColumns.has(column)) {
+          await tx.$executeRawUnsafe(
+            `UPDATE "global_request_budgets" SET "${column}" = "${column}" + 1, "updated_at" = NOW() WHERE "billing_month" = $1`,
+            billingMonth,
+          );
+          await tx.$executeRawUnsafe(
+            `UPDATE "provider_request_breakdowns" SET "${column}" = "${column}" + 1, "updated_at" = NOW() WHERE "provider" = $1 AND "billing_month" = $2`,
+            reservation.provider,
+            billingMonth,
+          );
+        }
+      }
+
+      // Update quota headers if provided
+      if (quotaHeaders) {
+        if (quotaHeaders.remaining !== undefined) {
+          await tx.$executeRaw`UPDATE "global_request_budgets" SET "quota_remaining" = ${quotaHeaders.remaining} WHERE "billing_month" = ${billingMonth}`;
+        }
+        if (quotaHeaders.resetEpochMs !== undefined) {
+          await tx.$executeRaw`UPDATE "global_request_budgets" SET "quota_reset_epoch_ms" = ${BigInt(quotaHeaders.resetEpochMs)} WHERE "billing_month" = ${billingMonth}`;
+        }
+      }
+    });
+  }
+
+  /**
+   * Get the current global usage snapshot.
+   */
+  async getUsage(): Promise<GlobalUsageSnapshot> {
+    const billingMonth = RequestBudgetService.utcBillingMonth();
+    return this.buildSnapshot(this.prisma, billingMonth, this.budget, this.reserveAmount);
+  }
+
+  /**
+   * Check if a routine request can proceed (for compatibility).
+   */
+  async canMakeRoutineRequest(): Promise<{ allowed: boolean; usage: GlobalUsageSnapshot }> {
+    const usage = await this.getUsage();
+    return { allowed: !usage.isRoutineBlocked, usage };
+  }
+
+  /**
+   * Check if a manual request with override can proceed (for compatibility).
    */
   async canMakeManualRequest(
-    provider: ProviderId,
+    _provider: ProviderId,
     override: boolean = false,
-  ): Promise<{ allowed: boolean; usage: BudgetUsageSnapshot }> {
-    const usage = await this.getUsage(provider);
-
-    // Absolute hard stop: budget fully consumed
-    if (usage.totalAttempts >= usage.budget) {
-      return { allowed: false, usage };
-    }
-
-    // If within reserve, only override allowed
-    if (usage.availableForRoutineWork <= 0 && !override) {
-      return { allowed: false, usage };
-    }
-
+  ): Promise<{ allowed: boolean; usage: GlobalUsageSnapshot }> {
+    const usage = await this.getUsage();
+    if (usage.allocated >= usage.budget) return { allowed: false, usage };
+    if (usage.availableForRoutine <= 0 && !override) return { allowed: false, usage };
     return { allowed: true, usage };
+  }
+
+  /**
+   * Build the usage snapshot from a transaction client.
+   */
+  private async buildSnapshot(
+    tx: PrismaService | any,
+    billingMonth: string,
+    budget: number,
+    reserve: number,
+  ): Promise<GlobalUsageSnapshot> {
+    const globalRow = await tx.globalRequestBudget.findUnique({
+      where: { billingMonth },
+    });
+
+    const breakdowns = await tx.providerRequestBreakdown.findMany({
+      where: { billingMonth },
+    });
+
+    const unresolvedReservations = await tx.requestAttemptReservation.count({
+      where: { billingMonth, status: 'allocated' },
+    });
+
+    const allocated = globalRow?.allocated ?? 0;
+    const confirmed = globalRow?.confirmed ?? 0;
+    const completedSuccess = globalRow?.completedSuccess ?? 0;
+    const failureCounts = {
+      timeout: globalRow?.failureTimeout ?? 0,
+      rateLimit: globalRow?.failureRateLimit ?? 0,
+      server: globalRow?.failureServer ?? 0,
+      network: globalRow?.failureNetwork ?? 0,
+      client: globalRow?.failureClient ?? 0,
+    };
+
+    const providers: ProviderBreakdown[] = breakdowns.map((b: any) => ({
+      provider: b.provider,
+      allocated: b.allocated,
+      confirmed: b.confirmed,
+      completedSuccess: b.completedSuccess,
+      failureCounts: {
+        timeout: b.failureTimeout,
+        rateLimit: b.failureRateLimit,
+        server: b.failureServer,
+        network: b.failureNetwork,
+        client: b.failureClient,
+      },
+    }));
+
+    const availableForRoutine = Math.max(0, budget - reserve - allocated);
+    const percentageUsed = budget > 0 ? Math.round((allocated / budget) * 10000) / 100 : 0;
+
+    return {
+      billingMonth,
+      budget,
+      reserve,
+      allocated,
+      confirmed,
+      completedSuccess,
+      failureCounts,
+      quotaRemaining: globalRow?.quotaRemaining ?? null,
+      quotaResetEpochMs: globalRow?.quotaResetEpochMs ? Number(globalRow.quotaResetEpochMs) : null,
+      unresolved: unresolvedReservations,
+      availableForRoutine,
+      percentageUsed,
+      isWarning: percentageUsed >= this.warningPercent,
+      isRoutineBlocked: allocated >= budget - reserve,
+      isAbsoluteBlocked: allocated >= budget,
+      providers,
+    };
   }
 }
