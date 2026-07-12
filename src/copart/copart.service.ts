@@ -8,11 +8,36 @@ import {
   type ProviderFetchConfig,
   type FetchFailureKind,
 } from './provider-fetch';
+import { validateProviderResponse, type MalformedReason } from './response-validator';
 
 interface PageFailure {
   page: number;
-  kind: FetchFailureKind;
+  kind: FetchFailureKind | 'malformed_response';
   status?: number;
+  reason?: MalformedReason;
+}
+
+/** Terminal reason codes for the pagination loop. */
+type TerminalReason =
+  | 'completed'
+  | 'max_pages_reached'
+  | 'empty_page'
+  | 'short_page'
+  | 'repeated_page'
+  | 'malformed_response'
+  | 'deadline_exceeded'
+  | 'non_retryable_http_error'
+  | 'all_pages_failed';
+
+/** Ordered lot-number signature for a single fetched page. */
+type PageSignature = string[];
+
+/** Counts of failures by kind, for the extended summary. */
+interface FailureCounts {
+  timeout: number;
+  rateLimit: number;
+  server: number;
+  network: number;
 }
 
 @Injectable()
@@ -26,7 +51,7 @@ export class CopartService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly vehiclesService: VehiclesService,
-) {}
+  ) {}
 
   /** Build a ProviderFetchConfig from validated env vars. */
   private getFetchConfig(): ProviderFetchConfig {
@@ -139,18 +164,43 @@ export class CopartService {
         'x-rapidapi-key': apiKey,
       };
 
-      // Fetch vehicles from RapidAPI (paginated)
+      // ──────────────────────────────────────────────────────────────
+      // Pagination loop — with response validation, duplicate-page
+      // detection, and terminal-reason classification.
+      //
+      // RAW IMPORT BEHAVIOUR (append-only):
+      //   Every lot that passes item-level validation is persisted to
+      //   `VehicleRawImport` *before* upserting the vehicle record.
+      //   This is intentionally append-only: re-runs of the same job
+      //   (or overlapping jobs) will create duplicate raw-import rows
+      //   rather than updating existing ones.  This preserves a full
+      //   audit trail of provider payloads.  Deduplication happens at
+      //   the `VehicleSourceBinding` level (unique on provider +
+      //   externalLotId), not at the raw-import level.
+      // ──────────────────────────────────────────────────────────────
+
       const lots: Record<string, any>[] = [];
       let page = 1;
       let deadlineReached = false;
+      let terminalReason: TerminalReason | null = null;
+      let repeatedPage: { laterPage: number; earlierPage: number } | null = null;
+      const pageSignatures: Map<number, PageSignature> = new Map();
+      const failureCounts: FailureCounts = { timeout: 0, rateLimit: 0, server: 0, network: 0 };
+      let pagesAttempted = 0;
+      let pagesCompleted = 0;
+      let retryCount = 0;
+      let itemsReceived = 0;
 
       while (page <= this.maxPages) {
         const remaining = jobDeadlineMs - Date.now();
         if (remaining <= 0) {
           this.logger.warn(`Import job deadline (${jobTimeoutMs}ms) reached at page ${page}`);
           deadlineReached = true;
+          terminalReason = 'deadline_exceeded';
           break;
         }
+
+        pagesAttempted++;
 
         const url = `${this.RAPIDAPI_BASE}/vehicles?platform=${platform}&page=${page}&limit=${this.BATCH_SIZE}`;
         this.logger.log(`Fetching ${platform} page ${page}/${this.maxPages} (remaining: ${Math.floor(remaining / 1000)}s)`);
@@ -164,6 +214,14 @@ export class CopartService {
 
         if (!result.ok) {
           const f = result.failure;
+          retryCount += result.attempts - 1;
+
+          // Classify failure for counts
+          if (f.kind === 'HTTP_429') failureCounts.rateLimit++;
+          else if (f.kind === 'HTTP_5XX') failureCounts.server++;
+          else if (f.kind === 'NETWORK_ERROR') failureCounts.network++;
+          else if (f.kind === 'ABORTED' || f.kind === 'DEADLINE_EXCEEDED') failureCounts.timeout++;
+
           this.logger.error(
             `Provider fetch failed at page ${page}: ${f.kind}${f.status ? ` (${f.status})` : ''} — ${f.message} [attempts: ${result.attempts}]`,
           );
@@ -172,12 +230,14 @@ export class CopartService {
           // Non-retryable 4xx: stop pagination entirely
           if (f.kind === 'HTTP_4XX') {
             this.logger.warn(`Stopping pagination: non-retryable HTTP ${f.status}`);
+            terminalReason = 'non_retryable_http_error';
             break;
           }
 
           // Deadline exceeded: stop with what we have
           if (f.kind === 'DEADLINE_EXCEEDED') {
             deadlineReached = true;
+            terminalReason = 'deadline_exceeded';
             break;
           }
 
@@ -186,33 +246,111 @@ export class CopartService {
           continue;
         }
 
-        const body = result.data;
-        const data = body?.data ?? [];
+        // ── Validate top-level response shape ──
+        const validation = validateProviderResponse(result.data);
 
-        if (data.length === 0) {
-          this.logger.log(`No more data at page ${page}`);
+        if (!validation.ok) {
+          this.logger.error(
+            `Malformed provider response at page ${page}: ${validation.reason} — ${validation.detail}`,
+          );
+          pageFailures.push({ page, kind: 'malformed_response', reason: validation.reason });
+          terminalReason = 'malformed_response';
+          // Process zero items from this response, stop pagination
           break;
         }
 
-        lots.push(...data);
+        const data = validation.items as Record<string, any>[];
+
+        // ── Empty page: terminal signal ──
+        if (data.length === 0) {
+          this.logger.log(`Empty page at ${page}, stopping pagination`);
+          terminalReason = terminalReason ?? 'empty_page';
+          break;
+        }
+
+        // ── Duplicate page detection ──
+        // Build ordered lot-number signature for this page
+        const currentPageSignature: PageSignature = data
+          .map((item) => {
+            if (item === null || typeof item !== 'object') return '__non_object__';
+            const ln = item.lot_number;
+            return ln !== null && ln !== undefined ? String(ln) : '__missing_lot_id__';
+          });
+
+        // Check against all previously seen page signatures
+        let isDuplicatePage = false;
+        let duplicateOfPage = 0;
+        for (const [prevPage, prevSig] of pageSignatures) {
+          if (signaturesEqual(currentPageSignature, prevSig)) {
+            isDuplicatePage = true;
+            duplicateOfPage = prevPage;
+            break;
+          }
+        }
+
+        if (isDuplicatePage) {
+          this.logger.warn(
+            `Page ${page} repeats lot identifiers from page ${duplicateOfPage}, stopping before duplicate processing`,
+          );
+          repeatedPage = { laterPage: page, earlierPage: duplicateOfPage };
+          terminalReason = 'repeated_page';
+          break;
+        }
+
+        pageSignatures.set(page, currentPageSignature);
+
+        // ── Item-level validation: filter out items missing lot_number ──
+        const validItems: Record<string, any>[] = [];
+        for (const item of data) {
+          if (item === null || typeof item !== 'object') {
+            skipped++;
+            continue;
+          }
+          if (item.lot_number === null || item.lot_number === undefined) {
+            skipped++;
+            // Do NOT create raw import, binding or vehicle records
+            continue;
+          }
+          validItems.push(item);
+        }
+
+        const skippedThisPage = data.length - validItems.length;
+        if (skippedThisPage > 0) {
+          this.logger.warn(`Page ${page}: skipped ${skippedThisPage} items missing provider lot ID`);
+        }
+
+        lots.push(...validItems);
+        itemsReceived += data.length;
+        pagesCompleted++;
+
         this.logger.log(
-          `Fetched ${data.length} vehicles from page ${page} (total: ${lots.length}) [attempts: ${result.attempts}]`,
+          `Fetched ${data.length} vehicles from page ${page} (${validItems.length} valid, total: ${lots.length}) [attempts: ${result.attempts}]`,
         );
 
+        // ── Short page: terminal signal (fewer items than BATCH_SIZE) ──
         if (data.length < this.BATCH_SIZE) {
-          break; // Last page
+          terminalReason = terminalReason ?? 'short_page';
+          break;
         }
 
         page++;
       }
 
-      this.logger.log(`Total vehicles to process: ${lots.length}${deadlineReached ? ' (deadline reached)' : ''}`);
+      // Set terminal reason if loop completed without other signal
+      if (terminalReason === null) {
+        terminalReason = pagesCompleted > 0 ? 'max_pages_reached' : 'all_pages_failed';
+      }
 
+      this.logger.log(
+        `Total vehicles to process: ${lots.length}${deadlineReached ? ' (deadline reached)' : ''} [terminal: ${terminalReason}]`,
+      );
+
+      // ── Process validated lots ──
       for (const raw of lots) {
         try {
           const mapped = this.mapRawToVehicle(raw, platform);
 
-          // Store raw import
+          // Store raw import (append-only — see note above)
           await this.prisma.vehicleRawImport.create({
             data: {
               provider: platform,
@@ -222,7 +360,7 @@ export class CopartService {
             },
           });
 
-          // Check if vehicle already exists
+          // Check if vehicle already exists (deduplication via VehicleSourceBinding)
           const existing = await this.prisma.vehicleSourceBinding.findUnique({
             where: {
               provider_externalLotId: {
@@ -233,6 +371,7 @@ export class CopartService {
           });
 
           if (existing) {
+            // Replay: update existing vehicle, no duplicate created
             await this.vehiclesService.update(existing.vehicleId, mapped);
             updated++;
           } else {
@@ -271,13 +410,20 @@ export class CopartService {
           status: errors > 0 && created + updated === 0 ? 'FAILED' : errors > 0 ? 'PARTIAL_SUCCESS' : 'SUCCESS',
           finishedAt: new Date(),
           summaryJsonb: {
+            provider: platform,
             created,
             updated,
             skipped,
             errors,
-            pagesFetched: pageFailures.length === 0 ? page - 1 : pageFailures[0].page - 1,
+            pagesAttempted,
+            pagesCompleted,
+            itemsReceived,
+            retryCount,
+            failureCounts,
             pageFailures,
             deadlineReached,
+            repeatedPage,
+            terminalReason,
             jobDurationMs,
             maxPagesConfig: this.maxPages,
           } as any,
@@ -285,7 +431,7 @@ export class CopartService {
       });
 
       this.logger.log(
-        `Import job ${jobId} completed: ${created} created, ${updated} updated, ${errors} errors`,
+        `Import job ${jobId} completed: ${created} created, ${updated} updated, ${skipped} skipped, ${errors} errors [${terminalReason}]`,
       );
     } catch (error) {
       await this.prisma.importJob.update({
@@ -299,6 +445,11 @@ export class CopartService {
       this.logger.error(`Import job ${jobId} failed: ${error}`);
     }
   }
+
+  // ── Helper: compare two page signatures ──
+  // Not claimed as a concurrency-safe ordering guarantee — only used
+  // within a single job's sequential pagination to detect if the
+  // provider returns the same ordered lot identifiers twice.
 
   mapRawToVehicle(raw: Record<string, any>, platform: 'copart' | 'iaai') {
     const year = Number(raw.year) || new Date().getFullYear();
@@ -521,4 +672,19 @@ export class CopartService {
     this.logger.log('Cron-triggered Copart sync');
     await this.sync();
   }
+}
+
+// ── Module-level helper: compare two ordered lot-number signatures ──
+/**
+ * Compare two page signatures for equality.
+ * Only used within a single job's sequential pagination to detect
+ * if the provider returns the same ordered lot identifiers twice.
+ * This is NOT a concurrency-safe ordering guarantee.
+ */
+function signaturesEqual(a: PageSignature, b: PageSignature): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
