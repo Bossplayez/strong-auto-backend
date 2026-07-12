@@ -22,17 +22,26 @@ import {
 } from './dto';
 
 const isProd = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
 
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
 
-function setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
-  const common = {
+// Production: Secure + SameSite=None (cross-site cookies require Secure)
+// Test: relaxed for local HTTP Playwright/CI
+// Development: SameSite=Lax (HTTP localhost)
+function getCookieOptions() {
+  const sameSite = isProd ? 'none' as const : 'lax' as const;
+  return {
     httpOnly: true,
     secure: isProd,
-    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+    sameSite,
     path: '/',
   };
+}
+
+function setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
+  const common = getCookieOptions();
   res.cookie(ACCESS_COOKIE, accessToken, {
     ...common,
     maxAge: 15 * 60 * 1000, // 15m
@@ -50,7 +59,7 @@ function clearAuthCookies(res: Response) {
 
 @ApiTags('Auth')
 @Controller('auth')
-@Throttle({ auth: { ttl: 60_000, limit: 100 } })
+@Throttle({ auth: { ttl: 60_000, limit: 10 } })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
