@@ -17,6 +17,14 @@ const importConfigSchema = z.object({
   IMPORT_MONTHLY_REQUEST_BUDGET: z.coerce.number().int().min(1).max(10000000).default(30000),
   IMPORT_MONTHLY_REQUEST_RESERVE: z.coerce.number().int().min(0).max(10000000).default(3000),
   IMPORT_BUDGET_WARNING_PERCENT: z.coerce.number().int().min(1).max(100).default(80),
+
+  // ── Task 033S: Discovery / Scheduler ──
+  SCHEDULER_HOT_INTERVAL_MS: z.coerce.number().int().min(60000).max(3600000).default(900000),
+  SCHEDULER_WARM_INTERVAL_MS: z.coerce.number().int().min(600000).max(21600000).default(10800000),
+  SCHEDULER_COLD_INTERVAL_MS: z.coerce.number().int().min(1800000).max(86400000).default(43200000),
+  SEARCH_CACHE_TTL_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
+  DISCOVERY_MAX_PAGES: z.coerce.number().int().min(1).max(100).default(10),
+  SCHEDULER_CONFIRMATION_MISSES: z.coerce.number().int().min(1).max(10).default(3),
 });
 
 const envSchema = z.object({
@@ -86,6 +94,12 @@ const envSchema = z.object({
   IMPORT_MONTHLY_REQUEST_BUDGET: importConfigSchema.shape.IMPORT_MONTHLY_REQUEST_BUDGET,
   IMPORT_MONTHLY_REQUEST_RESERVE: importConfigSchema.shape.IMPORT_MONTHLY_REQUEST_RESERVE,
   IMPORT_BUDGET_WARNING_PERCENT: importConfigSchema.shape.IMPORT_BUDGET_WARNING_PERCENT,
+  SCHEDULER_HOT_INTERVAL_MS: importConfigSchema.shape.SCHEDULER_HOT_INTERVAL_MS,
+  SCHEDULER_WARM_INTERVAL_MS: importConfigSchema.shape.SCHEDULER_WARM_INTERVAL_MS,
+  SCHEDULER_COLD_INTERVAL_MS: importConfigSchema.shape.SCHEDULER_COLD_INTERVAL_MS,
+  SEARCH_CACHE_TTL_SECONDS: importConfigSchema.shape.SEARCH_CACHE_TTL_SECONDS,
+  DISCOVERY_MAX_PAGES: importConfigSchema.shape.DISCOVERY_MAX_PAGES,
+  SCHEDULER_CONFIRMATION_MISSES: importConfigSchema.shape.SCHEDULER_CONFIRMATION_MISSES,
 })
   // Cross-field validation
   .refine(

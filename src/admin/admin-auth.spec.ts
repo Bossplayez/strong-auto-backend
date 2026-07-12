@@ -14,6 +14,9 @@ import { AdminService } from './admin.service';
 import { CopartService } from '../copart/copart.service';
 import { ProviderLeaseService } from '../copart/provider-lease.service';
 import { RequestBudgetService } from '../copart/request-budget.service';
+import { DiscoveryService } from '../copart/discovery.service';
+import { AuctionSearchService } from '../copart/auction-search.service';
+import { FreshnessSchedulerService } from '../copart/freshness-scheduler.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -55,6 +58,9 @@ describe('Admin Import — Runtime Authorization (Task 033R1)', () => {
             importJob: { findFirst: jest.fn().mockResolvedValue(null) },
           },
         },
+        { provide: DiscoveryService, useValue: { getCursorState: jest.fn().mockResolvedValue([]), runDiscovery: jest.fn() } },
+        { provide: AuctionSearchService, useValue: { search: jest.fn(), importLot: jest.fn() } },
+        { provide: FreshnessSchedulerService, useValue: { getStatus: jest.fn(), pause: jest.fn(), resume: jest.fn(), updateCadence: jest.fn(), tick: jest.fn() } },
       ],
     })
       .overrideGuard(JwtAuthGuard)

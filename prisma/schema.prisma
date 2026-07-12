@@ -907,3 +907,149 @@ model AppEvent {
 
   @@map("app_events")
 }
+
+// ═══════════════════════════════════════════════════════════════
+// AUCTION DISCOVERY (Task 033S)
+// ═══════════════════════════════════════════════════════════════
+
+enum FreshnessTier {
+  HOT
+  WARM
+  COLD
+}
+
+enum DiscoveredLotState {
+  DISCOVERED
+  IMPORTING
+  IMPORTED
+  SOLD
+  REMOVED
+  UNAVAILABLE
+}
+
+/// Cursor state per provider + normalized query fingerprint.
+/// Supports safe resume after interruption.
+model DiscoveryCursor {
+  id                   String    @id @default(uuid()) @map("id")
+  provider             String    @map("provider")
+  queryFingerprint     String    @map("query_fingerprint")
+  nextCursor           String?   @map("next_cursor")
+  previousCursor       String?   @map("previous_cursor")
+  lastSuccessfulCursor String?   @map("last_successful_cursor")
+  lastStartedAt        DateTime? @map("last_started_at")
+  lastCompletedAt      DateTime? @map("last_completed_at")
+  exhaustedAt          DateTime? @map("exhausted_at")
+  contractVersion      String    @default("v1") @map("contract_version")
+  lastError            String?   @map("last_error")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@unique([provider, queryFingerprint])
+  @@map("discovery_cursors")
+}
+
+/// Normalized external lot discovered via search or discovery.
+/// Separate from Vehicle — live results do NOT become catalog vehicles
+/// without explicit import action.
+model DiscoveredLot {
+  id                    String             @id @default(uuid()) @map("id")
+  provider              String             @map("provider")
+  externalLotId         String             @map("external_lot_id")
+  title                 String             @map("title")
+  make                  String             @map("make")
+  model                 String             @map("model")
+  year                  Int                @map("year")
+  vin                   String?            @map("vin")
+  slugVin               String?            @map("slug_vin")
+  platformId            Int?               @map("platform_id")
+  subLot                Boolean            @default(false) @map("sub_lot")
+  ad                    DateTime?          @map("ad")
+  auctionState          String?            @map("auction_state")
+  auctionFormatted      String?            @map("auction_formatted")
+  isBuyNow              Boolean            @default(false) @map("is_buy_now")
+  buyNowUsd             Decimal?           @map("buy_now_usd") @db.Decimal
+  currentBidUsd         Decimal?           @map("current_bid_usd") @db.Decimal
+  estimatedCostUsd      Decimal?           @map("estimated_cost_usd") @db.Decimal
+  lastSoldPriceUsd      Decimal?           @map("last_sold_price_usd") @db.Decimal
+  odometerMi            Int?               @map("odometer_mi")
+  odometerKm            Int?               @map("odometer_km")
+  primaryDamage         String?            @map("primary_damage")
+  secondaryDamage       String?            @map("secondary_damage")
+  loss                  String?            @map("loss")
+  runCondition          String?            @map("run_condition")
+  hasKey                Boolean?           @map("has_key")
+  bodyStyle             String?            @map("body_style")
+  engine                String?            @map("engine")
+  driveType             String?            @map("drive_type")
+  exteriorColor         String?            @map("exterior_color")
+  fuelType              String?            @map("fuel_type")
+  transmission          String?            @map("transmission")
+  airbags               String?            @map("airbags")
+  restraintSystem       String?            @map("restraint_system")
+  locationDisplay       String?            @map("location_display")
+  locationState         String?            @map("location_state")
+  facilityId            String?            @map("facility_id")
+  facilityOfficeName    String?            @map("facility_office_name")
+  facilityState         String?            @map("facility_state")
+  facilityZip           String?            @map("facility_zip")
+  has360                Boolean            @default(false) @map("has_360")
+  hasVideo              Boolean            @default(false) @map("has_video")
+  thumbsCount           Int                @default(0) @map("thumbs_count")
+  sellerClass           String?            @map("seller_class")
+  sellerType            String?            @map("seller_type")
+  saleDocumentName      String?            @map("sale_document_name")
+  saleDocumentType      String?            @map("sale_document_type")
+  sourcePayloadHash     String?            @map("source_payload_hash")
+  // Freshness tracking
+  lastSeenAt            DateTime           @default(now()) @map("last_seen_at")
+  lastProviderUpdateAt  DateTime?          @map("last_provider_update_at")
+  nextRefreshAt         DateTime?          @map("next_refresh_at")
+  freshnessTier         FreshnessTier      @default(COLD) @map("freshness_tier")
+  consecutiveMisses     Int                @default(0) @map("consecutive_misses")
+  availabilityConfirmed Boolean            @default(true) @map("availability_confirmed")
+  // Import state
+  state                 DiscoveredLotState @default(DISCOVERED) @map("state")
+  vehicleId             String?            @map("vehicle_id")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  @@unique([provider, externalLotId])
+  @@index([provider, freshnessTier, nextRefreshAt])
+  @@index([provider, state])
+  @@index([nextRefreshAt])
+  @@index([isBuyNow, auctionState])
+  @@map("discovered_lots")
+}
+
+/// Short-lived search result cache keyed by normalized query fingerprint.
+model SearchQueryCache {
+  id               String   @id @default(uuid()) @map("id")
+  queryFingerprint String   @unique @map("query_fingerprint")
+  provider         String   @map("provider")
+  params           Json     @map("params")
+  results          Json     @map("results")
+  nextCursor       String?  @map("next_cursor")
+  itemCount        Int      @map("item_count")
+  ttlSeconds       Int      @default(60) @map("ttl_seconds")
+  expiresAt        DateTime @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([provider, expiresAt])
+  @@map("search_query_cache")
+}
+
+/// Scheduler state — single row, controls global scheduler.
+model SchedulerState {
+  id             String    @id @default(uuid()) @map("id")
+  isPaused       Boolean   @default(false) @map("is_paused")
+  hotIntervalMs  Int       @default(900000) @map("hot_interval_ms")
+  warmIntervalMs Int       @default(10800000) @map("warm_interval_ms")
+  coldIntervalMs Int       @default(43200000) @map("cold_interval_ms")
+  lastRunAt      DateTime? @map("last_run_at")
+  nextRunAt      DateTime? @map("next_run_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("scheduler_state")
+}

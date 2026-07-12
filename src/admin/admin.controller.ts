@@ -21,6 +21,9 @@ import { AdminService } from './admin.service';
 import { CopartService } from '../copart/copart.service';
 import { ProviderLeaseService } from '../copart/provider-lease.service';
 import { RequestBudgetService } from '../copart/request-budget.service';
+import { DiscoveryService } from '../copart/discovery.service';
+import { AuctionSearchService } from '../copart/auction-search.service';
+import { FreshnessSchedulerService } from '../copart/freshness-scheduler.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -48,6 +51,9 @@ export class AdminController {
     private readonly copartService: CopartService,
     private readonly leaseService: ProviderLeaseService,
     private readonly budgetService: RequestBudgetService,
+    private readonly discoveryService: DiscoveryService,
+    private readonly searchService: AuctionSearchService,
+    private readonly schedulerService: FreshnessSchedulerService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -554,5 +560,152 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Paginated list of audit log entries' })
   async listAuditLogs(@Query() query: PaginationQueryDto): Promise<any> {
     return this.adminService.listAuditLogs(query.page, query.pageSize);
+  }
+
+  // =====================
+  // Auction Discovery (Task 033S)
+  // =====================
+
+  @Get('auction/search')
+  @ApiOperation({ summary: 'Search live auction lots (admin)' })
+  @ApiResponse({ status: 200, description: 'Search results with cache + dedup' })
+  async auctionSearch(@Query() query: Record<string, string>): Promise<any> {
+    return this.searchService.search(query);
+  }
+
+  @Post('auction/import-lot')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Import a discovered lot into catalog (admin)' })
+  @ApiResponse({ status: 200, description: 'Import result' })
+  async importDiscoveredLot(@Body() body: { lotNumber: string; platform: 'copart' | 'iaai' }): Promise<any> {
+    return this.searchService.importLot(body.lotNumber, body.platform);
+  }
+
+  @Post('auction/discovery/run')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Trigger bounded discovery pass (admin)' })
+  @ApiResponse({ status: 200, description: 'Discovery result' })
+  async runDiscovery(@Body() body: {
+    platform: 'copart' | 'iaai';
+    make?: string;
+    year?: number;
+    search?: string;
+    buyNow?: boolean;
+    saleStatus?: string;
+    sort?: string;
+    maxPages?: number;
+  }): Promise<any> {
+    return this.discoveryService.runDiscovery(body, body.maxPages);
+  }
+
+  @Get('auction/cursors')
+  @ApiOperation({ summary: 'Get cursor state per provider (admin)' })
+  @ApiResponse({ status: 200, description: 'Cursor states' })
+  async getCursorStates(@Query('provider') provider?: string): Promise<any> {
+    const providers = provider ? [provider] : ['copart', 'iaai'];
+    const results: any[] = [];
+    for (const p of providers) {
+      const cursors = await this.discoveryService.getCursorState(p);
+      results.push({ provider: p, cursors });
+    }
+    return { providers: results };
+  }
+
+  @Get('auction/discovered-lots')
+  @ApiOperation({ summary: 'List discovered lots (admin)' })
+  @ApiResponse({ status: 200, description: 'Paginated discovered lots' })
+  async listDiscoveredLots(
+    @Query() query: { page?: string; pageSize?: string; provider?: string; state?: string; tier?: string },
+  ): Promise<any> {
+    const page = Number(query.page) || 1;
+    const pageSize = Math.min(Number(query.pageSize) || 20, 100);
+    const where: any = {};
+    if (query.provider) where.provider = query.provider;
+    if (query.state) where.state = query.state;
+    if (query.tier) where.freshnessTier = query.tier;
+
+    const [lots, total] = await Promise.all([
+      this.prisma.discoveredLot.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { lastSeenAt: 'desc' },
+        select: {
+          id: true,
+          provider: true,
+          externalLotId: true,
+          title: true,
+          make: true,
+          model: true,
+          year: true,
+          isBuyNow: true,
+          buyNowUsd: true,
+          currentBidUsd: true,
+          auctionState: true,
+          auctionFormatted: true,
+          locationDisplay: true,
+          freshnessTier: true,
+          state: true,
+          lastSeenAt: true,
+          nextRefreshAt: true,
+          consecutiveMisses: true,
+          availabilityConfirmed: true,
+          vehicleId: true,
+        },
+      }),
+      this.prisma.discoveredLot.count({ where }),
+    ]);
+
+    return { items: lots, total, page, pageSize };
+  }
+
+  // =====================
+  // Scheduler Controls (Task 033S)
+  // =====================
+
+  @Get('auction/scheduler')
+  @ApiOperation({ summary: 'Get scheduler status (admin)' })
+  @ApiResponse({ status: 200, description: 'Scheduler status' })
+  async getSchedulerStatus(): Promise<any> {
+    return this.schedulerService.getStatus();
+  }
+
+  @Post('auction/scheduler/pause')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Pause scheduler (admin)' })
+  @ApiResponse({ status: 200, description: 'Scheduler paused' })
+  async pauseScheduler(): Promise<{ message: string }> {
+    await this.schedulerService.pause();
+    return { message: 'Scheduler paused' };
+  }
+
+  @Post('auction/scheduler/resume')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume scheduler (admin)' })
+  @ApiResponse({ status: 200, description: 'Scheduler resumed' })
+  async resumeScheduler(): Promise<{ message: string }> {
+    await this.schedulerService.resume();
+    return { message: 'Scheduler resumed' };
+  }
+
+  @Patch('auction/scheduler/cadence')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update scheduler cadence (admin)' })
+  @ApiResponse({ status: 200, description: 'Cadence updated' })
+  async updateCadence(@Body() body: {
+    hotIntervalMs?: number;
+    warmIntervalMs?: number;
+    coldIntervalMs?: number;
+  }): Promise<{ message: string }> {
+    await this.schedulerService.updateCadence(body);
+    return { message: 'Cadence updated' };
+  }
+
+  @Post('auction/scheduler/tick')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Trigger manual scheduler tick (admin)' })
+  @ApiResponse({ status: 200, description: 'Tick result' })
+  async triggerTick(): Promise<any> {
+    return this.schedulerService.tick();
   }
 }

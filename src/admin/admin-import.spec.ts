@@ -16,6 +16,9 @@ import { AdminService } from './admin.service';
 import { CopartService } from '../copart/copart.service';
 import { ProviderLeaseService } from '../copart/provider-lease.service';
 import { RequestBudgetService } from '../copart/request-budget.service';
+import { DiscoveryService } from '../copart/discovery.service';
+import { AuctionSearchService } from '../copart/auction-search.service';
+import { FreshnessSchedulerService } from '../copart/freshness-scheduler.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('AdminController — import operational status (Task 033R)', () => {
@@ -93,6 +96,9 @@ describe('AdminController — import operational status (Task 033R)', () => {
         { provide: CopartService, useValue: { sync: jest.fn() } },
         { provide: ProviderLeaseService, useValue: leaseService },
         { provide: RequestBudgetService, useValue: budgetService },
+        { provide: DiscoveryService, useValue: { getCursorState: jest.fn().mockResolvedValue([]) } },
+        { provide: AuctionSearchService, useValue: { search: jest.fn(), importLot: jest.fn() } },
+        { provide: FreshnessSchedulerService, useValue: { getStatus: jest.fn(), pause: jest.fn(), resume: jest.fn(), updateCadence: jest.fn(), tick: jest.fn() } },
         { provide: PrismaService, useValue: prisma },
         { provide: JwtAuthGuard, useValue: { canActivate: () => true } },
         { provide: RolesGuard, useValue: { canActivate: () => true } },
