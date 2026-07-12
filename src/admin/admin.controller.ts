@@ -598,15 +598,15 @@ export class AdminController {
     return this.discoveryService.runDiscovery(body, body.maxPages);
   }
 
-  @Get('auction/cursors')
+  @Get('auction/checkpoints')
   @ApiOperation({ summary: 'Get cursor state per provider (admin)' })
   @ApiResponse({ status: 200, description: 'Cursor states' })
-  async getCursorStates(@Query('provider') provider?: string): Promise<any> {
+  async getCheckpointStates(@Query('provider') provider?: string): Promise<any> {
     const providers = provider ? [provider] : ['copart', 'iaai'];
     const results: any[] = [];
     for (const p of providers) {
-      const cursors = await this.discoveryService.getCursorState(p);
-      results.push({ provider: p, cursors });
+      const checkpoints = await this.discoveryService.getCheckpointState(p);
+      results.push({ provider: p, checkpoints });
     }
     return { providers: results };
   }

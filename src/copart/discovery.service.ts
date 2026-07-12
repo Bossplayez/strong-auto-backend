@@ -1,18 +1,23 @@
 /**
- * Cursor-based auction discovery service.
+ * Page-checkpoint-based auction discovery service.
  *
- * Uses the confirmed RapidAPI contract (Task 033P):
+ * CONFIRMED provider contract (Task 033P, 13/13 HTTP 200):
  *   GET /vehicles?platform={copart|iaai}&page={n}&limit=20
  *   Response: { ok, data: [...], meta: { next_cursor, per_page, prev_cursor } }
  *
+ * IMPORTANT: Despite the meta field name "next_cursor", the provider
+ * uses PAGE-BASED pagination (integer page number). The "next_cursor"
+ * field contains the next page number as a string, not an opaque token.
+ * This was confirmed by Task 033P probe: all requests used ?page=N and
+ * returned HTTP 200.
+ *
  * Features:
- * - Cursor state persisted per provider + query fingerprint
- * - Safe resume after interruption
- * - Cursor advancement in fenced transaction
- * - Cursor-loop detection
+ * - Page checkpoint persisted per provider + query fingerprint
+ * - Safe resume after interruption (advance page only in same tx as page persist)
+ * - Loop detection (identical lot set across pages)
  * - Repeated-lot-page detection
- * - Copart/IAAI independent cursor state
- * - All requests through global quota reservation
+ * - Copart/IAAI independent checkpoint state
+ * - Every request through atomic global quota reservation
  * - Provider + externalLotId idempotency
  * - No fixed page count assumption
  */
@@ -47,14 +52,12 @@ export interface DiscoveryResult {
   lotsDiscovered: number;
   lotsUpdated: number;
   newLots: number;
-  cursorAdvanced: boolean;
+  checkpointAdvanced: boolean;
   exhausted: boolean;
   terminalReason: string;
-  nextCursor: string | null;
+  nextPage: number | null;
   errors: string[];
 }
-
-const CONTRACT_VERSION = 'v1';
 
 @Injectable()
 export class DiscoveryService {
@@ -78,7 +81,6 @@ export class DiscoveryService {
     if (params.buyNow) parts.push(`buy_now=true`);
     if (params.saleStatus) parts.push(`sale_status=${params.saleStatus}`);
     if (params.sort) parts.push(`sort=${params.sort}`);
-    // Create a simple hash
     const str = parts.join('|');
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -116,7 +118,11 @@ export class DiscoveryService {
 
   /**
    * Run a bounded discovery pass for a provider + query.
-   * Resumes from the last cursor state.
+   * Resumes from the last page checkpoint.
+   *
+   * Page checkpoint advancement is atomic: the page number is advanced
+   * only in the same fenced transaction that persists the discovered lots.
+   * A failed page does NOT advance the checkpoint.
    */
   async runDiscovery(
     params: DiscoveryParams,
@@ -134,16 +140,16 @@ export class DiscoveryService {
         lotsDiscovered: 0,
         lotsUpdated: 0,
         newLots: 0,
-        cursorAdvanced: false,
+        checkpointAdvanced: false,
         exhausted: false,
         terminalReason: 'configuration_error',
-        nextCursor: null,
+        nextPage: null,
         errors: ['RAPIDAPI_KEY not configured'],
       };
     }
 
-    // Get or create cursor state
-    const cursor = await this.prisma.discoveryCursor.upsert({
+    // Get or create checkpoint state
+    const checkpoint = await this.prisma.discoveryCheckpoint.upsert({
       where: {
         provider_queryFingerprint: {
           provider: params.platform,
@@ -162,7 +168,7 @@ export class DiscoveryService {
     });
 
     // Check if exhausted
-    if (cursor.exhaustedAt) {
+    if (checkpoint.exhaustedAt) {
       return {
         provider: params.platform,
         queryFingerprint,
@@ -170,13 +176,16 @@ export class DiscoveryService {
         lotsDiscovered: 0,
         lotsUpdated: 0,
         newLots: 0,
-        cursorAdvanced: false,
+        checkpointAdvanced: false,
         exhausted: true,
         terminalReason: 'already_exhausted',
-        nextCursor: cursor.nextCursor,
+        nextPage: checkpoint.lastPage,
         errors: [],
       };
     }
+
+    // Resume from the next page after last successful page
+    const startPage = (checkpoint.lastPage ?? 0) + 1;
 
     const headers = {
       'x-rapidapi-host': this.RAPIDAPI_HOST,
@@ -192,16 +201,15 @@ export class DiscoveryService {
     let lotsDiscovered = 0;
     let lotsUpdated = 0;
     let newLots = 0;
-    let page = 1;
+    let currentPage = startPage;
     let exhausted = false;
     let terminalReason = 'completed';
     const errors: string[] = [];
-    const seenLotIds = new Set<string>();
 
     // Track page identities for loop detection
     const pageIdentities: Map<number, string[]> = new Map();
 
-    while (page <= maxPgs) {
+    while (pagesCompleted < maxPgs) {
       if (Date.now() >= jobDeadlineMs) {
         terminalReason = 'deadline_exceeded';
         break;
@@ -216,7 +224,7 @@ export class DiscoveryService {
       }
 
       // Budget reservation
-      const attemptId = `disc-${params.platform}-${queryFingerprint}-p${page}-${crypto.randomUUID()}`;
+      const attemptId = `disc-${params.platform}-${queryFingerprint}-p${currentPage}-${crypto.randomUUID()}`;
       const reservation = await this.budgetService.reserve(
         params.platform as ProviderId,
         null,
@@ -228,8 +236,8 @@ export class DiscoveryService {
         break;
       }
 
-      const url = this.buildUrl(params, page);
-      this.logger.log(`Discovery ${params.platform} page ${page}/${maxPgs} (${queryFingerprint})`);
+      const url = this.buildUrl(params, currentPage);
+      this.logger.log(`Discovery ${params.platform} page ${currentPage} (checkpoint: last=${checkpoint.lastPage}, this=page ${currentPage}/${startPage + maxPgs - 1})`);
 
       const result = await providerFetch<any>(
         url,
@@ -254,7 +262,7 @@ export class DiscoveryService {
 
       if (!result.ok) {
         const f = result.failure;
-        errors.push(`Page ${page}: ${f.kind} - ${f.message}`);
+        errors.push(`Page ${currentPage}: ${f.kind} - ${f.message}`);
 
         if (f.kind === 'HTTP_4XX') {
           terminalReason = 'non_retryable_http_error';
@@ -264,16 +272,17 @@ export class DiscoveryService {
           terminalReason = 'deadline_exceeded';
           break;
         }
-        // Retryable failure — advance page
-        page++;
-        continue;
+        // Retryable failure — do NOT advance checkpoint
+        // Next discovery pass will retry the same page
+        break;
       }
 
       // Validate response
       const validation = validateProviderResponse(result.data);
       if (!validation.ok) {
-        errors.push(`Page ${page}: malformed - ${validation.reason}`);
+        errors.push(`Page ${currentPage}: malformed - ${validation.reason}`);
         terminalReason = 'malformed_response';
+        // Do NOT advance checkpoint on malformed response
         break;
       }
 
@@ -291,7 +300,7 @@ export class DiscoveryService {
         .map((item) => String(item.lot_number ?? '__missing__'))
         .sort();
 
-      // Check for repeated page
+      // Check for repeated page (identical lot set)
       let isRepeated = false;
       for (const [, prevId] of pageIdentities) {
         if (currentPageId.length === prevId.length &&
@@ -301,69 +310,90 @@ export class DiscoveryService {
         }
       }
       if (isRepeated) {
-        this.logger.warn(`Page ${page} repeats previous page lot IDs — stopping`);
+        this.logger.warn(`Page ${currentPage} repeats previous page lot IDs — stopping`);
         exhausted = true;
-        terminalReason = 'cursor_loop_detected';
+        terminalReason = 'loop_detected';
         break;
       }
-      pageIdentities.set(page, currentPageId);
+      pageIdentities.set(currentPage, currentPageId);
 
-      // Process items
-      for (const raw of items) {
-        const lotId = String(raw.lot_number ?? '');
-        if (!lotId) continue;
+      // Atomic checkpoint advancement: persist lots AND advance page in one transaction
+      // This ensures a failed page does NOT advance the checkpoint
+      const txResult = await this.prisma.$transaction(async (tx) => {
+        let txNew = 0;
+        let txUpdated = 0;
 
-        const normalized = normalizeDiscoveredLot(raw, params.platform);
+        for (const raw of items) {
+          const lotId = String(raw.lot_number ?? '');
+          if (!lotId) continue;
 
-        // Idempotent upsert
-        const existing = await this.prisma.discoveredLot.findUnique({
-          where: {
-            provider_externalLotId: {
-              provider: params.platform,
-              externalLotId: lotId,
+          const normalized = normalizeDiscoveredLot(raw, params.platform);
+
+          const existing = await tx.discoveredLot.findUnique({
+            where: {
+              provider_externalLotId: {
+                provider: params.platform,
+                externalLotId: lotId,
+              },
             },
+          });
+
+          if (existing) {
+            await tx.discoveredLot.update({
+              where: { id: existing.id },
+              data: {
+                ...normalized,
+                lastSeenAt: new Date(),
+                consecutiveMisses: 0,
+                availabilityConfirmed: true,
+              },
+            });
+            txUpdated++;
+          } else {
+            await tx.discoveredLot.create({
+              data: {
+                provider: params.platform,
+                externalLotId: lotId,
+                ...normalized,
+                lastSeenAt: new Date(),
+              },
+            });
+            txNew++;
+          }
+        }
+
+        // Advance checkpoint ONLY after successful lot persistence
+        await tx.discoveryCheckpoint.update({
+          where: { id: checkpoint.id },
+          data: {
+            lastPage: currentPage,
+            lastSuccessfulPage: currentPage,
+            lastCompletedAt: new Date(),
           },
         });
 
-        if (existing) {
-          await this.prisma.discoveredLot.update({
-            where: { id: existing.id },
-            data: {
-              ...normalized,
-              lastSeenAt: new Date(),
-              consecutiveMisses: 0,
-              availabilityConfirmed: true,
-            },
-          });
-          lotsUpdated++;
-        } else {
-          await this.prisma.discoveredLot.create({
-            data: {
-              provider: params.platform,
-              externalLotId: lotId,
-              ...normalized,
-              lastSeenAt: new Date(),
-            },
-          });
-          newLots++;
-        }
+        return { txNew, txUpdated };
+      });
 
-        lotsDiscovered++;
-        seenLotIds.add(lotId);
-      }
+      lotsDiscovered += items.length;
+      newLots += txResult.txNew;
+      lotsUpdated += txResult.txUpdated;
 
       pagesCompleted++;
-      page++;
+      currentPage++;
+
+      // Check if fewer than limit items returned — likely last page
+      if (items.length < (params.limit ?? 20)) {
+        exhausted = true;
+        terminalReason = 'exhausted_short_page';
+        break;
+      }
     }
 
-    // Update cursor state in a transaction
-    const nextCursor = pagesCompleted > 0 ? `page_${page}` : cursor.nextCursor;
-    await this.prisma.discoveryCursor.update({
-      where: { id: cursor.id },
+    // Final checkpoint update
+    await this.prisma.discoveryCheckpoint.update({
+      where: { id: checkpoint.id },
       data: {
-        nextCursor: exhausted ? null : nextCursor,
-        lastSuccessfulCursor: pagesCompleted > 0 ? `page_${page - 1}` : cursor.lastSuccessfulCursor,
-        lastCompletedAt: new Date(),
         exhaustedAt: exhausted ? new Date() : null,
         lastError: errors.length > 0 ? errors[errors.length - 1] : null,
       },
@@ -381,30 +411,31 @@ export class DiscoveryService {
       lotsDiscovered,
       lotsUpdated,
       newLots,
-      cursorAdvanced: pagesCompleted > 0,
+      checkpointAdvanced: pagesCompleted > 0,
       exhausted,
       terminalReason,
-      nextCursor: exhausted ? null : nextCursor,
+      nextPage: exhausted ? null : currentPage,
       errors,
     };
   }
 
-  /** Get cursor state for a provider. */
-  async getCursorState(provider: string): Promise<any[]> {
-    const cursors = await this.prisma.discoveryCursor.findMany({
+  /** Get checkpoint state for a provider. */
+  async getCheckpointState(provider: string): Promise<any[]> {
+    const checkpoints = await this.prisma.discoveryCheckpoint.findMany({
       where: { provider },
       orderBy: { updatedAt: 'desc' },
     });
-    return cursors.map((c) => ({
+    return checkpoints.map((c) => ({
       queryFingerprint: c.queryFingerprint,
-      nextCursor: c.nextCursor,
-      lastSuccessfulCursor: c.lastSuccessfulCursor,
+      lastPage: c.lastPage,
+      lastSuccessfulPage: c.lastSuccessfulPage,
       lastStartedAt: c.lastStartedAt,
       lastCompletedAt: c.lastCompletedAt,
       exhaustedAt: c.exhaustedAt,
       isExhausted: c.exhaustedAt !== null,
       lastError: c.lastError,
       contractVersion: c.contractVersion,
+      paginationType: 'page_based',
     }));
   }
 }

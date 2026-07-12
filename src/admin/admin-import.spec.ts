@@ -96,7 +96,7 @@ describe('AdminController — import operational status (Task 033R)', () => {
         { provide: CopartService, useValue: { sync: jest.fn() } },
         { provide: ProviderLeaseService, useValue: leaseService },
         { provide: RequestBudgetService, useValue: budgetService },
-        { provide: DiscoveryService, useValue: { getCursorState: jest.fn().mockResolvedValue([]) } },
+        { provide: DiscoveryService, useValue: { getCheckpointState: jest.fn().mockResolvedValue([]) } },
         { provide: AuctionSearchService, useValue: { search: jest.fn(), importLot: jest.fn() } },
         { provide: FreshnessSchedulerService, useValue: { getStatus: jest.fn(), pause: jest.fn(), resume: jest.fn(), updateCadence: jest.fn(), tick: jest.fn() } },
         { provide: PrismaService, useValue: prisma },

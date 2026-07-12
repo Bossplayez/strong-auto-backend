@@ -68,7 +68,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
   beforeEach(async () => {
     // Mock PrismaService with in-memory stores
     const discoveredLots = new Map();
-    const discoveryCursors = new Map();
+    const discoveryCheckpoints = new Map();
     const searchCache = new Map();
     const schedulerState = new Map();
     const vehicles = new Map();
@@ -148,31 +148,31 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
           return { count };
         }),
       },
-      discoveryCursor: {
+      discoveryCheckpoint: {
         upsert: jest.fn(({ where, create, update }) => {
           const key = `${where.provider_queryFingerprint?.provider}_${where.provider_queryFingerprint?.queryFingerprint}`;
-          const existing = discoveryCursors.get(key);
+          const existing = discoveryCheckpoints.get(key);
           if (existing) {
             const updated = { ...existing, ...update };
-            discoveryCursors.set(key, updated);
+            discoveryCheckpoints.set(key, updated);
             return updated;
           }
           const created = { id: `cursor-${Date.now()}`, ...create };
-          discoveryCursors.set(key, created);
+          discoveryCheckpoints.set(key, created);
           return created;
         }),
         update: jest.fn(({ where, data }) => {
-          for (const [key, cursor] of discoveryCursors.entries()) {
+          for (const [key, cursor] of discoveryCheckpoints.entries()) {
             if (cursor.id === where.id) {
               const updated = { ...cursor, ...data };
-              discoveryCursors.set(key, updated);
+              discoveryCheckpoints.set(key, updated);
               return updated;
             }
           }
           return null;
         }),
         findMany: jest.fn(({ where }) => {
-          let results = Array.from(discoveryCursors.values());
+          let results = Array.from(discoveryCheckpoints.values());
           if (where?.provider) results = results.filter((c) => c.provider === where.provider);
           return results;
         }),
@@ -340,8 +340,8 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
       expect(iaaiResult.provider).toBe('iaai');
 
       // Verify cursors are separate
-      const copartCursors = await discoveryService.getCursorState('copart');
-      const iaaiCursors = await discoveryService.getCursorState('iaai');
+      const copartCursors = await discoveryService.getCheckpointState('copart');
+      const iaaiCursors = await discoveryService.getCheckpointState('iaai');
       expect(copartCursors).toBeDefined();
       expect(iaaiCursors).toBeDefined();
     });
@@ -690,7 +690,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
   describe('Cursor resume', () => {
     it('20. resume uses existing cursor state', async () => {
       // Create existing cursor with progress
-      await prisma.discoveryCursor.upsert({
+      await prisma.discoveryCheckpoint.upsert({
         where: {
           provider_queryFingerprint: {
             provider: 'copart',
@@ -700,8 +700,8 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         create: {
           provider: 'copart',
           queryFingerprint: discoveryService.buildQueryFingerprint({ platform: 'copart' }),
-          nextCursor: 'page_5',
-          lastSuccessfulCursor: 'page_4',
+          lastPage: 4,
+          lastSuccessfulPage: 4,
           lastStartedAt: new Date(),
           lastCompletedAt: new Date(),
         },
@@ -713,13 +713,13 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
       expect(result.provider).toBe('copart');
       // Without API key mock, it will fail with configuration_error
       // But cursor state should still exist
-      const cursors = await discoveryService.getCursorState('copart');
+      const cursors = await discoveryService.getCheckpointState('copart');
       expect(cursors).toBeDefined();
     });
 
     it('21. exhausted cursor returns immediately', async () => {
       const fp = discoveryService.buildQueryFingerprint({ platform: 'copart' });
-      await prisma.discoveryCursor.upsert({
+      await prisma.discoveryCheckpoint.upsert({
         where: {
           provider_queryFingerprint: {
             provider: 'copart',
@@ -729,8 +729,8 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         create: {
           provider: 'copart',
           queryFingerprint: fp,
-          nextCursor: null,
-          lastSuccessfulCursor: 'page_100',
+          lastPage: null,
+          lastSuccessfulPage: 100,
           lastStartedAt: new Date(),
           lastCompletedAt: new Date(),
           exhaustedAt: new Date(),
