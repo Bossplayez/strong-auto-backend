@@ -1009,6 +1009,12 @@ model DiscoveredLot {
   freshnessTier         FreshnessTier      @default(COLD) @map("freshness_tier")
   consecutiveMisses     Int                @default(0) @map("consecutive_misses")
   availabilityConfirmed Boolean            @default(true) @map("availability_confirmed")
+  // Scheduler priority and deferral (Task 033T Phase 3)
+  priorityScore         Int?               @map("priority_score")
+  selectedAt            DateTime?          @map("selected_at")
+  deferredAt            DateTime?          @map("deferred_at")
+  deferralReason        String?            @map("deferral_reason")
+  attemptCost           Int                @default(1) @map("attempt_cost")
   // Import state
   state                 DiscoveredLotState @default(DISCOVERED) @map("state")
   vehicleId             String?            @map("vehicle_id")

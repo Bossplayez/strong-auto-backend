@@ -65,6 +65,12 @@ export interface SchedulerStatus {
   monthlyBudget: number;
   monthlyRemaining: number;
   remainingDays: number;
+  // Phase 3 extended fields
+  selectedToday: number;
+  deferredToday: number;
+  completedToday: number;
+  failedToday: number;
+  projectedMonthEndUsage: number;
 }
 
 export interface QuotaAllocation {
@@ -96,6 +102,68 @@ export class FreshnessSchedulerService {
     private readonly leaseService: ProviderLeaseService,
     private readonly budgetService: RequestBudgetService,
   ) {}
+
+  /**
+   * Calculate priority score for a lot.
+   *
+   * Priority factors (higher = more urgent):
+   * 1. Auction time proximity (closer = higher)
+   * 2. Active bidding (auctionState open/active)
+   * 3. Tracked/favorited (imported vehicles)
+   * 4. Buy Now availability
+   * 5. Most overdue nextRefreshAt
+   * 6. Stable lot ID tie-break
+   */
+  calculatePriorityScore(lot: {
+    ad?: Date | null;
+    auctionState?: string | null;
+    isBuyNow?: boolean;
+    vehicleId?: string | null;
+    nextRefreshAt?: Date | null;
+    externalLotId: string;
+  }, now: Date = new Date()): number {
+    let score = 0;
+
+    // 1. Auction time proximity (0-500 points)
+    if (lot.ad) {
+      const hoursUntilAuction = (new Date(lot.ad).getTime() - now.getTime()) / (1000 * 60 * 60);
+      if (hoursUntilAuction > 0 && hoursUntilAuction <= 24) {
+        score += Math.round(500 - (hoursUntilAuction * 20)); // 500 at 0h, 20 at 24h
+      } else if (hoursUntilAuction <= 0) {
+        score += 500; // auction started
+      }
+    }
+
+    // 2. Active bidding (200 points)
+    if (lot.auctionState === 'open' || lot.auctionState === 'active') {
+      score += 200;
+    }
+
+    // 3. Tracked/favorited — imported as vehicle (150 points)
+    if (lot.vehicleId) {
+      score += 150;
+    }
+
+    // 4. Buy Now (100 points)
+    if (lot.isBuyNow) {
+      score += 100;
+    }
+
+    // 5. Most overdue (0-100 points based on how overdue)
+    if (lot.nextRefreshAt) {
+      const overdueMs = now.getTime() - new Date(lot.nextRefreshAt).getTime();
+      if (overdueMs > 0) {
+        const overdueHours = overdueMs / (1000 * 60 * 60);
+        score += Math.min(100, Math.round(overdueHours * 2));
+      }
+    }
+
+    // 6. Stable tie-break: hash of lot ID (0-10 points)
+    const hash = lot.externalLotId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    score += hash % 10;
+
+    return score;
+  }
 
   /** Get or create the singleton scheduler state. */
   private async getState() {
@@ -178,7 +246,7 @@ export class FreshnessSchedulerService {
     const dailyEnvelope = this.calculateDailyEnvelope(monthlyRemaining, remainingDays);
     const tierBudgets = this.calculateTierBudgets(dailyEnvelope);
 
-    const [pendingHot, pendingWarm, pendingCold, totalDiscovered] = await Promise.all([
+    const [pendingHot, pendingWarm, pendingCold, totalDiscovered, selectedToday, deferredToday, completedToday, failedToday] = await Promise.all([
       this.prisma.discoveredLot.count({
         where: {
           freshnessTier: 'HOT',
@@ -203,7 +271,32 @@ export class FreshnessSchedulerService {
       this.prisma.discoveredLot.count({
         where: { state: { in: ['DISCOVERED', 'IMPORTED'] } },
       }),
+      // Selected today
+      this.prisma.discoveredLot.count({
+        where: { selectedAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+      }),
+      // Deferred today
+      this.prisma.discoveredLot.count({
+        where: { deferredAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+      }),
+      // Completed today (recently updated, not failed)
+      this.prisma.discoveredLot.count({
+        where: {
+          lastProviderUpdateAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+          consecutiveMisses: 0,
+        },
+      }),
+      // Failed today
+      this.prisma.discoveredLot.count({
+        where: {
+          lastProviderUpdateAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+          consecutiveMisses: { gt: 0 },
+        },
+      }),
     ]);
+
+    // Projected month-end usage = current usage + (dailyEnvelope × remainingDays)
+    const projectedMonthEndUsage = (budget.allocated ?? 0) + (dailyEnvelope * remainingDays);
 
     return {
       isPaused: state.isPaused,
@@ -224,6 +317,11 @@ export class FreshnessSchedulerService {
       monthlyBudget: budget.budget ?? 30000,
       monthlyRemaining,
       remainingDays,
+      selectedToday,
+      deferredToday,
+      completedToday,
+      failedToday,
+      projectedMonthEndUsage,
     };
   }
 
@@ -349,7 +447,7 @@ export class FreshnessSchedulerService {
   ): Promise<{ processed: number; deferred: number; requestsUsed: number; errors: string[] }> {
     const intervalMs = tier === 'HOT' ? state.hotIntervalMs : state.warmIntervalMs;
 
-    // Get ALL lots that need refresh, ordered by priority (oldest first)
+    // Get ALL lots that need refresh, ordered by priority score (highest first)
     const lots = await this.prisma.discoveredLot.findMany({
       where: {
         freshnessTier: tier,
@@ -357,7 +455,7 @@ export class FreshnessSchedulerService {
         state: { in: ['DISCOVERED', 'IMPORTED'] },
         availabilityConfirmed: true,
       },
-      take: tierBudget * 5, // fetch more than budget to calculate deferrals
+      take: tierBudget * 5,
       orderBy: { nextRefreshAt: 'asc' },
       select: {
         id: true,
@@ -368,6 +466,8 @@ export class FreshnessSchedulerService {
         ad: true,
         auctionState: true,
         isBuyNow: true,
+        vehicleId: true,
+        nextRefreshAt: true,
       },
     });
 
@@ -375,15 +475,50 @@ export class FreshnessSchedulerService {
       return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
     }
 
+    // Calculate priority scores and sort
+    const scored = lots
+      .map(lot => ({
+        ...lot,
+        priorityScore: this.calculatePriorityScore(lot, now),
+      }))
+      .sort((a, b) => b.priorityScore - a.priorityScore);
+
     // Split into "will refresh" and "will defer"
-    const toRefresh = lots.slice(0, tierBudget);
-    const toDefer = lots.slice(tierBudget);
+    const toRefresh = scored.slice(0, tierBudget);
+    const toDefer = scored.slice(tierBudget);
 
     this.logger.log(
       `Processing ${tier} tier: ${lots.length} lots eligible, ` +
-      `${toRefresh.length} to refresh (detail endpoint, ${toRefresh.length} requests), ` +
+      `${toRefresh.length} selected (detail, ${toRefresh.length} requests, priority ${toRefresh[0]?.priorityScore}-${toRefresh[toRefresh.length - 1]?.priorityScore}), ` +
       `${toDefer.length} deferred`,
     );
+
+    // Mark selected lots
+    for (const lot of toRefresh) {
+      await this.prisma.discoveredLot.update({
+        where: { id: lot.id },
+        data: {
+          priorityScore: lot.priorityScore,
+          selectedAt: now,
+          attemptCost: 1,
+          deferralReason: null,
+          deferredAt: null,
+        },
+      });
+    }
+
+    // Mark deferred lots
+    for (const lot of toDefer) {
+      await this.prisma.discoveredLot.update({
+        where: { id: lot.id },
+        data: {
+          priorityScore: lot.priorityScore,
+          deferredAt: now,
+          deferralReason: 'budget_exceeded',
+          nextRefreshAt: new Date(now.getTime() + intervalMs),
+        },
+      });
+    }
 
     // Refresh selected lots via detail endpoint
     // (In production, this would call providerFetch with /vehicles/{lotNumber})
@@ -428,19 +563,7 @@ export class FreshnessSchedulerService {
       }
     }
 
-    // Defer remaining lots — extend their nextRefreshAt
-    let deferred = 0;
-    for (const lot of toDefer) {
-      await this.prisma.discoveredLot.update({
-        where: { id: lot.id },
-        data: {
-          nextRefreshAt: new Date(now.getTime() + intervalMs),
-        },
-      });
-      deferred++;
-    }
-
-    return { processed, deferred, requestsUsed: toRefresh.length, errors };
+    return { processed, deferred: toDefer.length, requestsUsed: toRefresh.length, errors };
   }
 
   /** Classify a lot into a freshness tier. */
