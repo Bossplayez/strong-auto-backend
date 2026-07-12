@@ -59,7 +59,7 @@ function clearAuthCookies(res: Response) {
 
 @ApiTags('Auth')
 @Controller('auth')
-@Throttle({ auth: { ttl: 60_000, limit: 10 } })
+@Throttle({ auth: { ttl: 60_000, limit: Number(process.env.THROTTLE_AUTH_LIMIT) || 10 } })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

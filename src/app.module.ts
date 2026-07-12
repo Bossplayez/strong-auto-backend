@@ -34,22 +34,22 @@ import { validateEnv } from './config/env.validation';
       validate: validateEnv,
     }),
 
-    // Global rate limiting — default: 60 req/min per IP
+    // Global rate limiting — production-safe defaults, env-overridable for testing
     ThrottlerModule.forRoot([
       {
         name: 'default',
         ttl: 60_000,
-        limit: 60,
+        limit: Number(process.env.THROTTLE_DEFAULT_LIMIT) || 60,
       },
       {
         name: 'auth',
         ttl: 60_000,
-        limit: 10,
+        limit: Number(process.env.THROTTLE_AUTH_LIMIT) || 10,
       },
       {
         name: 'auction',
         ttl: 60_000,
-        limit: 30,
+        limit: Number(process.env.THROTTLE_AUCTION_LIMIT) || 30,
       },
     ]),
 
