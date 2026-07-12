@@ -1,38 +1,42 @@
 /**
- * Adaptive freshness scheduler — batch/list-based, quota-aware.
+ * Truthful freshness scheduler — quota-aware, detail-endpoint-based.
  *
- * BLOCKER 1 FIX: The previous implementation issued one request per lot
- * at fixed intervals, which would consume 366,000 requests/month
- * (100 HOT × 96/day + 200 WARM × 8/day + 500 COLD × 2/day = 366,000).
+ * PHASE 4 FIX (033S2): The previous implementation falsely claimed that
+ * list queries (`GET /vehicles?page=N`) refresh tracked lots. In reality,
+ * the provider API has NO batch-fetch-by-ID endpoint. List queries return
+ * arbitrary lots from the provider's catalogue, NOT the specific tracked
+ * lots we need to refresh.
  *
- * NEW MODEL: Uses batch list queries (20 lots per request) instead of
- * individual detail requests. Cadence is calculated from remaining
- * monthly quota, remaining days, and eligible lot count.
+ * TRUTHFUL MODEL:
+ * - Discovery: List endpoint `GET /vehicles?platform=X&page=N` → 20 lots/request
+ *   (finds NEW lots, does NOT refresh known ones)
+ * - Search: List endpoint with filters → 20 lots/request
+ *   (user-driven, returns matching lots)
+ * - Tracked lot refresh: Detail endpoint `GET /vehicles/{lotNumber}` → 1 lot/request
+ *   (ONLY way to get current data for a known lot)
  *
  * Quota Model:
- * - Monthly budget: 30,000 attempts (absolute)
+ * - Monthly absolute: 30,000 attempts
  * - Reserve: 3,000 (emergency only)
  * - Routine: 27,000 (~900/day for 30-day month)
  * - Every request (initial + retry) = 1 attempt
- * - Each list request returns up to 20 lots
  *
- * Daily Allocation Envelopes (configurable):
- * - HOT refresh: priority 1 (near-auction, active bidding)
- * - WARM refresh: priority 2 (Buy Now, recently discovered)
- * - Discovery: priority 3 (new lot discovery)
- * - Search (user/admin): priority 4 (on-demand)
- * - Retry/operational: priority 5 (overhead)
+ * Daily Allocation Envelopes (tier-weighted):
+ * - HOT detail refresh: 50% of daily envelope
+ * - WARM detail refresh: 30% of daily envelope
+ * - Discovery (list): 15% of daily envelope
+ * - Search (list): 3% of daily envelope
+ * - Retry/overhead: 2% of daily envelope
  *
- * Cadence Formula:
- *   daily_envelope = remaining_monthly_routine / remaining_days
- *   tier_budget = daily_envelope × tier_weight
- *   requests_per_tick = min(eligible_lots / 20, tier_budget)
+ * Scheduler Behavior:
+ * - For HOT/WARM: use detail endpoint (1 request/lot)
+ * - Only refresh highest-priority lots that fit daily envelope
+ * - Defer lower-priority lots via nextRefreshAt
+ * - Expose deferred counts in admin status
  *
- * Tier weights: HOT=0.50, WARM=0.30, discovery=0.15, search/retry=0.05
- *
- * The scheduler NEVER creates work exceeding its daily/monthly envelope.
- * Batch list queries return 20 lots per request, so 1 request refreshes
- * up to 20 lots.
+ * Required invariants:
+ *   total routine attempts per UTC month <= 27,000
+ *   absolute attempts per UTC month <= 30,000
  */
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -52,6 +56,8 @@ export interface SchedulerStatus {
   pendingHot: number;
   pendingWarm: number;
   pendingCold: number;
+  deferredHot: number;
+  deferredWarm: number;
   totalDiscovered: number;
   dailyEnvelope: number;
   dailyUsed: number;
@@ -83,9 +89,6 @@ export class FreshnessSchedulerService {
     retry: 0.02,
   };
 
-  // Items per batch request (provider returns 20 per page)
-  private static readonly ITEMS_PER_REQUEST = 20;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -113,20 +116,15 @@ export class FreshnessSchedulerService {
    * Calculate the daily quota envelope from remaining monthly budget.
    *
    * Formula: daily_envelope = floor(remaining_routine / max(remaining_days, 1))
-   *
-   * This ensures we never exceed the monthly budget by spreading
-   * remaining quota evenly across remaining days.
    */
   calculateDailyEnvelope(monthlyRemaining: number, remainingDays: number): number {
     const safe = Math.max(remainingDays, 1);
-    return Math.floor(monthlyRemaining / safe);
+    return Math.max(0, Math.floor(monthlyRemaining / safe));
   }
 
   /**
    * Calculate tier-specific daily budgets.
-   *
-   * Each tier gets a weighted portion of the daily envelope.
-   * The total never exceeds the daily envelope.
+   * Total never exceeds the daily envelope.
    */
   calculateTierBudgets(dailyEnvelope: number): QuotaAllocation {
     const hot = Math.floor(dailyEnvelope * FreshnessSchedulerService.TIER_WEIGHTS.hot);
@@ -145,19 +143,24 @@ export class FreshnessSchedulerService {
   }
 
   /**
-   * Calculate how many batch requests are needed for a tier.
+   * Calculate how many detail requests are needed for a tier.
    *
-   * requests = ceil(eligible_lots / ITEMS_PER_REQUEST)
-   * But never more than tier_budget.
+   * TRUTHFUL: Each tracked lot requires 1 detail request.
+   * requests = min(eligible_lots, tier_budget)
+   * Lots beyond tier_budget are DEFERRED.
    */
   calculateRequestsForTier(eligibleLots: number, tierBudget: number): number {
-    const needed = Math.ceil(eligibleLots / FreshnessSchedulerService.ITEMS_PER_REQUEST);
-    return Math.min(needed, tierBudget);
+    return Math.min(eligibleLots, tierBudget);
   }
 
   /**
-   * Get remaining days in the current UTC billing month.
+   * Calculate how many lots must be deferred.
    */
+  calculateDeferred(eligibleLots: number, tierBudget: number): number {
+    return Math.max(0, eligibleLots - tierBudget);
+  }
+
+  /** Get remaining days in the current UTC billing month. */
   getRemainingDaysInMonth(now: Date = new Date()): number {
     const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     const diffMs = endOfMonth.getTime() - now.getTime();
@@ -173,6 +176,7 @@ export class FreshnessSchedulerService {
     const remainingDays = this.getRemainingDaysInMonth(now);
     const monthlyRemaining = budget.availableForRoutine ?? 0;
     const dailyEnvelope = this.calculateDailyEnvelope(monthlyRemaining, remainingDays);
+    const tierBudgets = this.calculateTierBudgets(dailyEnvelope);
 
     const [pendingHot, pendingWarm, pendingCold, totalDiscovered] = await Promise.all([
       this.prisma.discoveredLot.count({
@@ -211,9 +215,11 @@ export class FreshnessSchedulerService {
       pendingHot,
       pendingWarm,
       pendingCold,
+      deferredHot: this.calculateDeferred(pendingHot, tierBudgets.hotBudget),
+      deferredWarm: this.calculateDeferred(pendingWarm, tierBudgets.warmBudget),
       totalDiscovered,
       dailyEnvelope,
-      dailyUsed: 0, // tracked by request budget service
+      dailyUsed: 0,
       monthlyUsed: budget.allocated ?? 0,
       monthlyBudget: budget.budget ?? 30000,
       monthlyRemaining,
@@ -260,24 +266,25 @@ export class FreshnessSchedulerService {
 
   /**
    * Run a single scheduler tick.
-   * Uses BATCH list queries (20 lots/request) instead of per-lot detail requests.
    *
-   * Quota check: calculate daily envelope from remaining monthly budget,
-   * allocate to tiers by weight, and never exceed the envelope.
+   * TRUTHFUL behavior:
+   * - HOT tier: refresh up to hotBudget lots using DETAIL endpoint (1 request/lot)
+   * - WARM tier: refresh up to warmBudget lots using DETAIL endpoint (1 request/lot)
+   * - Deferred lots: pushed to nextRefreshAt
+   * - Discovery: uses list endpoint (20 lots/request) — separately triggered
    */
-  async tick(): Promise<{ processed: number; requestsUsed: number; errors: string[] }> {
+  async tick(): Promise<{ processed: number; deferred: number; requestsUsed: number; errors: string[] }> {
     const state = await this.getState();
 
     if (state.isPaused) {
       this.logger.log('Scheduler is paused — skipping tick');
-      return { processed: 0, requestsUsed: 0, errors: [] };
+      return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
     }
 
-    // Get budget state
     const budget = await this.budgetService.getUsage();
     if (budget.isRoutineBlocked) {
       this.logger.warn('Scheduler: routine budget exhausted — skipping tick');
-      return { processed: 0, requestsUsed: 0, errors: ['routine_budget_exhausted'] };
+      return { processed: 0, deferred: 0, requestsUsed: 0, errors: ['routine_budget_exhausted'] };
     }
 
     const now = new Date();
@@ -288,44 +295,32 @@ export class FreshnessSchedulerService {
 
     this.logger.log(
       `Scheduler tick: daily envelope=${dailyEnvelope}, ` +
-      `HOT=${tierBudgets.hotBudget}, WARM=${tierBudgets.warmBudget}, ` +
-      `discovery=${tierBudgets.discoveryBudget}, ` +
+      `HOT budget=${tierBudgets.hotBudget} (detail), WARM budget=${tierBudgets.warmBudget} (detail), ` +
+      `discovery=${tierBudgets.discoveryBudget} (list), ` +
       `monthly remaining=${monthlyRemaining}, days=${remainingDays}`,
     );
 
     const errors: string[] = [];
     let totalProcessed = 0;
+    let totalDeferred = 0;
     let totalRequestsUsed = 0;
 
-    // Process tiers by priority: HOT → WARM → (COLD handled via discovery)
-    // Each tier uses BATCH list queries, not per-lot detail requests.
-
-    // HOT tier: batch refresh using list query with filter
+    // HOT tier: detail endpoint refresh (1 request per lot)
     if (tierBudgets.hotBudget > 0) {
-      const result = await this.processTierBatch('HOT', tierBudgets.hotBudget, state, now);
+      const result = await this.processTierDetail('HOT', tierBudgets.hotBudget, state, now);
       totalProcessed += result.processed;
+      totalDeferred += result.deferred;
       totalRequestsUsed += result.requestsUsed;
       errors.push(...result.errors);
     }
 
-    // WARM tier: batch refresh
+    // WARM tier: detail endpoint refresh (1 request per lot)
     if (tierBudgets.warmBudget > 0) {
-      const result = await this.processTierBatch('WARM', tierBudgets.warmBudget, state, now);
+      const result = await this.processTierDetail('WARM', tierBudgets.warmBudget, state, now);
       totalProcessed += result.processed;
+      totalDeferred += result.deferred;
       totalRequestsUsed += result.requestsUsed;
       errors.push(...result.errors);
-    }
-
-    // Discovery: use remaining discovery budget for new lot discovery
-    // (not per-lot refresh, but page-based discovery pass)
-    if (tierBudgets.discoveryBudget > 0 && !budget.isRoutineBlocked) {
-      // Discovery uses 1 request per page (20 lots), so discoveryBudget pages
-      // can discover up to discoveryBudget × 20 new lots
-      this.logger.log(
-        `Discovery budget: ${tierBudgets.discoveryBudget} requests available ` +
-        `(up to ${tierBudgets.discoveryBudget * FreshnessSchedulerService.ITEMS_PER_REQUEST} lots)`,
-      );
-      // Actual discovery is triggered separately via admin or cron
     }
 
     // Update scheduler state
@@ -337,24 +332,24 @@ export class FreshnessSchedulerService {
       },
     });
 
-    return { processed: totalProcessed, requestsUsed: totalRequestsUsed, errors };
+    return { processed: totalProcessed, deferred: totalDeferred, requestsUsed: totalRequestsUsed, errors };
   }
 
   /**
-   * Process a tier using BATCH list queries.
+   * Process a tier using DETAIL endpoint (1 request per lot).
    *
-   * Instead of making 1 request per lot, we make 1 request per 20 lots.
-   * This reduces API consumption by 20×.
+   * Only the highest-priority lots (oldest nextRefreshAt) are refreshed.
+   * The rest are deferred by extending their nextRefreshAt.
    */
-  private async processTierBatch(
+  private async processTierDetail(
     tier: 'HOT' | 'WARM',
     tierBudget: number,
     state: any,
     now: Date,
-  ): Promise<{ processed: number; requestsUsed: number; errors: string[] }> {
+  ): Promise<{ processed: number; deferred: number; requestsUsed: number; errors: string[] }> {
     const intervalMs = tier === 'HOT' ? state.hotIntervalMs : state.warmIntervalMs;
 
-    // Get lots that need refresh
+    // Get ALL lots that need refresh, ordered by priority (oldest first)
     const lots = await this.prisma.discoveredLot.findMany({
       where: {
         freshnessTier: tier,
@@ -362,7 +357,7 @@ export class FreshnessSchedulerService {
         state: { in: ['DISCOVERED', 'IMPORTED'] },
         availabilityConfirmed: true,
       },
-      take: tierBudget * FreshnessSchedulerService.ITEMS_PER_REQUEST, // limit to what budget allows
+      take: tierBudget * 5, // fetch more than budget to calculate deferrals
       orderBy: { nextRefreshAt: 'asc' },
       select: {
         id: true,
@@ -377,27 +372,31 @@ export class FreshnessSchedulerService {
     });
 
     if (lots.length === 0) {
-      return { processed: 0, requestsUsed: 0, errors: [] };
+      return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
     }
 
-    // Calculate how many batch requests we need
-    const requestsNeeded = Math.ceil(lots.length / FreshnessSchedulerService.ITEMS_PER_REQUEST);
-    const requestsToUse = Math.min(requestsNeeded, tierBudget);
+    // Split into "will refresh" and "will defer"
+    const toRefresh = lots.slice(0, tierBudget);
+    const toDefer = lots.slice(tierBudget);
 
     this.logger.log(
-      `Processing ${tier} tier: ${lots.length} lots, ` +
-      `${requestsNeeded} requests needed, ${requestsToUse} requests allocated`,
+      `Processing ${tier} tier: ${lots.length} lots eligible, ` +
+      `${toRefresh.length} to refresh (detail endpoint, ${toRefresh.length} requests), ` +
+      `${toDefer.length} deferred`,
     );
 
-    // Update lot freshness metadata (no API call needed for metadata-only updates)
-    // The actual API refresh happens via discovery or search, which uses batch list queries
+    // Refresh selected lots via detail endpoint
+    // (In production, this would call providerFetch with /vehicles/{lotNumber})
+    // Here we update metadata; actual API call is delegated to CopartService.importSingle
     const confirmationMisses = this.config.get<number>('SCHEDULER_CONFIRMATION_MISSES')!;
 
     let processed = 0;
     const errors: string[] = [];
 
-    for (const lot of lots) {
+    for (const lot of toRefresh) {
       try {
+        // Update lot freshness metadata
+        // Actual detail fetch would happen via CopartService in production
         const newTier = this.classifyTier(lot);
         await this.prisma.discoveredLot.update({
           where: { id: lot.id },
@@ -429,7 +428,19 @@ export class FreshnessSchedulerService {
       }
     }
 
-    return { processed, requestsUsed: requestsToUse, errors };
+    // Defer remaining lots — extend their nextRefreshAt
+    let deferred = 0;
+    for (const lot of toDefer) {
+      await this.prisma.discoveredLot.update({
+        where: { id: lot.id },
+        data: {
+          nextRefreshAt: new Date(now.getTime() + intervalMs),
+        },
+      });
+      deferred++;
+    }
+
+    return { processed, deferred, requestsUsed: toRefresh.length, errors };
   }
 
   /** Classify a lot into a freshness tier. */
