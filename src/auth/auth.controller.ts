@@ -30,7 +30,7 @@ function setAuthCookies(res: Response, accessToken: string, refreshToken: string
   const common = {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'none' as const,
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
     path: '/',
   };
   res.cookie(ACCESS_COOKIE, accessToken, {
@@ -50,7 +50,7 @@ function clearAuthCookies(res: Response) {
 
 @ApiTags('Auth')
 @Controller('auth')
-@Throttle({ auth: { ttl: 60_000, limit: 10 } })
+@Throttle({ auth: { ttl: 60_000, limit: 100 } })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

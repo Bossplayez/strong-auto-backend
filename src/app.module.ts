@@ -39,17 +39,17 @@ import { validateEnv } from './config/env.validation';
       {
         name: 'default',
         ttl: 60_000,
-        limit: 60,
+        limit: 1000,
       },
       {
         name: 'auth',
         ttl: 60_000,
-        limit: 10,
+        limit: 1000,
       },
       {
         name: 'auction',
         ttl: 60_000,
-        limit: 30,
+        limit: 1000,
       },
     ]),
 
