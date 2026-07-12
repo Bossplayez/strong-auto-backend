@@ -80,6 +80,7 @@ enum ImportJobStatus {
   SUCCESS
   PARTIAL_SUCCESS
   FAILED
+  ABANDONED
 }
 
 enum NewsStatus {
@@ -788,6 +789,40 @@ model ImportJob {
 
   @@index([provider, status, startedAt])
   @@map("import_jobs")
+}
+
+model ProviderLease {
+  id           String   @id @default(uuid()) @map("id")
+  provider     String   @unique @map("provider")
+  ownerToken   String   @map("owner_token")
+  fencingToken Int      @map("fencing_token")
+  acquiredAt   DateTime @map("acquired_at")
+  heartbeatAt  DateTime @map("heartbeat_at")
+  expiresAt    DateTime @map("expires_at")
+  importJobId  String?  @map("import_job_id")
+
+  @@map("provider_leases")
+}
+
+model ProviderRequestBudget {
+  id                    String   @id @default(uuid()) @map("id")
+  provider              String   @map("provider")
+  billingMonth          String   @map("billing_month")
+  totalAttempts         Int      @default(0) @map("total_attempts")
+  retryCount            Int      @default(0) @map("retry_count")
+  successCount          Int      @default(0) @map("success_count")
+  failureCountTimeout   Int      @default(0) @map("failure_count_timeout")
+  failureCountRateLimit Int      @default(0) @map("failure_count_rate_limit")
+  failureCountServer    Int      @default(0) @map("failure_count_server")
+  failureCountNetwork   Int      @default(0) @map("failure_count_network")
+  failureCountClient    Int      @default(0) @map("failure_count_client")
+  quotaRemaining        Int?     @map("quota_remaining")
+  quotaResetEpochMs     BigInt?  @map("quota_reset_epoch_ms")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, billingMonth])
+  @@map("provider_request_budgets")
 }
 
 model ProviderWebhook {

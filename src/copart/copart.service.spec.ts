@@ -13,6 +13,8 @@ import { Logger } from '@nestjs/common';
 import { CopartService } from './copart.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
+import { ProviderLeaseService } from './provider-lease.service';
+import { RequestBudgetService } from './request-budget.service';
 import { providerFetch, type ProviderFetchOutcome, type ProviderFetchConfig } from './provider-fetch';
 
 // ── Jest mock setup ───────────────────────────────────────────
@@ -56,6 +58,11 @@ function makeConfigService(overrides: Record<string, number | string> = {}): Con
     IMPORT_INITIAL_RETRY_DELAY_MS: 10,
     IMPORT_MAX_RETRY_DELAY_MS: 100,
     IMPORT_JOB_TIMEOUT_MS: 60000,
+    IMPORT_LEASE_TTL_MS: 60000,
+    IMPORT_HEARTBEAT_INTERVAL_MS: 5000,
+    IMPORT_MONTHLY_REQUEST_BUDGET: 30000,
+    IMPORT_MONTHLY_REQUEST_RESERVE: 3000,
+    IMPORT_BUDGET_WARNING_PERCENT: 80,
     ...overrides,
   };
   return {
@@ -121,15 +128,69 @@ function makeVehiclesMock() {
   };
 }
 
+/** Standard mock ProviderLeaseService. */
+function makeLeaseMock(overrides: any = {}) {
+  return {
+    claim: jest.fn().mockResolvedValue({
+      claimed: true,
+      ownerToken: 'test-owner-token',
+      fencingToken: 1,
+      lease: { provider: 'copart', fencingToken: 1, isExpired: false },
+      conflictingLease: null,
+    }),
+    renew: jest.fn().mockResolvedValue({ renewed: true, expiresAt: new Date(Date.now() + 60000) }),
+    release: jest.fn().mockResolvedValue({ released: true }),
+    verifyOwnership: jest.fn().mockResolvedValue(true),
+    getState: jest.fn().mockResolvedValue(null),
+    recoverStaleJobs: jest.fn().mockResolvedValue({ recoveredJobIds: [] }),
+    ...overrides,
+  };
+}
+
+/** Standard mock RequestBudgetService. */
+function makeBudgetMock(overrides: any = {}) {
+  const usage = {
+    provider: 'copart',
+    billingMonth: '2026-07',
+    totalAttempts: 0,
+    retryCount: 0,
+    successCount: 0,
+    failureCounts: { timeout: 0, rateLimit: 0, server: 0, network: 0, client: 0 },
+    quotaRemaining: null,
+    quotaResetEpochMs: null,
+    budget: 30000,
+    reserve: 3000,
+    availableForRoutineWork: 27000,
+    percentageUsed: 0,
+    isWarning: false,
+    isHardStop: false,
+  };
+  return {
+    get budget() { return 30000; },
+    get reserve() { return 3000; },
+    get warningPercent() { return 80; },
+    availableForRoutine: jest.fn(() => 27000),
+    record: jest.fn().mockResolvedValue({ recorded: true, currentUsage: usage }),
+    getUsage: jest.fn().mockResolvedValue(usage),
+    canMakeRoutineRequest: jest.fn().mockResolvedValue({ allowed: true, usage }),
+    canMakeManualRequest: jest.fn().mockResolvedValue({ allowed: true, usage }),
+    ...overrides,
+  };
+}
+
 /** Build a test module with CopartService and all mocked deps. */
 async function makeService(opts: {
   config?: ConfigService;
   prisma?: any;
   vehicles?: any;
+  lease?: any;
+  budget?: any;
 } = {}) {
   const prisma = opts.prisma ?? makePrismaMock();
   const vehicles = opts.vehicles ?? makeVehiclesMock();
   const config = opts.config ?? makeConfigService();
+  const lease = opts.lease ?? makeLeaseMock();
+  const budget = opts.budget ?? makeBudgetMock();
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -137,6 +198,8 @@ async function makeService(opts: {
       { provide: PrismaService, useValue: prisma },
       { provide: VehiclesService, useValue: vehicles },
       { provide: ConfigService, useValue: config },
+      { provide: ProviderLeaseService, useValue: lease },
+      { provide: RequestBudgetService, useValue: budget },
     ],
   }).compile();
 
@@ -147,7 +210,7 @@ async function makeService(opts: {
   jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
   jest.spyOn(service['logger'], 'error').mockImplementation(() => undefined);
 
-  return { service, prisma, vehicles, config };
+  return { service, prisma, vehicles, config, lease, budget };
 }
 
 /** Extract the last importJob.update call's summaryJsonb. */
@@ -717,6 +780,11 @@ describe('CopartService — no API key configured', () => {
         IMPORT_INITIAL_RETRY_DELAY_MS: 10,
         IMPORT_MAX_RETRY_DELAY_MS: 100,
         IMPORT_JOB_TIMEOUT_MS: 60000,
+        IMPORT_LEASE_TTL_MS: 60000,
+        IMPORT_HEARTBEAT_INTERVAL_MS: 5000,
+        IMPORT_MONTHLY_REQUEST_BUDGET: 30000,
+        IMPORT_MONTHLY_REQUEST_RESERVE: 3000,
+        IMPORT_BUDGET_WARNING_PERCENT: 80,
       };
       return values[key];
     });

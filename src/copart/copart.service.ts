@@ -9,6 +9,8 @@ import {
   type FetchFailureKind,
 } from './provider-fetch';
 import { validateProviderResponse, type MalformedReason } from './response-validator';
+import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
+import { RequestBudgetService } from './request-budget.service';
 
 interface PageFailure {
   page: number;
@@ -69,6 +71,8 @@ export class CopartService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly vehiclesService: VehiclesService,
+    private readonly leaseService: ProviderLeaseService,
+    private readonly budgetService: RequestBudgetService,
   ) {}
 
   /** Build a ProviderFetchConfig from validated env vars. */
@@ -161,6 +165,18 @@ export class CopartService {
     const fetchConfig = this.getFetchConfig();
     fetchConfig.jobDeadlineMs = jobDeadlineMs;
 
+    // ── Lease management ──
+    const providerId: ProviderId = platform;
+    const leaseTtlMs = this.config.get<number>('IMPORT_LEASE_TTL_MS')!;
+    const heartbeatIntervalMs = this.config.get<number>('IMPORT_HEARTBEAT_INTERVAL_MS')!;
+    const ownerToken = `${jobId}-${crypto.randomUUID()}`;
+    let currentFencingToken = 0;
+    let lastHeartbeatMs = Date.now();
+
+    // ── Budget gate state ──
+    let budgetExhausted = false;
+    let budgetUsage: Awaited<ReturnType<RequestBudgetService['getUsage']>> | null = null;
+
     try {
       const apiKey = this.config.get('RAPIDAPI_KEY');
 
@@ -196,6 +212,48 @@ export class CopartService {
         return;
       }
 
+      // ── Claim lease ──
+      const claimResult = await this.leaseService.claim(
+        providerId,
+        ownerToken,
+        leaseTtlMs,
+        jobId,
+      );
+
+      if (!claimResult.claimed || !claimResult.fencingToken) {
+        this.logger.warn(
+          `Could not claim lease for ${platform}: held by another owner`,
+        );
+        await this.prisma.importJob.update({
+          where: { id: jobId },
+          data: {
+            status: 'FAILED',
+            finishedAt: new Date(),
+            summaryJsonb: {
+              provider: platform,
+              terminalReason: 'configuration_error',
+              failureCode: 'lease_lost',
+              note: 'Another owner holds the provider lease',
+              jobDurationMs: Date.now() - jobStartMs,
+            } as any,
+          },
+        });
+        return;
+      }
+
+      currentFencingToken = claimResult.fencingToken;
+
+      // Recover stale jobs from the previous (expired) lease owner
+      await this.leaseService.recoverStaleJobs(providerId, jobId);
+
+      // ── Check budget before starting ──
+      const budgetCheck = await this.budgetService.canMakeRoutineRequest(providerId);
+      if (!budgetCheck.allowed) {
+        this.logger.warn(`Budget hard-stop for ${platform}: ${budgetCheck.usage.totalAttempts}/${budgetCheck.usage.budget} (reserve: ${budgetCheck.usage.reserve})`);
+        budgetExhausted = true;
+      }
+      budgetUsage = budgetCheck.usage;
+
       const headers = {
         'x-rapidapi-host': this.RAPIDAPI_HOST,
         'x-rapidapi-key': apiKey,
@@ -229,6 +287,13 @@ export class CopartService {
       let itemsReceived = 0;
 
       while (page <= this.maxPages) {
+        // ── Budget gate: stop routine work before consuming reserve ──
+        if (budgetExhausted) {
+          terminalReason = terminalReason ?? 'all_pages_failed';
+          this.logger.warn(`Stopping pagination: budget exhausted (routine reserve protection)`);
+          break;
+        }
+
         const remaining = jobDeadlineMs - Date.now();
         if (remaining <= 0) {
           this.logger.warn(`Import job deadline (${jobTimeoutMs}ms) reached at page ${page}`);
@@ -237,7 +302,48 @@ export class CopartService {
           break;
         }
 
+        // ── Lease ownership verification before HTTP request ──
+        const stillOwner = await this.leaseService.verifyOwnership(
+          providerId,
+          ownerToken,
+          currentFencingToken,
+        );
+        if (!stillOwner) {
+          this.logger.error(`Lost lease ownership for ${platform} before page ${page} — aborting`);
+          terminalReason = 'all_pages_failed';
+          break;
+        }
+
+        // ── Heartbeat: renew lease if interval has passed ──
+        if (Date.now() - lastHeartbeatMs >= heartbeatIntervalMs) {
+          const renewResult = await this.leaseService.renew(
+            providerId,
+            ownerToken,
+            currentFencingToken,
+            leaseTtlMs,
+          );
+          if (!renewResult.renewed) {
+            this.logger.error(`Heartbeat renewal failed for ${platform} — lost lease`);
+            terminalReason = 'all_pages_failed';
+            break;
+          }
+          lastHeartbeatMs = Date.now();
+        }
+
         pagesAttempted++;
+
+        // ── Budget gate: check before making HTTP request ──
+        const routineBudgetCheck = await this.budgetService.canMakeRoutineRequest(providerId);
+        if (!routineBudgetCheck.allowed) {
+          budgetExhausted = true;
+          budgetUsage = routineBudgetCheck.usage;
+          this.logger.warn(
+            `Budget hard-stop at page ${page}: ${routineBudgetCheck.usage.totalAttempts}/${routineBudgetCheck.usage.budget} (reserve: ${routineBudgetCheck.usage.reserve})`,
+          );
+          terminalReason = 'all_pages_failed';
+          break;
+        }
+        budgetUsage = routineBudgetCheck.usage;
 
         const url = `${this.RAPIDAPI_BASE}/vehicles?platform=${platform}&page=${page}&limit=${this.BATCH_SIZE}`;
         this.logger.log(`Fetching ${platform} page ${page}/${this.maxPages} (remaining: ${Math.floor(remaining / 1000)}s)`);
@@ -247,6 +353,26 @@ export class CopartService {
           headers,
           { ...fetchConfig, jobDeadlineMs },
           this.logger,
+        );
+
+        // ── Budget accounting: record actual HTTP attempts ──
+        const success = result.ok ? 1 : 0;
+        const retries = result.attempts - 1;
+        const failureDelta: Record<string, number> = {};
+        if (!result.ok) {
+          const f = result.failure;
+          if (f.kind === 'HTTP_429') failureDelta.rateLimit = 1;
+          else if (f.kind === 'HTTP_5XX') failureDelta.server = 1;
+          else if (f.kind === 'NETWORK_ERROR') failureDelta.network = 1;
+          else if (f.kind === 'HTTP_4XX') failureDelta.client = 1;
+          else if (f.kind === 'ABORTED' || f.kind === 'DEADLINE_EXCEEDED') failureDelta.timeout = 1;
+        }
+        await this.budgetService.record(
+          providerId,
+          result.attempts,
+          success,
+          retries,
+          failureDelta,
         );
 
         if (!result.ok) {
@@ -437,6 +563,18 @@ export class CopartService {
         }
       }
 
+      // ── Verify ownership before finalization (fencing) ──
+      const ownsBeforeFinalize = await this.leaseService.verifyOwnership(
+        providerId,
+        ownerToken,
+        currentFencingToken,
+      );
+      if (!ownsBeforeFinalize) {
+        this.logger.error(`Lost lease ownership for ${platform} before finalization — cannot write terminal status`);
+        // Cannot safely finalize — another owner may be writing
+        return;
+      }
+
       const jobDurationMs = Date.now() - jobStartMs;
       await this.prisma.importJob.update({
         where: { id: jobId },
@@ -460,14 +598,31 @@ export class CopartService {
             terminalReason,
             jobDurationMs,
             maxPagesConfig: this.maxPages,
+            budgetUsage: budgetUsage ? {
+              totalAttempts: budgetUsage.totalAttempts,
+              budget: budgetUsage.budget,
+              reserve: budgetUsage.reserve,
+              percentageUsed: budgetUsage.percentageUsed,
+              isWarning: budgetUsage.isWarning,
+              isHardStop: budgetUsage.isHardStop,
+            } : null,
           } as any,
         },
       });
+
+      // ── Release lease after successful finalization ──
+      await this.leaseService.release(providerId, ownerToken, currentFencingToken);
 
       this.logger.log(
         `Import job ${jobId} completed: ${created} created, ${updated} updated, ${skipped} skipped, ${errors} errors [${terminalReason}]`,
       );
     } catch (error) {
+      // ── Try to release lease on unexpected error ──
+      if (currentFencingToken > 0) {
+        try {
+          await this.leaseService.release(providerId, ownerToken, currentFencingToken);
+        } catch { /* best effort */ }
+      }
       await this.prisma.importJob.update({
         where: { id: jobId },
         data: {

@@ -8,6 +8,15 @@ const importConfigSchema = z.object({
   IMPORT_INITIAL_RETRY_DELAY_MS: z.coerce.number().int().min(100).max(5000).default(500),
   IMPORT_MAX_RETRY_DELAY_MS: z.coerce.number().int().min(500).max(30000).default(10000),
   IMPORT_JOB_TIMEOUT_MS: z.coerce.number().int().min(10000).max(900000).default(300000),
+
+  // ── Phase 2: Lease / heartbeat ──
+  IMPORT_LEASE_TTL_MS: z.coerce.number().int().min(1000).max(600000).default(60000),
+  IMPORT_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(1000).max(300000).default(15000),
+
+  // ── Phase 3: Monthly request budget ──
+  IMPORT_MONTHLY_REQUEST_BUDGET: z.coerce.number().int().min(1).max(10000000).default(30000),
+  IMPORT_MONTHLY_REQUEST_RESERVE: z.coerce.number().int().min(0).max(10000000).default(3000),
+  IMPORT_BUDGET_WARNING_PERCENT: z.coerce.number().int().min(1).max(100).default(80),
 });
 
 const envSchema = z.object({
@@ -72,6 +81,11 @@ const envSchema = z.object({
   IMPORT_INITIAL_RETRY_DELAY_MS: importConfigSchema.shape.IMPORT_INITIAL_RETRY_DELAY_MS,
   IMPORT_MAX_RETRY_DELAY_MS: importConfigSchema.shape.IMPORT_MAX_RETRY_DELAY_MS,
   IMPORT_JOB_TIMEOUT_MS: importConfigSchema.shape.IMPORT_JOB_TIMEOUT_MS,
+  IMPORT_LEASE_TTL_MS: importConfigSchema.shape.IMPORT_LEASE_TTL_MS,
+  IMPORT_HEARTBEAT_INTERVAL_MS: importConfigSchema.shape.IMPORT_HEARTBEAT_INTERVAL_MS,
+  IMPORT_MONTHLY_REQUEST_BUDGET: importConfigSchema.shape.IMPORT_MONTHLY_REQUEST_BUDGET,
+  IMPORT_MONTHLY_REQUEST_RESERVE: importConfigSchema.shape.IMPORT_MONTHLY_REQUEST_RESERVE,
+  IMPORT_BUDGET_WARNING_PERCENT: importConfigSchema.shape.IMPORT_BUDGET_WARNING_PERCENT,
 })
   // Cross-field validation
   .refine(
@@ -81,6 +95,14 @@ const envSchema = z.object({
   .refine(
     (data) => data.IMPORT_JOB_TIMEOUT_MS >= data.IMPORT_REQUEST_TIMEOUT_MS,
     { message: 'IMPORT_JOB_TIMEOUT_MS must be >= IMPORT_REQUEST_TIMEOUT_MS', path: ['IMPORT_JOB_TIMEOUT_MS'] },
+  )
+  .refine(
+    (data) => data.IMPORT_HEARTBEAT_INTERVAL_MS < data.IMPORT_LEASE_TTL_MS,
+    { message: 'IMPORT_HEARTBEAT_INTERVAL_MS must be < IMPORT_LEASE_TTL_MS (heartbeat must fire before lease expires)', path: ['IMPORT_HEARTBEAT_INTERVAL_MS'] },
+  )
+  .refine(
+    (data) => data.IMPORT_MONTHLY_REQUEST_RESERVE <= data.IMPORT_MONTHLY_REQUEST_BUDGET,
+    { message: 'IMPORT_MONTHLY_REQUEST_RESERVE must be <= IMPORT_MONTHLY_REQUEST_BUDGET', path: ['IMPORT_MONTHLY_REQUEST_RESERVE'] },
   );
 
 export type EnvConfig = z.infer<typeof envSchema>;

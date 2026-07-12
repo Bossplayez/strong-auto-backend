@@ -30,6 +30,11 @@ describe('env.validation import config defaults', () => {
     expect(env.IMPORT_INITIAL_RETRY_DELAY_MS).toBe(500);
     expect(env.IMPORT_MAX_RETRY_DELAY_MS).toBe(10000);
     expect(env.IMPORT_JOB_TIMEOUT_MS).toBe(300000);
+    expect(env.IMPORT_LEASE_TTL_MS).toBe(60000);
+    expect(env.IMPORT_HEARTBEAT_INTERVAL_MS).toBe(15000);
+    expect(env.IMPORT_MONTHLY_REQUEST_BUDGET).toBe(30000);
+    expect(env.IMPORT_MONTHLY_REQUEST_RESERVE).toBe(3000);
+    expect(env.IMPORT_BUDGET_WARNING_PERCENT).toBe(80);
   });
 
   it('accepts overridden values within range', () => {
@@ -40,6 +45,11 @@ describe('env.validation import config defaults', () => {
     base.IMPORT_INITIAL_RETRY_DELAY_MS = 1000;
     base.IMPORT_MAX_RETRY_DELAY_MS = 20000;
     base.IMPORT_JOB_TIMEOUT_MS = 600000;
+    base.IMPORT_LEASE_TTL_MS = 120000;
+    base.IMPORT_HEARTBEAT_INTERVAL_MS = 20000;
+    base.IMPORT_MONTHLY_REQUEST_BUDGET = 50000;
+    base.IMPORT_MONTHLY_REQUEST_RESERVE = 5000;
+    base.IMPORT_BUDGET_WARNING_PERCENT = 90;
     const env = validateEnv(base);
     expect(env.IMPORT_MAX_PAGES).toBe(50);
     expect(env.IMPORT_REQUEST_TIMEOUT_MS).toBe(15000);
@@ -47,6 +57,11 @@ describe('env.validation import config defaults', () => {
     expect(env.IMPORT_INITIAL_RETRY_DELAY_MS).toBe(1000);
     expect(env.IMPORT_MAX_RETRY_DELAY_MS).toBe(20000);
     expect(env.IMPORT_JOB_TIMEOUT_MS).toBe(600000);
+    expect(env.IMPORT_LEASE_TTL_MS).toBe(120000);
+    expect(env.IMPORT_HEARTBEAT_INTERVAL_MS).toBe(20000);
+    expect(env.IMPORT_MONTHLY_REQUEST_BUDGET).toBe(50000);
+    expect(env.IMPORT_MONTHLY_REQUEST_RESERVE).toBe(5000);
+    expect(env.IMPORT_BUDGET_WARNING_PERCENT).toBe(90);
   });
 });
 
@@ -182,6 +197,85 @@ describe('env.validation cross-field invariants', () => {
     base.IMPORT_REQUEST_TIMEOUT_MS = 10000;
     base.IMPORT_JOB_TIMEOUT_MS = 10000;
     expect(validateEnv(base).IMPORT_JOB_TIMEOUT_MS).toBe(10000);
+  });
+});
+
+describe('env.validation lease/budget boundary tests', () => {
+  // IMPORT_LEASE_TTL_MS: 1000..600000
+  it('rejects IMPORT_LEASE_TTL_MS = 999', () => {
+    const base = validEnv();
+    base.IMPORT_LEASE_TTL_MS = 999;
+    expect(() => validateEnv(base)).toThrow();
+  });
+
+  it('accepts IMPORT_LEASE_TTL_MS = 600000 (boundary)', () => {
+    const base = validEnv();
+    base.IMPORT_LEASE_TTL_MS = 600000;
+    expect(validateEnv(base).IMPORT_LEASE_TTL_MS).toBe(600000);
+  });
+
+  // IMPORT_HEARTBEAT_INTERVAL_MS: 1000..300000
+  it('rejects IMPORT_HEARTBEAT_INTERVAL_MS = 999', () => {
+    const base = validEnv();
+    base.IMPORT_HEARTBEAT_INTERVAL_MS = 999;
+    expect(() => validateEnv(base)).toThrow();
+  });
+
+  // IMPORT_MONTHLY_REQUEST_BUDGET: 1..10000000
+  it('rejects IMPORT_MONTHLY_REQUEST_BUDGET = 0', () => {
+    const base = validEnv();
+    base.IMPORT_MONTHLY_REQUEST_BUDGET = 0;
+    expect(() => validateEnv(base)).toThrow();
+  });
+
+  it('accepts IMPORT_MONTHLY_REQUEST_BUDGET = 10000000', () => {
+    const base = validEnv();
+    base.IMPORT_MONTHLY_REQUEST_BUDGET = 10000000;
+    expect(validateEnv(base).IMPORT_MONTHLY_REQUEST_BUDGET).toBe(10000000);
+  });
+
+  // IMPORT_MONTHLY_REQUEST_RESERVE: 0..budget
+  it('rejects IMPORT_MONTHLY_REQUEST_RESERVE > budget', () => {
+    const base = validEnv();
+    base.IMPORT_MONTHLY_REQUEST_BUDGET = 10000;
+    base.IMPORT_MONTHLY_REQUEST_RESERVE = 10001;
+    expect(() => validateEnv(base)).toThrow();
+  });
+
+  it('accepts IMPORT_MONTHLY_REQUEST_RESERVE = budget (boundary)', () => {
+    const base = validEnv();
+    base.IMPORT_MONTHLY_REQUEST_BUDGET = 10000;
+    base.IMPORT_MONTHLY_REQUEST_RESERVE = 10000;
+    expect(validateEnv(base).IMPORT_MONTHLY_REQUEST_RESERVE).toBe(10000);
+  });
+
+  // IMPORT_BUDGET_WARNING_PERCENT: 1..100
+  it('rejects IMPORT_BUDGET_WARNING_PERCENT = 0', () => {
+    const base = validEnv();
+    base.IMPORT_BUDGET_WARNING_PERCENT = 0;
+    expect(() => validateEnv(base)).toThrow();
+  });
+
+  it('rejects IMPORT_BUDGET_WARNING_PERCENT = 101', () => {
+    const base = validEnv();
+    base.IMPORT_BUDGET_WARNING_PERCENT = 101;
+    expect(() => validateEnv(base)).toThrow();
+  });
+});
+
+describe('env.validation lease cross-field invariants', () => {
+  it('rejects heartbeat >= lease TTL', () => {
+    const base = validEnv();
+    base.IMPORT_LEASE_TTL_MS = 5000;
+    base.IMPORT_HEARTBEAT_INTERVAL_MS = 5000; // equal = should fail
+    expect(() => validateEnv(base)).toThrow();
+  });
+
+  it('accepts heartbeat < lease TTL (boundary)', () => {
+    const base = validEnv();
+    base.IMPORT_LEASE_TTL_MS = 5000;
+    base.IMPORT_HEARTBEAT_INTERVAL_MS = 4999; // 1ms below
+    expect(validateEnv(base).IMPORT_HEARTBEAT_INTERVAL_MS).toBe(4999);
   });
 });
 
