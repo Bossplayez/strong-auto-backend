@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+// ── Auction import configuration ────────────────────────────
+const importConfigSchema = z.object({
+  IMPORT_MAX_PAGES: z.coerce.number().int().min(1).max(100).default(5),
+  IMPORT_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(10000),
+  IMPORT_MAX_RETRY_ATTEMPTS: z.coerce.number().int().min(0).max(5).default(2),
+  IMPORT_INITIAL_RETRY_DELAY_MS: z.coerce.number().int().min(100).max(5000).default(500),
+  IMPORT_MAX_RETRY_DELAY_MS: z.coerce.number().int().min(500).max(30000).default(10000),
+  IMPORT_JOB_TIMEOUT_MS: z.coerce.number().int().min(10000).max(900000).default(300000),
+});
+
 const envSchema = z.object({
   // ── Runtime ──────────────────────────────────────────────
   NODE_ENV: z
@@ -54,9 +64,27 @@ const envSchema = z.object({
   RAILWAY_DEPLOYMENT_ID: z.string().optional(),
   RAILWAY_SNAPSHOT_ID: z.string().optional(),
   RAILWAY_PUBLIC_DOMAIN: z.string().optional(),
-});
+
+  // ── Auction import configuration ────────────────────────────
+  IMPORT_MAX_PAGES: importConfigSchema.shape.IMPORT_MAX_PAGES,
+  IMPORT_REQUEST_TIMEOUT_MS: importConfigSchema.shape.IMPORT_REQUEST_TIMEOUT_MS,
+  IMPORT_MAX_RETRY_ATTEMPTS: importConfigSchema.shape.IMPORT_MAX_RETRY_ATTEMPTS,
+  IMPORT_INITIAL_RETRY_DELAY_MS: importConfigSchema.shape.IMPORT_INITIAL_RETRY_DELAY_MS,
+  IMPORT_MAX_RETRY_DELAY_MS: importConfigSchema.shape.IMPORT_MAX_RETRY_DELAY_MS,
+  IMPORT_JOB_TIMEOUT_MS: importConfigSchema.shape.IMPORT_JOB_TIMEOUT_MS,
+})
+  // Cross-field validation
+  .refine(
+    (data) => data.IMPORT_MAX_RETRY_DELAY_MS >= data.IMPORT_INITIAL_RETRY_DELAY_MS,
+    { message: 'IMPORT_MAX_RETRY_DELAY_MS must be >= IMPORT_INITIAL_RETRY_DELAY_MS', path: ['IMPORT_MAX_RETRY_DELAY_MS'] },
+  )
+  .refine(
+    (data) => data.IMPORT_JOB_TIMEOUT_MS >= data.IMPORT_REQUEST_TIMEOUT_MS,
+    { message: 'IMPORT_JOB_TIMEOUT_MS must be >= IMPORT_REQUEST_TIMEOUT_MS', path: ['IMPORT_JOB_TIMEOUT_MS'] },
+  );
 
 export type EnvConfig = z.infer<typeof envSchema>;
+export type ImportConfig = z.infer<typeof importConfigSchema>;
 
 /** Validate and transform `process.env` into a typed config object. */
 export function validateEnv(config: Record<string, unknown>): EnvConfig {
@@ -71,6 +99,12 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
       `❌ Invalid environment variables:\n${errors}\n\n` +
         'Please check your environment configuration.',
     );
+  }
+
+  // Runtime sanity checks (finite integers)
+  const c = parsed.data;
+  if (!Number.isFinite(c.IMPORT_MAX_PAGES) || !Number.isFinite(c.IMPORT_REQUEST_TIMEOUT_MS) || !Number.isFinite(c.IMPORT_MAX_RETRY_ATTEMPTS) || !Number.isFinite(c.IMPORT_INITIAL_RETRY_DELAY_MS) || !Number.isFinite(c.IMPORT_MAX_RETRY_DELAY_MS) || !Number.isFinite(c.IMPORT_JOB_TIMEOUT_MS)) {
+    throw new Error('Invalid environment variables: all import config values must be finite integers');
   }
 
   return parsed.data;

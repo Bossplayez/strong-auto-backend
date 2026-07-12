@@ -3,6 +3,17 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 import { normalizeFuelType, normalizeDriveType, normalizeBodyType } from '../common/normalization';
+import {
+  providerFetch,
+  type ProviderFetchConfig,
+  type FetchFailureKind,
+} from './provider-fetch';
+
+interface PageFailure {
+  page: number;
+  kind: FetchFailureKind;
+  status?: number;
+}
 
 @Injectable()
 export class CopartService {
@@ -10,13 +21,28 @@ export class CopartService {
   private readonly RAPIDAPI_HOST = 'vehicle-auction-data-api-copart-iaai.p.rapidapi.com';
   private readonly RAPIDAPI_BASE = 'https://vehicle-auction-data-api-copart-iaai.p.rapidapi.com';
   private readonly BATCH_SIZE = 20; // API returns max 20 per request
-  private readonly MAX_PAGES = 5; // Safety limit: 5 pages = 100 vehicles per sync
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly vehiclesService: VehiclesService,
-  ) {}
+) {}
+
+  /** Build a ProviderFetchConfig from validated env vars. */
+  private getFetchConfig(): ProviderFetchConfig {
+    return {
+      requestTimeoutMs: this.config.get<number>('IMPORT_REQUEST_TIMEOUT_MS')!,
+      maxRetryAttempts: this.config.get<number>('IMPORT_MAX_RETRY_ATTEMPTS')!,
+      initialRetryDelayMs: this.config.get<number>('IMPORT_INITIAL_RETRY_DELAY_MS')!,
+      maxRetryDelayMs: this.config.get<number>('IMPORT_MAX_RETRY_DELAY_MS')!,
+      jobDeadlineMs: 0, // set per-job in processImportJobWithPlatform
+    };
+  }
+
+  /** Configured max pages (replaces hardcoded MAX_PAGES). */
+  private get maxPages(): number {
+    return this.config.get<number>('IMPORT_MAX_PAGES')!;
+  }
 
   async sync(): Promise<{ jobId: string; status: string }> {
     // Check for active jobs
@@ -84,6 +110,13 @@ export class CopartService {
     let updated = 0;
     let skipped = 0;
     let errors = 0;
+    const pageFailures: PageFailure[] = [];
+
+    const jobStartMs = Date.now();
+    const jobTimeoutMs = this.config.get<number>('IMPORT_JOB_TIMEOUT_MS')!;
+    const jobDeadlineMs = jobStartMs + jobTimeoutMs;
+    const fetchConfig = this.getFetchConfig();
+    fetchConfig.jobDeadlineMs = jobDeadlineMs;
 
     try {
       const apiKey = this.config.get('RAPIDAPI_KEY');
@@ -101,28 +134,59 @@ export class CopartService {
         return;
       }
 
+      const headers = {
+        'x-rapidapi-host': this.RAPIDAPI_HOST,
+        'x-rapidapi-key': apiKey,
+      };
+
       // Fetch vehicles from RapidAPI (paginated)
       const lots: Record<string, any>[] = [];
       let page = 1;
+      let deadlineReached = false;
 
-      while (page <= this.MAX_PAGES) {
-        const url = `${this.RAPIDAPI_BASE}/vehicles?platform=${platform}&page=${page}&limit=${this.BATCH_SIZE}`;
-        this.logger.log(`Fetching ${platform} page ${page}: ${url}`);
-
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'x-rapidapi-host': this.RAPIDAPI_HOST,
-            'x-rapidapi-key': apiKey,
-          },
-        });
-
-        if (!response.ok) {
-          this.logger.error(`RapidAPI error: ${response.status} ${response.statusText}`);
+      while (page <= this.maxPages) {
+        const remaining = jobDeadlineMs - Date.now();
+        if (remaining <= 0) {
+          this.logger.warn(`Import job deadline (${jobTimeoutMs}ms) reached at page ${page}`);
+          deadlineReached = true;
           break;
         }
 
-        const body = await response.json();
+        const url = `${this.RAPIDAPI_BASE}/vehicles?platform=${platform}&page=${page}&limit=${this.BATCH_SIZE}`;
+        this.logger.log(`Fetching ${platform} page ${page}/${this.maxPages} (remaining: ${Math.floor(remaining / 1000)}s)`);
+
+        const result = await providerFetch<any>(
+          url,
+          headers,
+          { ...fetchConfig, jobDeadlineMs },
+          this.logger,
+        );
+
+        if (!result.ok) {
+          const f = result.failure;
+          this.logger.error(
+            `Provider fetch failed at page ${page}: ${f.kind}${f.status ? ` (${f.status})` : ''} — ${f.message} [attempts: ${result.attempts}]`,
+          );
+          pageFailures.push({ page, kind: f.kind, status: f.status });
+
+          // Non-retryable 4xx: stop pagination entirely
+          if (f.kind === 'HTTP_4XX') {
+            this.logger.warn(`Stopping pagination: non-retryable HTTP ${f.status}`);
+            break;
+          }
+
+          // Deadline exceeded: stop with what we have
+          if (f.kind === 'DEADLINE_EXCEEDED') {
+            deadlineReached = true;
+            break;
+          }
+
+          // Retryable failure that exhausted all retries: advance to next page
+          page++;
+          continue;
+        }
+
+        const body = result.data;
         const data = body?.data ?? [];
 
         if (data.length === 0) {
@@ -131,7 +195,9 @@ export class CopartService {
         }
 
         lots.push(...data);
-        this.logger.log(`Fetched ${data.length} vehicles from page ${page} (total: ${lots.length})`);
+        this.logger.log(
+          `Fetched ${data.length} vehicles from page ${page} (total: ${lots.length}) [attempts: ${result.attempts}]`,
+        );
 
         if (data.length < this.BATCH_SIZE) {
           break; // Last page
@@ -140,7 +206,7 @@ export class CopartService {
         page++;
       }
 
-      this.logger.log(`Total vehicles to process: ${lots.length}`);
+      this.logger.log(`Total vehicles to process: ${lots.length}${deadlineReached ? ' (deadline reached)' : ''}`);
 
       for (const raw of lots) {
         try {
@@ -198,12 +264,23 @@ export class CopartService {
         }
       }
 
+      const jobDurationMs = Date.now() - jobStartMs;
       await this.prisma.importJob.update({
         where: { id: jobId },
         data: {
           status: errors > 0 && created + updated === 0 ? 'FAILED' : errors > 0 ? 'PARTIAL_SUCCESS' : 'SUCCESS',
           finishedAt: new Date(),
-          summaryJsonb: { created, updated, skipped, errors } as any,
+          summaryJsonb: {
+            created,
+            updated,
+            skipped,
+            errors,
+            pagesFetched: pageFailures.length === 0 ? page - 1 : pageFailures[0].page - 1,
+            pageFailures,
+            deadlineReached,
+            jobDurationMs,
+            maxPagesConfig: this.maxPages,
+          } as any,
         },
       });
 
@@ -315,23 +392,23 @@ export class CopartService {
     if (params.year_to) url.searchParams.set('year_to', String(params.year_to));
     if (params.search) url.searchParams.set('search', params.search);
 
-    this.logger.log(`Searching ${platform}: ${url.toString()}`);
+    this.logger.log(`Searching ${platform}: page ${page}, limit ${limit}`);
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
+    const result = await providerFetch<any>(
+      url.toString(),
+      {
         'x-rapidapi-host': this.RAPIDAPI_HOST,
         'x-rapidapi-key': apiKey,
       },
-    });
+      { ...this.getFetchConfig(), jobDeadlineMs: Date.now() + this.config.get<number>('IMPORT_REQUEST_TIMEOUT_MS')! * 2 },
+      this.logger,
+    );
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      this.logger.error(`RapidAPI search error: ${response.status} ${errText}`);
-      throw new Error(`RapidAPI error: ${response.status}`);
+    if (!result.ok) {
+      throw new Error(`Provider search error: ${result.failure.kind}${result.failure.status ? ` (${result.failure.status})` : ''}`);
     }
 
-    const body = await response.json();
+    const body = result.data;
     const items = body?.data ?? [];
 
     // Mark items that are already imported
@@ -386,23 +463,23 @@ export class CopartService {
 
     // Fetch single vehicle details
     const url = `${this.RAPIDAPI_BASE}/vehicles/${lotNumber}?platform=${platform}`;
-    this.logger.log(`Fetching single vehicle: ${url}`);
+    this.logger.log(`Fetching single vehicle: lot ${lotNumber}, platform ${platform}`);
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
+    const result = await providerFetch<any>(
+      url,
+      {
         'x-rapidapi-host': this.RAPIDAPI_HOST,
         'x-rapidapi-key': apiKey,
       },
-    });
+      { ...this.getFetchConfig(), jobDeadlineMs: Date.now() + this.config.get<number>('IMPORT_REQUEST_TIMEOUT_MS')! * 2 },
+      this.logger,
+    );
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      this.logger.error(`RapidAPI single fetch error: ${response.status} ${errText}`);
-      throw new Error(`RapidAPI error: ${response.status}`);
+    if (!result.ok) {
+      throw new Error(`Provider fetch error: ${result.failure.kind}${result.failure.status ? ` (${result.failure.status})` : ''}`);
     }
 
-    const body = await response.json();
+    const body = result.data;
     const raw = body?.data ?? body;
 
     if (!raw || !raw.lot_number) {
