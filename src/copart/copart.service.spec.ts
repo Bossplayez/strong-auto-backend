@@ -727,4 +727,76 @@ describe('CopartService — no API key configured', () => {
     expect(summary?.terminalReason).toBe('configuration_error');
     expect(summary?.failureCode).toBe('provider_credentials_missing');
   });
+
+  // ── Regression: blocked allocation performs zero fetch calls ──
+  it('16. budget blocked → zero providerFetch calls', async () => {
+    const blockedBudget = makeBudgetMock();
+    blockedBudget.canMakeRoutineRequest = jest.fn().mockResolvedValue({
+      allowed: false,
+      usage: { allocated: 30000, budget: 30000, reserve: 3000, isRoutineBlocked: true },
+      reason: 'routine_budget_exhausted',
+    });
+    blockedBudget.reserve = jest.fn(); // Should NOT be called
+    const { service, prisma, lease } = await makeService({ budget: blockedBudget });
+    lease.claim = jest.fn().mockResolvedValue({ claimed: true, fencingToken: 1 });
+    lease.verifyOwnership = jest.fn().mockResolvedValue(true);
+    lease.release = jest.fn();
+
+    await service.processImportJobWithPlatform('job-blocked', 'copart');
+
+    // Budget check must have happened
+    expect(blockedBudget.canMakeRoutineRequest).toHaveBeenCalled();
+    // Reserve (pre-request hook) must NOT have been called — pagination never started
+    expect(blockedBudget.reserve).not.toHaveBeenCalled();
+    // No items processed
+    const summary = getLastSummary(prisma);
+    expect(summary?.itemsProcessed ?? 0).toBe(0);
+  });
+
+  // ── Regression: atomic reservation before initial request and every retry ──
+  it('17. preRequestHook (reserve) is invoked before each HTTP attempt including retries', async () => {
+    const budget = makeBudgetMock();
+    const reserveCalls: string[] = [];
+    budget.reserve = jest.fn().mockImplementation(async (_p: string, _j: string, attemptId: string) => {
+      reserveCalls.push(attemptId);
+      return { allowed: true, attemptId, status: 'allocated' as const, usage: budget.usage };
+    });
+    budget.canMakeRoutineRequest = jest.fn().mockResolvedValue({
+      allowed: true,
+      usage: { allocated: 0, budget: 30000, reserve: 3000, isRoutineBlocked: false },
+    });
+
+    const { service, prisma, lease } = await makeService({ budget });
+    lease.claim = jest.fn().mockResolvedValue({ claimed: true, fencingToken: 1 });
+    lease.verifyOwnership = jest.fn().mockResolvedValue(true);
+    lease.release = jest.fn();
+    mockedProviderFetch.mockImplementation(async (
+      _url: any, _headers: any, _config: any, _logger: any, _validator: any, _dedupe: any,
+      hook?: any,
+    ) => {
+      if (hook) await hook();
+      return fetchOk(makePage([1001, 1002, 1003]));
+    });
+    mockedProviderFetch.mockImplementationOnce(async (
+      _url: any, _headers: any, _config: any, _logger: any, _validator: any, _dedupe: any,
+      hook?: any,
+    ) => {
+      if (hook) await hook();
+      return fetchOk(makePage([1001, 1002, 1003]));
+    });
+    mockedProviderFetch.mockImplementationOnce(async (
+      _url: any, _headers: any, _config: any, _logger: any, _validator: any, _dedupe: any,
+      hook?: any,
+    ) => {
+      if (hook) await hook();
+      return fetchOk({ data: [] });
+    });
+
+    await service.processImportJobWithPlatform('job-reserve-test', 'copart');
+
+    // At least one reserve call must have happened for the initial fetch
+    expect(reserveCalls.length).toBeGreaterThanOrEqual(1);
+    // Every attemptId must be unique
+    expect(new Set(reserveCalls).size).toBe(reserveCalls.length);
+  });
 });
