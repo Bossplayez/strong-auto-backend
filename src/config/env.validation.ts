@@ -18,7 +18,10 @@ const importConfigSchema = z.object({
   IMPORT_MONTHLY_REQUEST_RESERVE: z.coerce.number().int().min(0).max(10000000).default(3000),
   IMPORT_BUDGET_WARNING_PERCENT: z.coerce.number().int().min(1).max(100).default(80),
 
-  // ── Task 033S: Discovery / Scheduler ──
+  // ── Task 033S/033T: Discovery / Scheduler ──
+  // Phase 15: automatic scheduler
+  SCHEDULER_ENABLED: z.coerce.boolean().default(false),
+  SCHEDULER_TICK_INTERVAL_MS: z.coerce.number().int().min(10000).max(3600000).default(300000),
   SCHEDULER_HOT_INTERVAL_MS: z.coerce.number().int().min(60000).max(3600000).default(900000),
   SCHEDULER_WARM_INTERVAL_MS: z.coerce.number().int().min(600000).max(21600000).default(10800000),
   SCHEDULER_COLD_INTERVAL_MS: z.coerce.number().int().min(1800000).max(86400000).default(43200000),
@@ -94,6 +97,8 @@ const envSchema = z.object({
   IMPORT_MONTHLY_REQUEST_BUDGET: importConfigSchema.shape.IMPORT_MONTHLY_REQUEST_BUDGET,
   IMPORT_MONTHLY_REQUEST_RESERVE: importConfigSchema.shape.IMPORT_MONTHLY_REQUEST_RESERVE,
   IMPORT_BUDGET_WARNING_PERCENT: importConfigSchema.shape.IMPORT_BUDGET_WARNING_PERCENT,
+  SCHEDULER_ENABLED: importConfigSchema.shape.SCHEDULER_ENABLED,
+  SCHEDULER_TICK_INTERVAL_MS: importConfigSchema.shape.SCHEDULER_TICK_INTERVAL_MS,
   SCHEDULER_HOT_INTERVAL_MS: importConfigSchema.shape.SCHEDULER_HOT_INTERVAL_MS,
   SCHEDULER_WARM_INTERVAL_MS: importConfigSchema.shape.SCHEDULER_WARM_INTERVAL_MS,
   SCHEDULER_COLD_INTERVAL_MS: importConfigSchema.shape.SCHEDULER_COLD_INTERVAL_MS,

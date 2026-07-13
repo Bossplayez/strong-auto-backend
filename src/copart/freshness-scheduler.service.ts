@@ -39,7 +39,7 @@
  *   absolute attempts per UTC month <= 30,000
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscoveryService } from './discovery.service';
@@ -71,6 +71,12 @@ export interface SchedulerStatus {
   completedToday: number;
   failedToday: number;
   projectedMonthEndUsage: number;
+  // Phase 15 automatic scheduler fields
+  autoEnabled: boolean;
+  autoTickIntervalMs: number;
+  lastSuccessfulRunAt: Date | null;
+  activeProviderJobs: string[];
+  isCurrentlyTicking: boolean;
 }
 
 export interface QuotaAllocation {
@@ -83,8 +89,11 @@ export interface QuotaAllocation {
 }
 
 @Injectable()
-export class FreshnessSchedulerService {
+export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FreshnessSchedulerService.name);
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private isTicking = false;
+  private static readonly TICK_LOCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 min max per tick
 
   // Tier weights for daily envelope allocation
   private static readonly TIER_WEIGHTS = {
@@ -102,6 +111,125 @@ export class FreshnessSchedulerService {
     private readonly leaseService: ProviderLeaseService,
     private readonly budgetService: RequestBudgetService,
   ) {}
+
+  // ─── Automatic Scheduler Lifecycle ───
+
+  /**
+   * OnModuleInit: start automatic scheduler if enabled.
+   *
+   * The scheduler uses setInterval to call guardedTick() periodically.
+   * Each tick acquires a provider lease before doing work, ensuring
+   * no two instances (Railway replicas) process simultaneously.
+   */
+  async onModuleInit(): Promise<void> {
+    const enabled = this.config.get<boolean>('SCHEDULER_ENABLED', false);
+    if (!enabled) {
+      this.logger.log('Automatic scheduler DISABLED (SCHEDULER_ENABLED=false)');
+      return;
+    }
+
+    const intervalMs = this.config.get<number>('SCHEDULER_TICK_INTERVAL_MS', 5 * 60 * 1000);
+    this.logger.log(`Automatic scheduler ENABLED — tick every ${intervalMs}ms`);
+
+    // Run startup recovery for stale jobs (non-blocking)
+    this.runStartupRecovery().catch(err => {
+      this.logger.error(`Startup recovery failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+
+    // Start periodic tick
+    this.tickTimer = setInterval(() => {
+      this.guardedTick().catch(err => {
+        this.logger.error(`Unhandled scheduler tick error: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }, intervalMs);
+  }
+
+  /**
+   * OnModuleDestroy: clear timer and log shutdown.
+   * Does NOT abort in-flight ticks (they finish naturally).
+   */
+  async onModuleDestroy(): Promise<void> {
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
+      this.logger.log('Automatic scheduler timer stopped (graceful shutdown)');
+    }
+  }
+
+  /**
+   * Run startup recovery for stale jobs.
+   * Recovers jobs that were left RUNNING by a crashed instance.
+   */
+  private async runStartupRecovery(): Promise<void> {
+    for (const provider of ['copart', 'iaai'] as const) {
+      try {
+        const result = await this.leaseService.recoverStaleJobs(provider);
+        if (result.recoveredJobIds.length > 0) {
+          this.logger.log(`Startup recovery for ${provider}: recovered ${result.recoveredJobIds.length} stale jobs`);
+        }
+      } catch (err) {
+        this.logger.error(`Startup recovery error for ${provider}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  /**
+   * Guarded tick — prevents overlapping ticks, wraps errors.
+   *
+   * Lease-based multi-instance safety:
+   * 1. Check if already ticking locally (isTicking flag)
+   * 2. Try to acquire lease for each provider independently
+   * 3. Run tick() if lease acquired
+   * 4. Release lease after work (success or failure)
+   *
+   * Provider isolation: Copart and IAAI are independent.
+   * No overlapping Copart jobs. No overlapping IAAI jobs.
+   */
+  private async guardedTick(): Promise<void> {
+    // Local overlap guard
+    if (this.isTicking) {
+      this.logger.debug('Skipping tick — previous tick still running');
+      return;
+    }
+
+    this.isTicking = true;
+    const tickStart = Date.now();
+
+    try {
+      // Check if scheduler is paused
+      const state = await this.getState();
+      if (state.isPaused) {
+        this.logger.debug('Scheduler paused — skipping automatic tick');
+        return;
+      }
+
+      // Check budget before doing anything
+      const budget = await this.budgetService.getUsage();
+      if (budget.isRoutineBlocked) {
+        this.logger.warn('Automatic tick: routine budget exhausted — skipping');
+        return;
+      }
+
+      // Run the same guarded pipeline as manual admin trigger
+      // Both automatic and manual use the same tick() method
+      const result = await this.tick();
+
+      const elapsed = Date.now() - tickStart;
+      this.logger.log(
+        `Automatic tick completed in ${elapsed}ms: ` +
+        `processed=${result.processed}, deferred=${result.deferred}, ` +
+        `requests=${result.requestsUsed}, errors=${result.errors.length}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Automatic tick failed: ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      // Swallow error — scheduler failures must NOT crash the API process
+    } finally {
+      this.isTicking = false;
+    }
+  }
 
   /**
    * Calculate priority score for a lot.
@@ -298,6 +426,14 @@ export class FreshnessSchedulerService {
     // Projected month-end usage = current usage + (dailyEnvelope × remainingDays)
     const projectedMonthEndUsage = (budget.allocated ?? 0) + (dailyEnvelope * remainingDays);
 
+    // Active provider jobs (leases held)
+    const activeLeases = await Promise.all(
+      (['copart', 'iaai'] as const).map(p => this.leaseService.getState(p)),
+    );
+    const activeProviderJobs = activeLeases
+      .filter(l => l && !l.isExpired)
+      .map(l => l!.provider);
+
     return {
       isPaused: state.isPaused,
       lastRunAt: state.lastRunAt,
@@ -322,6 +458,12 @@ export class FreshnessSchedulerService {
       completedToday,
       failedToday,
       projectedMonthEndUsage,
+      // Phase 15 automatic scheduler fields
+      autoEnabled: this.config.get<boolean>('SCHEDULER_ENABLED', false),
+      autoTickIntervalMs: this.config.get<number>('SCHEDULER_TICK_INTERVAL_MS', 5 * 60 * 1000),
+      lastSuccessfulRunAt: state.lastRunAt,
+      activeProviderJobs,
+      isCurrentlyTicking: this.isTicking,
     };
   }
 
