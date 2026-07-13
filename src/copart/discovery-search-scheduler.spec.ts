@@ -91,7 +91,8 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
           if (take) results = results.slice(0, take);
           return results;
         }),
-        count: jest.fn(({ where }) => {
+        count: jest.fn((args?: { where?: any }) => {
+          const where = args?.where;
           let results = Array.from(discoveredLots.values());
           if (where?.provider) results = results.filter((l) => l.provider === where.provider);
           if (where?.state?.in) results = results.filter((l) => where.state.in.includes(l.state));
@@ -149,6 +150,10 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         }),
       },
       discoveryCheckpoint: {
+        findUnique: jest.fn(({ where }) => {
+          const key = `${where.provider_queryFingerprint?.provider}_${where.provider_queryFingerprint?.queryFingerprint}`;
+          return discoveryCheckpoints.get(key) || null;
+        }),
         upsert: jest.fn(({ where, create, update }) => {
           const key = `${where.provider_queryFingerprint?.provider}_${where.provider_queryFingerprint?.queryFingerprint}`;
           const existing = discoveryCheckpoints.get(key);

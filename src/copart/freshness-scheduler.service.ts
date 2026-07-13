@@ -77,6 +77,15 @@ export interface SchedulerStatus {
   lastSuccessfulRunAt: Date | null;
   activeProviderJobs: string[];
   isCurrentlyTicking: boolean;
+  // Phase 033T — discovery integration
+  lastDiscoveryRunAt: Date | null;
+  nextDiscoveryRunAt: Date | null;
+  discoveryPagesAttempted: number;
+  discoveryLotsReceived: number;
+  discoveryCreated: number;
+  discoveryUpdated: number;
+  discoverySkipped: number;
+  discoveryTerminalReason: string | null;
 }
 
 export interface QuotaAllocation {
@@ -94,6 +103,29 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private isTicking = false;
   private static readonly TICK_LOCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 min max per tick
+
+  // Discovery cadence: how often to run discovery per provider.
+  // Bootstrap interval — used when no lots exist (seed the database).
+  private static readonly DISCOVERY_BOOTSTRAP_INTERVAL_MS = 30 * 60 * 1000; // 30 min
+  // Normal interval — used when lots already exist.
+  private static readonly DISCOVERY_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 h
+  // Max pages per discovery run per provider per tick (bounded to protect budget).
+  private static readonly DISCOVERY_MAX_PAGES_PER_TICK = 3;
+
+  // Track latest discovery results for admin status.
+  private lastDiscovery: {
+    runAt: Date;
+    providers: Array<{
+      provider: string;
+      pagesCompleted: number;
+      lotsDiscovered: number;
+      newLots: number;
+      lotsUpdated: number;
+      skipped: number;
+      terminalReason: string | null;
+      errors: string[];
+    }>;
+  } | null = null;
 
   // Tier weights for daily envelope allocation
   private static readonly TIER_WEIGHTS = {
@@ -434,6 +466,9 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       .filter(l => l && !l.isExpired)
       .map(l => l!.provider);
 
+    // Discovery status from last run
+    const d = this.lastDiscovery;
+
     return {
       isPaused: state.isPaused,
       lastRunAt: state.lastRunAt,
@@ -464,6 +499,17 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       lastSuccessfulRunAt: state.lastRunAt,
       activeProviderJobs,
       isCurrentlyTicking: this.isTicking,
+      // Phase 033T — discovery integration
+      lastDiscoveryRunAt: d ? d.runAt : null,
+      nextDiscoveryRunAt: this.computeNextDiscoveryAt(now, totalDiscovered),
+      discoveryPagesAttempted: d ? d.providers.reduce((s, p) => s + p.pagesCompleted, 0) : 0,
+      discoveryLotsReceived: d ? d.providers.reduce((s, p) => s + p.lotsDiscovered, 0) : 0,
+      discoveryCreated: d ? d.providers.reduce((s, p) => s + p.newLots, 0) : 0,
+      discoveryUpdated: d ? d.providers.reduce((s, p) => s + p.lotsUpdated, 0) : 0,
+      discoverySkipped: d ? d.providers.reduce((s, p) => s + p.skipped, 0) : 0,
+      discoveryTerminalReason: d
+        ? d.providers.find(p => p.terminalReason)?.terminalReason ?? null
+        : null,
     };
   }
 
@@ -544,6 +590,29 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     let totalProcessed = 0;
     let totalDeferred = 0;
     let totalRequestsUsed = 0;
+
+    // ── Discovery phase: run bounded discovery before HOT/WARM refresh ──
+    const discoveryResults = await this.runDueDiscovery(now);
+    if (discoveryResults.length > 0) {
+      this.lastDiscovery = {
+        runAt: now,
+        providers: discoveryResults.map(r => ({
+          provider: r.provider,
+          pagesCompleted: r.pagesCompleted,
+          lotsDiscovered: r.lotsDiscovered,
+          newLots: r.newLots,
+          lotsUpdated: r.lotsUpdated,
+          skipped: 0,
+          terminalReason: r.terminalReason,
+          errors: r.errors,
+        })),
+      };
+      this.logger.log(
+        `Discovery this tick: ${discoveryResults.length} provider(s), ` +
+        `${discoveryResults.reduce((s, r) => s + r.pagesCompleted, 0)} pages, ` +
+        `${discoveryResults.reduce((s, r) => s + r.lotsDiscovered, 0)} lots`,
+      );
+    }
 
     // HOT tier: detail endpoint refresh (1 request per lot)
     if (tierBudgets.hotBudget > 0) {
@@ -706,6 +775,134 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     }
 
     return { processed, deferred: toDefer.length, requestsUsed: toRefresh.length, errors };
+  }
+
+  // ─── Discovery Integration ───
+
+  /**
+   * Determine when the next discovery run should happen.
+   * Uses bootstrap interval when no lots exist, normal interval otherwise.
+   */
+  private computeNextDiscoveryAt(now: Date, totalDiscovered: number): Date | null {
+    if (!this.lastDiscovery) return now; // due immediately
+    const interval =
+      totalDiscovered === 0
+        ? FreshnessSchedulerService.DISCOVERY_BOOTSTRAP_INTERVAL_MS
+        : FreshnessSchedulerService.DISCOVERY_INTERVAL_MS;
+    return new Date(this.lastDiscovery.runAt.getTime() + interval);
+  }
+
+  /**
+   * Check whether a provider's discovery profile is due.
+   *
+   * A profile is due when:
+   * - totalDiscovered === 0 (bootstrap — need to seed the database), OR
+   * - no checkpoint exists for the default profile (never discovered), OR
+   * - checkpoint exists but lastCompletedAt is older than the interval.
+   *
+   * Exhausted checkpoints are NOT due (end of pagination reached).
+   */
+  private async isDiscoveryDue(
+    provider: string,
+    now: Date,
+    totalDiscovered: number,
+  ): Promise<boolean> {
+    // Bootstrap: always due when empty
+    if (totalDiscovered === 0) return true;
+
+    const fingerprint = this.discoveryService.buildQueryFingerprint({
+      platform: provider as 'copart' | 'iaai',
+    });
+
+    const checkpoint = await this.prisma.discoveryCheckpoint.findUnique({
+      where: { provider_queryFingerprint: { provider, queryFingerprint: fingerprint } },
+    });
+
+    if (!checkpoint) return true; // never discovered — due
+    if (checkpoint.exhaustedAt) return false; // exhausted — not due
+    if (!checkpoint.lastCompletedAt) return true; // started but never completed
+
+    const interval = FreshnessSchedulerService.DISCOVERY_INTERVAL_MS;
+    return now.getTime() - checkpoint.lastCompletedAt.getTime() >= interval;
+  }
+
+  /**
+   * Run bounded discovery for due providers.
+   *
+   * Each provider is handled independently — one failure does not block
+   * the other. Discovery respects existing lease, fencing, and quota
+   * controls inside DiscoveryService.runDiscovery().
+   *
+   * Does NOT auto-publish discovered lots to the catalog.
+   */
+  private async runDueDiscovery(
+    now: Date,
+  ): Promise<
+    Array<{
+      provider: string;
+      pagesCompleted: number;
+      lotsDiscovered: number;
+      lotsUpdated: number;
+      newLots: number;
+      terminalReason: string;
+      errors: string[];
+    }>
+  > {
+    const totalDiscovered = await this.prisma.discoveredLot.count();
+    const results: Array<{
+      provider: string;
+      pagesCompleted: number;
+      lotsDiscovered: number;
+      lotsUpdated: number;
+      newLots: number;
+      terminalReason: string;
+      errors: string[];
+    }> = [];
+
+    for (const provider of ['copart', 'iaai'] as const) {
+      try {
+        const due = await this.isDiscoveryDue(provider, now, totalDiscovered);
+        if (!due) {
+          this.logger.debug(`Discovery for ${provider} not due — skipping`);
+          continue;
+        }
+
+        const maxPages = FreshnessSchedulerService.DISCOVERY_MAX_PAGES_PER_TICK;
+        this.logger.log(
+          `Running bounded discovery for ${provider} (maxPages=${maxPages})`,
+        );
+
+        const result = await this.discoveryService.runDiscovery(
+          { platform: provider },
+          maxPages,
+        );
+
+        results.push({
+          provider: result.provider,
+          pagesCompleted: result.pagesCompleted,
+          lotsDiscovered: result.lotsDiscovered,
+          lotsUpdated: result.lotsUpdated,
+          newLots: result.newLots,
+          terminalReason: result.terminalReason,
+          errors: result.errors,
+        });
+      } catch (err) {
+        this.logger.error(
+          `Discovery failed for ${provider}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        results.push({
+          provider,
+          pagesCompleted: 0,
+          lotsDiscovered: 0,
+          lotsUpdated: 0,
+          newLots: 0,
+          terminalReason: 'error',
+          errors: [err instanceof Error ? err.message : String(err)],
+        });
+      }
+    }
+
+    return results;
   }
 
   /** Classify a lot into a freshness tier. */

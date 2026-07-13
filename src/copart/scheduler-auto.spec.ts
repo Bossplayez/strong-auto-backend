@@ -39,6 +39,9 @@ describe('Task 033T Phase 15 — Automatic Scheduler', () => {
         count: jest.fn().mockResolvedValue(0),
         update: jest.fn().mockResolvedValue({}),
       },
+      discoveryCheckpoint: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
     };
 
     budgetService = {
@@ -82,7 +85,26 @@ describe('Task 033T Phase 15 — Automatic Scheduler', () => {
         FreshnessSchedulerService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: config },
-        { provide: DiscoveryService, useValue: { discover: jest.fn() } },
+        {
+          provide: DiscoveryService,
+          useValue: {
+            buildQueryFingerprint: jest.fn().mockReturnValue('fp_test'),
+            runDiscovery: jest.fn().mockResolvedValue({
+              provider: 'copart',
+              queryFingerprint: 'fp_test',
+              pagesCompleted: 0,
+              lotsDiscovered: 0,
+              lotsUpdated: 0,
+              newLots: 0,
+              checkpointAdvanced: false,
+              exhausted: false,
+              terminalReason: 'completed',
+              nextPage: null,
+              errors: [],
+            }),
+            getCheckpointState: jest.fn().mockResolvedValue([]),
+          },
+        },
         { provide: ProviderLeaseService, useValue: leaseService },
         { provide: RequestBudgetService, useValue: budgetService },
       ],
