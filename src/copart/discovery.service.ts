@@ -318,8 +318,11 @@ export class DiscoveryService {
       pageIdentities.set(currentPage, currentPageId);
 
       // Atomic checkpoint advancement: persist lots AND advance page in one transaction
-      // This ensures a failed page does NOT advance the checkpoint
-      const txResult = await this.prisma.$transaction(async (tx) => {
+      // This ensures a failed page does NOT advance the checkpoint.
+      // Extended timeout (30s) because HTTP fetch just completed and the
+      // connection pool may have been idle during the request.
+      const txResult = await this.prisma.$transaction(
+        async (tx) => {
         let txNew = 0;
         let txUpdated = 0;
 
@@ -373,7 +376,9 @@ export class DiscoveryService {
         });
 
         return { txNew, txUpdated };
-      });
+        },
+        { maxWait: 15000, timeout: 30000 },
+      );
 
       lotsDiscovered += items.length;
       newLots += txResult.txNew;
