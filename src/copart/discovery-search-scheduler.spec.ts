@@ -266,7 +266,10 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
       complete: jest.fn().mockResolvedValue(undefined),
     };
 
-    leaseService = {};
+    leaseService = {
+      getState: jest.fn().mockResolvedValue(null),
+      recoverStaleJobs: jest.fn().mockResolvedValue({ recoveredJobIds: [] }),
+    };
 
     configService = {
       get: jest.fn((key: string) => {
@@ -278,6 +281,8 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
           IMPORT_MAX_RETRY_DELAY_MS: 1000,
           IMPORT_JOB_TIMEOUT_MS: 30000,
           DISCOVERY_MAX_PAGES: 5,
+          SCHEDULER_ENABLED: false,
+          SCHEDULER_TICK_INTERVAL_MS: 300000,
           SCHEDULER_HOT_INTERVAL_MS: 900000,
           SCHEDULER_WARM_INTERVAL_MS: 10800000,
           SCHEDULER_COLD_INTERVAL_MS: 43200000,
