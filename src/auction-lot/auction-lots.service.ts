@@ -98,7 +98,16 @@ function toPublicDetailDto(lot: DiscoveredLot): PublicAuctionLotDetailDto {
     ...card,
     primaryDamage: lot.primaryDamage || null,
     secondaryDamage: lot.secondaryDamage || null,
-    engine: lot.engine || null,
+    engine: (() => {
+      if (!lot.engine) return null;
+      try {
+        const parsed = JSON.parse(lot.engine);
+        if (parsed && typeof parsed === 'object') {
+          return parsed.raw || [parsed.size_l ? parsed.size_l + 'L' : null, parsed.hp ? parsed.hp + 'hp' : null].filter(Boolean).join(' · ') || null;
+        }
+        return lot.engine;
+      } catch { return lot.engine; }
+    })(),
     transmission: lot.transmission || null,
     exteriorColor: lot.exteriorColor || null,
     mediaUrls: lot.mediaUrls ?? [],
