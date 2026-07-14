@@ -2,10 +2,20 @@
 // Strong Auto — Public Auction Lots Service (Task 036)
 // Read-only service for public auction lot queries.
 // Reads from Strong Auto PostgreSQL only. Never calls providers.
+// Uses tested lifecycle-mapping for all state transitions.
 // ─────────────────────────────────────────────────────────────
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { DiscoveredLot } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import {
+  normalizeLifecycleState,
+  computeFreshnessState,
+  isPublicEligible,
+  STALE_AFTER_MS,
+} from './lifecycle-mapping';
+import { AuctionLifecycleState, AuctionFreshnessState } from './types';
 import type {
   PublicAuctionLotCardDto,
   PublicAuctionLotDetailDto,
@@ -13,12 +23,44 @@ import type {
   PublicAuctionLotListResponse,
 } from './dto/public-auction-lot.dto';
 
+const VALID_PROVIDERS = ['copart', 'iaai'] as const;
+const VALID_LIFECYCLE_STATES = [
+  'NOT_READY', 'UPCOMING', 'OPEN', 'LIVE', 'ENDED', 'SOLD', 'REMOVED',
+] as const;
+type ProviderType = typeof VALID_PROVIDERS[number];
+type LifecycleStateType = typeof VALID_LIFECYCLE_STATES[number];
+const MAX_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 20;
+
 /**
  * Map a DiscoveredLot Prisma record to a public card DTO.
  * Only allowlisted fields are exposed.
  * Sensitive fields (VIN, seller info, raw payload, lease state) are excluded.
  */
-function toPublicCardDto(lot: any): PublicAuctionLotCardDto {
+function toPublicCardDto(lot: DiscoveredLot): PublicAuctionLotCardDto {
+  const now = new Date();
+  const lifecycleState = normalizeLifecycleState(
+    lot.auctionState,
+    lot.auctionTime ?? lot.ad,
+    now,
+  );
+
+  const tier = lot.freshnessTier ?? 'COLD';
+  const staleAfterMs =
+    tier === 'HOT' ? STALE_AFTER_MS.HOT :
+    tier === 'WARM' ? STALE_AFTER_MS.WARM :
+    STALE_AFTER_MS.COLD;
+
+  const freshnessState = computeFreshnessState(
+    lot.lastSeenAt ?? new Date(),
+    lot.nextRefreshAt,
+    lot.consecutiveMisses ?? 0,
+    lot.availabilityConfirmed ?? false,
+    lifecycleState as AuctionLifecycleState,
+    staleAfterMs,
+    now,
+  );
+
   return {
     provider: lot.provider,
     externalLotId: lot.externalLotId,
@@ -31,86 +73,26 @@ function toPublicCardDto(lot: any): PublicAuctionLotCardDto {
     driveType: lot.driveType || null,
     odometerKm: lot.odometerKm || null,
     odometerMi: lot.odometerMi || null,
-    lifecycleState: mapLifecycleState(lot.auctionState, lot.ad),
-    auctionTimestamp: lot.ad ? lot.ad.toISOString() : null,
-    auctionTimezoneOffset: null, // TODO: derive from provider facility data
+    lifecycleState,
+    auctionTimestamp: (lot.auctionTime ?? lot.ad) ? (lot.auctionTime ?? lot.ad)!.toISOString() : null,
+    auctionTimezoneOffset: lot.auctionTimezoneOffset ?? null,
     currentBidUsd: lot.currentBidUsd ? Number(lot.currentBidUsd) : null,
     buyNowUsd: lot.buyNowUsd ? Number(lot.buyNowUsd) : null,
     currency: 'USD',
-    thumbnailUrl: null, // TODO: derive from media URLs
-    mediaCount: lot.thumbsCount ?? 0,
+    thumbnailUrl: lot.mediaUrls?.[0] ?? null,
+    mediaCount: lot.mediaUrls?.length ?? lot.thumbsCount ?? 0,
     locationDisplay: lot.locationDisplay || null,
     locationState: lot.locationState || null,
-    freshnessState: mapFreshnessState(
-      lot.freshnessTier,
-      lot.consecutiveMisses,
-      lot.availabilityConfirmed,
-      lot.nextRefreshAt,
-    ),
-    freshnessTimestamp: (lot.lastProviderUpdateAt || lot.lastSeenAt).toISOString(),
+    freshnessState,
+    freshnessTimestamp: (lot.lastProviderUpdateAt ?? lot.lastSeenAt ?? new Date()).toISOString(),
     importedVehicleId: lot.vehicleId || null,
   };
 }
 
 /**
- * Map lifecycle state from provider auction state + timestamp.
- * This is a best-effort mapping; the exact state depends on provider contract.
- */
-function mapLifecycleState(
-  auctionState: string | null,
-  auctionDate: Date | null,
-): string {
-  if (!auctionState) {
-    return 'NOT_READY';
-  }
-
-  const state = auctionState.toLowerCase();
-
-  // Terminal states
-  if (state.includes('sold') || state === 'sold') return 'SOLD';
-  if (state.includes('removed') || state === 'cancelled') return 'REMOVED';
-  if (state.includes('ended')) return 'ENDED';
-
-  // Active states
-  if (state.includes('live') || state.includes('open')) return 'LIVE';
-  if (state.includes('on') || state.includes('open')) return 'OPEN';
-
-  // Upcoming — has a future auction date
-  if (auctionDate && auctionDate > new Date()) {
-    return 'UPCOMING';
-  }
-
-  // Default to upcoming if we have a date, otherwise not ready
-  return auctionDate ? 'UPCOMING' : 'NOT_READY';
-}
-
-/**
- * Map freshness state from existing DiscoveredLot fields.
- * HOT → FRESH, WARM → FRESH, COLD + high misses → STALE,
- * deferred → DEFERRED, consecutive misses >= 3 → TERMINAL.
- */
-function mapFreshnessState(
-  tier: string,
-  consecutiveMisses: number,
-  availabilityConfirmed: boolean,
-  nextRefreshAt: Date | null,
-): string {
-  if (!availabilityConfirmed && consecutiveMisses >= 3) {
-    return 'TERMINAL';
-  }
-  if (nextRefreshAt && nextRefreshAt < new Date() && consecutiveMisses >= 2) {
-    return 'STALE';
-  }
-  if (tier === 'COLD' && consecutiveMisses >= 1) {
-    return 'STALE';
-  }
-  return 'FRESH';
-}
-
-/**
  * Map a DiscoveredLot to a public detail DTO.
  */
-function toPublicDetailDto(lot: any): PublicAuctionLotDetailDto {
+function toPublicDetailDto(lot: DiscoveredLot): PublicAuctionLotDetailDto {
   const card = toPublicCardDto(lot);
   return {
     ...card,
@@ -119,10 +101,47 @@ function toPublicDetailDto(lot: any): PublicAuctionLotDetailDto {
     engine: lot.engine || null,
     transmission: lot.transmission || null,
     exteriorColor: lot.exteriorColor || null,
-    mediaUrls: [], // TODO: populate from media table or lot data
+    mediaUrls: lot.mediaUrls ?? [],
     has360: lot.has360 ?? false,
     hasVideo: lot.hasVideo ?? false,
   };
+}
+
+/**
+ * Check if a lot counts as "current" for public stats.
+ * Must be: public-eligible, FRESH, nonterminal, NOT_READY|UPCOMING|OPEN|LIVE
+ */
+function isCurrentLot(lot: Pick<DiscoveredLot, 'auctionState' | 'auctionTime' | 'ad' | 'lastSeenAt' | 'nextRefreshAt' | 'consecutiveMisses' | 'availabilityConfirmed' | 'freshnessTier' | 'lifecycleState' | 'freshnessState' | 'isBuyNow' | 'buyNowUsd'>): boolean {
+  const now = new Date();
+  const lifecycle = normalizeLifecycleState(
+    lot.auctionState,
+    lot.auctionTime ?? lot.ad,
+    now,
+  );
+  const tier = lot.freshnessTier ?? 'COLD';
+  const staleAfterMs =
+    tier === 'HOT' ? STALE_AFTER_MS.HOT :
+    tier === 'WARM' ? STALE_AFTER_MS.WARM :
+    STALE_AFTER_MS.COLD;
+  const freshness = computeFreshnessState(
+    lot.lastSeenAt ?? new Date(),
+    lot.nextRefreshAt,
+    lot.consecutiveMisses ?? 0,
+    lot.availabilityConfirmed ?? false,
+    lifecycle,
+    staleAfterMs,
+    now,
+  );
+
+  if (!isPublicEligible(freshness as AuctionFreshnessState, lifecycle as AuctionLifecycleState, lot.availabilityConfirmed ?? false, lot.consecutiveMisses ?? 0))
+    return false;
+
+  return [
+    AuctionLifecycleState.NOT_READY,
+    AuctionLifecycleState.UPCOMING,
+    AuctionLifecycleState.OPEN,
+    AuctionLifecycleState.LIVE,
+  ].includes(lifecycle as AuctionLifecycleState);
 }
 
 @Injectable()
@@ -131,8 +150,7 @@ export class AuctionLotsService {
 
   /**
    * Get paginated public auction lots.
-   * Filters by provider, make, model, year, lifecycle, buyNow.
-   * Sorts by auction date (upcoming first) by default.
+   * Only returns public-eligible lots.
    */
   async findAll(query: {
     page?: number;
@@ -146,32 +164,51 @@ export class AuctionLotsService {
     sort?: string;
     sortDir?: 'asc' | 'desc';
   }): Promise<PublicAuctionLotListResponse> {
+    // Validate provider
+    if (query.provider && !VALID_PROVIDERS.includes(query.provider as ProviderType)) {
+      throw new BadRequestException(
+        `Invalid provider "${query.provider}". Valid: ${VALID_PROVIDERS.join(', ')}`,
+      );
+    }
+
+    // Validate lifecycle state
+    if (query.lifecycleState && !VALID_LIFECYCLE_STATES.includes(query.lifecycleState as LifecycleStateType)) {
+      throw new BadRequestException(
+        `Invalid lifecycleState. Valid: ${VALID_LIFECYCLE_STATES.join(', ')}`,
+      );
+    }
+
     const page = Math.max(1, query.page ?? 1);
-    const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 20));
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, query.pageSize ?? DEFAULT_PAGE_SIZE));
     const skip = (page - 1) * pageSize;
 
     // Build where clause — only public-eligible lots
-    const where: any = {
-      // Exclude terminal lots from default public view
+    const where: Prisma.DiscoveredLotWhereInput = {
       availabilityConfirmed: true,
       consecutiveMisses: { lt: 3 },
+      // Exclude terminal freshness
+      freshnessState: { not: 'TERMINAL' },
+    };
+
+    // Exclude terminal lifecycle
+    where.NOT = {
+      lifecycleState: { in: ['SOLD', 'REMOVED'] },
     };
 
     if (query.provider) where.provider = query.provider;
-    if (query.make) where.make = query.make;
-    if (query.model) where.model = query.model;
+    if (query.make) where.make = { equals: query.make, mode: 'insensitive' };
+    if (query.model) where.model = { equals: query.model, mode: 'insensitive' };
     if (query.year) where.year = query.year;
     if (query.buyNow) {
       where.isBuyNow = true;
       where.buyNowUsd = { not: null };
     }
     if (query.lifecycleState) {
-      // Map lifecycle state back to provider auction state filter
-      where.auctionState = this.mapLifecycleStateFilter(query.lifecycleState);
+      where.lifecycleState = query.lifecycleState as LifecycleStateType;
     }
 
     // Build order by
-    const orderBy: any = [];
+    const orderBy: Prisma.DiscoveredLotOrderByWithRelationInput[] = [];
     if (query.sort === 'price_asc') {
       orderBy.push({ currentBidUsd: 'asc' });
     } else if (query.sort === 'price_desc') {
@@ -180,13 +217,20 @@ export class AuctionLotsService {
       orderBy.push({ year: 'asc' });
     } else if (query.sort === 'year_desc') {
       orderBy.push({ year: 'desc' });
+    } else if (query.sort === 'auction_asc') {
+      orderBy.push({ auctionTime: 'asc' });
+    } else if (query.sort === 'auction_desc') {
+      orderBy.push({ auctionTime: 'desc' });
     } else {
       // Default: upcoming auctions first, then by last seen
-      orderBy.push({ ad: 'asc' });
+      orderBy.push({ auctionTime: { sort: 'asc', nulls: 'last' } });
       orderBy.push({ lastSeenAt: 'desc' });
     }
-    if (query.sortDir) {
-      orderBy[0] = { [Object.keys(orderBy[0])[0]]: query.sortDir };
+
+    // Apply sortDir to first orderBy entry
+    if (query.sortDir && orderBy.length > 0) {
+      const firstKey = Object.keys(orderBy[0])[0];
+      orderBy[0] = { [firstKey]: query.sortDir };
     }
 
     const [lots, total] = await Promise.all([
@@ -215,6 +259,12 @@ export class AuctionLotsService {
     provider: string,
     externalLotId: string,
   ): Promise<PublicAuctionLotDetailDto> {
+    if (!VALID_PROVIDERS.includes(provider as ProviderType)) {
+      throw new BadRequestException(
+        `Invalid provider "${provider}". Valid: ${VALID_PROVIDERS.join(', ')}`,
+      );
+    }
+
     const lot = await this.prisma.discoveredLot.findUnique({
       where: { provider_externalLotId: { provider, externalLotId } },
     });
@@ -230,50 +280,73 @@ export class AuctionLotsService {
 
   /**
    * Get public auction lot stats (semantic counters).
+   * Counters use tested rules — no unknown/default lot counted as current.
    */
   async getStats(): Promise<PublicAuctionLotStatsDto> {
     const now = new Date();
 
-    // currentLotCount: FRESH, nonterminal, active lifecycle states
-    const [currentLotCount, liveLotCount, buyNowCount, upcomingCount, curatedCount] = await Promise.all([
-      // Current lots: active lifecycle, not terminal
-      this.prisma.discoveredLot.count({
-        where: {
-          availabilityConfirmed: true,
-          consecutiveMisses: { lt: 3 },
-          auctionState: { in: ['on', 'open', 'live', 'upcoming', 'pending'] },
-        },
-      }),
-      // Live lots: LIVE state
-      this.prisma.discoveredLot.count({
-        where: {
-          availabilityConfirmed: true,
-          consecutiveMisses: { lt: 3 },
-          auctionState: { in: ['live', 'on'] },
-        },
-      }),
-      // Buy Now lots
-      this.prisma.discoveredLot.count({
-        where: {
-          availabilityConfirmed: true,
-          consecutiveMisses: { lt: 3 },
-          isBuyNow: true,
-          buyNowUsd: { not: null },
-        },
-      }),
-      // Upcoming lots: future auction date
-      this.prisma.discoveredLot.count({
-        where: {
-          availabilityConfirmed: true,
-          consecutiveMisses: { lt: 3 },
-          ad: { gt: now },
-        },
-      }),
-      // Curated published vehicles (separate counter)
-      this.prisma.vehicle.count({
-        where: { publicationStatus: 'PUBLISHED' },
-      }),
-    ]);
+    // Fetch all candidate lots (public-eligible, non-terminal)
+    // In production this would use SQL aggregations, but for correctness
+    // we compute eligibility in application code to match the tested rules exactly.
+    const candidates = await this.prisma.discoveredLot.findMany({
+      where: {
+        availabilityConfirmed: true,
+        consecutiveMisses: { lt: 3 },
+        freshnessState: { not: 'TERMINAL' },
+        NOT: { lifecycleState: { in: ['SOLD', 'REMOVED'] } },
+      },
+      select: {
+        auctionState: true,
+        auctionTime: true,
+        ad: true,
+        lastSeenAt: true,
+        nextRefreshAt: true,
+        consecutiveMisses: true,
+        availabilityConfirmed: true,
+        freshnessTier: true,
+        lifecycleState: true,
+        freshnessState: true,
+        isBuyNow: true,
+        buyNowUsd: true,
+      },
+    });
+
+    let currentLotCount = 0;
+    let liveLotCount = 0;
+    let buyNowCount = 0;
+    let upcomingCount = 0;
+
+    for (const lot of candidates) {
+      if (!isCurrentLot(lot)) continue;
+
+      currentLotCount++;
+
+      const lifecycle = normalizeLifecycleState(
+        lot.auctionState,
+        lot.auctionTime ?? lot.ad,
+        now,
+      );
+
+      if (lifecycle === AuctionLifecycleState.LIVE) {
+        liveLotCount++;
+      }
+
+      if (lot.isBuyNow && lot.buyNowUsd != null) {
+        buyNowCount++;
+      }
+
+      if (lifecycle === AuctionLifecycleState.UPCOMING) {
+        const auctionDate = lot.auctionTime ?? lot.ad;
+        if (auctionDate && auctionDate > now) {
+          upcomingCount++;
+        }
+      }
+    }
+
+    // Curated published vehicles (separate counter)
+    const curatedCount = await this.prisma.vehicle.count({
+      where: { publicationStatus: 'PUBLISHED' },
+    });
 
     return {
       currentLotCount,
@@ -282,26 +355,5 @@ export class AuctionLotsService {
       upcomingCount,
       curatedVehicleCount: curatedCount,
     };
-  }
-
-  /**
-   * Map public lifecycle state filter to provider auction state.
-   */
-  private mapLifecycleStateFilter(lifecycleState: string): any {
-    switch (lifecycleState) {
-      case 'LIVE':
-      case 'OPEN':
-        return { in: ['on', 'open', 'live'] };
-      case 'UPCOMING':
-        return { in: ['upcoming', 'pending'] };
-      case 'ENDED':
-        return 'ended';
-      case 'SOLD':
-        return 'sold';
-      case 'REMOVED':
-        return { in: ['removed', 'cancelled'] };
-      default:
-        return undefined;
-    }
   }
 }

@@ -9,7 +9,6 @@ import {
   Get,
   Param,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -52,6 +51,15 @@ export class AuctionLotsController {
     return this.auctionLotsService.findAll(query);
   }
 
+  // IMPORTANT: /stats must be declared BEFORE /:provider/:externalLotId
+  // otherwise NestJS will match 'stats' as the :provider param.
+  @Get('stats')
+  @ApiOperation({ summary: 'Get public auction lot stats' })
+  @ApiResponse({ status: 200, description: 'Auction lot statistics' })
+  async getStats(): Promise<PublicAuctionLotStatsDto> {
+    return this.auctionLotsService.getStats();
+  }
+
   @Get(':provider/:externalLotId')
   @ApiOperation({ summary: 'Get public auction lot detail' })
   @ApiParam({ name: 'provider', description: 'Provider (copart, iaai)' })
@@ -63,12 +71,5 @@ export class AuctionLotsController {
     @Param('externalLotId') externalLotId: string,
   ): Promise<PublicAuctionLotDetailDto> {
     return this.auctionLotsService.findOne(provider, externalLotId);
-  }
-
-  @Get('stats')
-  @ApiOperation({ summary: 'Get public auction lot stats' })
-  @ApiResponse({ status: 200, description: 'Auction lot statistics' })
-  async getStats(): Promise<PublicAuctionLotStatsDto> {
-    return this.auctionLotsService.getStats();
   }
 }
