@@ -19,12 +19,12 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuctionLotsService } from './auction-lots.service';
-import type {
-  PublicAuctionLotListResponse,
-  PublicAuctionLotDetailDto,
-  PublicAuctionLotStatsDto,
-  PublicAuctionLotQueryDto,
+import {
+  type PublicAuctionLotListResponse,
+  type PublicAuctionLotDetailDto,
+  type PublicAuctionLotStatsDto,
 } from './dto/public-auction-lot.dto';
+import { PublicAuctionLotQueryDto } from './dto/public-auction-lot.dto';
 
 @ApiTags('auction-lots')
 @Controller('auction-lots')
