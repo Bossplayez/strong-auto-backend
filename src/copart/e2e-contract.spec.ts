@@ -188,13 +188,13 @@ describe('Task 033S1 — End-to-End Contract Tests', () => {
 
   it('3. cache hit causes zero budget reservations', async () => {
     // Pre-populate cache
-    const fingerprint = searchService.buildQueryFingerprint({ platform: 'copart', page: 1, limit: 20 });
+    const fingerprint = searchService.buildQueryFingerprint({ platform: 'copart', cursor: null, limit: 20 });
     await prisma.searchQueryCache.upsert({
       where: { queryFingerprint: fingerprint },
       create: {
         queryFingerprint: fingerprint,
         provider: 'copart',
-        params: { platform: 'copart', page: 1, limit: 20 },
+        params: { platform: 'copart', cursor: null, limit: 20 },
         results: [{ lot_number: '123', make: 'HONDA', model: 'Civic', year: 2020 }],
         nextCursor: null,
         itemCount: 1,
@@ -204,7 +204,7 @@ describe('Task 033S1 — End-to-End Contract Tests', () => {
       update: {},
     });
 
-    const result = await searchService.search({ platform: 'copart', page: 1, limit: 20 });
+    const result = await searchService.search({ platform: 'copart', cursor: null, limit: 20 });
     expect(result.cached).toBe(true);
     expect(budgetService.reserve).not.toHaveBeenCalled();
   });
@@ -218,7 +218,7 @@ describe('Task 033S1 — End-to-End Contract Tests', () => {
     });
 
     await expect(
-      searchService.search({ platform: 'copart', page: 1, limit: 20 }),
+      searchService.search({ platform: 'copart', cursor: null, limit: 20 }),
     ).rejects.toThrow(/Budget/);
 
     expect(budgetService.reserve).not.toHaveBeenCalled();
@@ -308,13 +308,13 @@ describe('Task 033S1 — End-to-End Contract Tests', () => {
     const mockItems = [];
     (searchService as any).executeSearch = jest.fn().mockResolvedValue({
       items: mockItems,
-      page: 1,
+      cursor: null,
       hasMore: false,
       cached: false,
       provider: 'copart',
     });
 
-    const result = await searchService.search({ platform: 'copart', page: 1, limit: 20 });
+    const result = await searchService.search({ platform: 'copart', cursor: null, limit: 20 });
 
     // No vehicle should have been created
     expect(prisma.vehicle.create).not.toHaveBeenCalled();
@@ -367,7 +367,7 @@ describe('Task 033S1 — End-to-End Contract Tests', () => {
   it('9. search params include all filters from URL', () => {
     const params = searchService.normalizeParams({
       platform: 'copart',
-      page: '2',
+      cursor: 'abc123',
       limit: '20',
       make: 'BMW',
       year: '2020',
@@ -378,7 +378,7 @@ describe('Task 033S1 — End-to-End Contract Tests', () => {
     });
 
     expect(params.platform).toBe('copart');
-    expect(params.page).toBe(2);
+    expect(params.cursor).toBe('abc123');
     expect(params.limit).toBe(20);
     expect(params.make).toBe('BMW');
     expect(params.year).toBe(2020);

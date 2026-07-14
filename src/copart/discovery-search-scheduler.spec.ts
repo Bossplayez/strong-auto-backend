@@ -385,7 +385,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         create: {
           queryFingerprint: 'search_test1',
           provider: 'copart',
-          params: { platform: 'copart', page: 1, limit: 20 },
+          params: { platform: 'copart', cursor: null, limit: 20 },
           results: mockItems,
           nextCursor: null,
           itemCount: 1,
@@ -396,7 +396,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
       });
 
       // Build fingerprint matching the stored cache
-      const fingerprint = searchService.buildQueryFingerprint({ platform: 'copart', page: 1, limit: 20 });
+      const fingerprint = searchService.buildQueryFingerprint({ platform: 'copart', cursor: null, limit: 20 });
 
       // Re-store with matching fingerprint
       await prisma.searchQueryCache.upsert({
@@ -404,7 +404,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         create: {
           queryFingerprint: fingerprint,
           provider: 'copart',
-          params: { platform: 'copart', page: 1, limit: 20 },
+          params: { platform: 'copart', cursor: null, limit: 20 },
           results: mockItems,
           nextCursor: null,
           itemCount: 1,
@@ -417,7 +417,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         },
       });
 
-      const result = await searchService.search({ platform: 'copart', page: 1, limit: 20 });
+      const result = await searchService.search({ platform: 'copart', cursor: null, limit: 20 });
       expect(result.cached).toBe(true);
       expect(result.items).toHaveLength(1);
       // Budget should NOT have been called for cache hit
@@ -435,7 +435,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
       });
 
       await expect(
-        searchService.search({ platform: 'copart', page: 1, limit: 20 }),
+        searchService.search({ platform: 'copart', cursor: null, limit: 20 }),
       ).rejects.toThrow(/Budget/);
 
       // Reserve should NOT have been called
@@ -646,12 +646,12 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
       expect(params.platform).toBe('copart');
     });
 
-    it('16. clamps page to valid range', () => {
-      const params = searchService.normalizeParams({ page: '0' });
-      expect(params.page).toBe(1);
+    it('16. handles cursor parameter', () => {
+      const params = searchService.normalizeParams({ cursor: null });
+      expect(params.cursor).toBeNull();
 
-      const params2 = searchService.normalizeParams({ page: '99999' });
-      expect(params2.page).toBeLessThanOrEqual(1000);
+      const params2 = searchService.normalizeParams({ cursor: 'abc123' });
+      expect(params2.cursor).toBe('abc123');
     });
 
     it('17. validates sort parameter', () => {
@@ -768,14 +768,14 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         // Return a minimal result without actually calling the API
         return {
           items: [],
-          page: params.page,
+          cursor: params.cursor,
           hasMore: false,
           cached: false,
           provider: params.platform,
         };
       };
 
-      const params = { platform: 'copart', page: 1, limit: 20 };
+      const params = { platform: 'copart', cursor: null, limit: 20 };
       // Fire two identical concurrent searches
       const [result1, result2] = await Promise.all([
         searchService.search(params),

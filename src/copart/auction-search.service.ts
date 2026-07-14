@@ -1,8 +1,10 @@
 /**
  * Filtered auction search service with cache and deduplication.
  *
- * Uses confirmed RapidAPI parameters:
- *   platform, make, year, search, buy_now, sale_status, sort, cursor (page)
+ * VERIFIED RapidAPI contract (Task 036):
+ *   auction_type=1 (copart) / 2 (iaai)
+ *   per_page=N (not limit)
+ *   cursor=<opaque> from meta.next_cursor
  *
  * Features:
  * - Normalize and validate all query parameters
@@ -33,13 +35,13 @@ export interface SearchParams {
   buyNow?: boolean;
   saleStatus?: string;
   sort?: string;
-  page?: number;
+  cursor?: string | null;
   limit?: number;
 }
 
 export interface SearchResult {
   items: any[];
-  page: number;
+  cursor: string | null;
   hasMore: boolean;
   cached: boolean;
   provider: string;
@@ -59,6 +61,12 @@ export class AuctionSearchService {
     private readonly budgetService: RequestBudgetService,
   ) {}
 
+  /** Map provider to auction_type: copart=1, iaai=2 */
+  private static readonly AUCTION_TYPE_MAP: Record<string, number> = {
+    copart: 1,
+    iaai: 2,
+  };
+
   /** Build a stable fingerprint from normalized search params. */
   buildQueryFingerprint(params: SearchParams): string {
     const parts: string[] = [params.platform];
@@ -68,8 +76,8 @@ export class AuctionSearchService {
     if (params.buyNow) parts.push(`buy_now=true`);
     if (params.saleStatus) parts.push(`sale_status=${params.saleStatus}`);
     if (params.sort) parts.push(`sort=${params.sort}`);
-    parts.push(`page=${params.page ?? 1}`);
-    parts.push(`limit=${params.limit ?? 20}`);
+    parts.push(`cursor=${params.cursor ?? 'initial'}`);
+    parts.push(`per_page=${params.limit ?? 20}`);
 
     const str = parts.join('|');
     let hash = 0;
@@ -84,10 +92,10 @@ export class AuctionSearchService {
   /** Validate and normalize search parameters. */
   normalizeParams(raw: Record<string, any>): SearchParams {
     const platform = raw.platform === 'iaai' ? 'iaai' : 'copart';
-    const page = Math.max(1, Math.min(Number(raw.page) || 1, 1000));
     const limit = Math.max(1, Math.min(Number(raw.limit) || 20, 50));
+    const cursor = raw.cursor ? String(raw.cursor) : null;
 
-    const params: SearchParams = { platform, page, limit };
+    const params: SearchParams = { platform, cursor, limit };
 
     if (raw.make && typeof raw.make === 'string') {
       params.make = raw.make.trim().slice(0, 50);
@@ -176,9 +184,9 @@ export class AuctionSearchService {
     }
 
     const url = new URL(`${this.RAPIDAPI_BASE}/vehicles`);
-    url.searchParams.set('platform', params.platform);
-    url.searchParams.set('page', String(params.page));
-    url.searchParams.set('limit', String(params.limit));
+    url.searchParams.set('auction_type', String(AuctionSearchService.AUCTION_TYPE_MAP[params.platform] ?? 1));
+    url.searchParams.set('per_page', String(params.limit));
+    if (params.cursor) url.searchParams.set('cursor', params.cursor);
     if (params.make) url.searchParams.set('make', params.make);
     if (params.year) url.searchParams.set('year', String(params.year));
     if (params.search) url.searchParams.set('search', params.search);
@@ -224,6 +232,7 @@ export class AuctionSearchService {
 
     const body = result.data;
     const items = body?.data ?? [];
+    const nextCursor: string | null = body?.meta?.next_cursor ?? null;
 
     // Normalize and upsert discovered lots
     const sanitizedItems: any[] = [];
@@ -270,8 +279,8 @@ export class AuctionSearchService {
 
     return {
       items: sanitizedItems,
-      page: params.page!,
-      hasMore: items.length === params.limit,
+      cursor: nextCursor,
+      hasMore: nextCursor !== null,
       cached: false,
       provider: params.platform,
     };
@@ -288,7 +297,7 @@ export class AuctionSearchService {
 
     return {
       items: cached.results as any[],
-      page: (cached.params as any)?.page ?? 1,
+      cursor: cached.nextCursor,
       hasMore: cached.nextCursor !== null,
       cached: true,
       provider: cached.provider,
@@ -311,14 +320,14 @@ export class AuctionSearchService {
         provider: params.platform,
         params: params as any,
         results: result.items as any,
-        nextCursor: result.hasMore ? `page_${result.page + 1}` : null,
+        nextCursor: result.cursor,
         itemCount: result.items.length,
         ttlSeconds: ttl,
         expiresAt,
       },
       update: {
         results: result.items as any,
-        nextCursor: result.hasMore ? `page_${result.page + 1}` : null,
+        nextCursor: result.cursor,
         itemCount: result.items.length,
         ttlSeconds: ttl,
         expiresAt,

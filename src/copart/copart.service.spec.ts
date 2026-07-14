@@ -27,7 +27,7 @@ const mockedProviderFetch = providerFetch as jest.MockedFunction<typeof provider
 
 // ── Helpers ───────────────────────────────────────────────────
 
-function makePage(lotNumbers: (number | string)[]): { data: any[] } {
+function makePage(lotNumbers: (number | string)[], hasNextCursor = true): { data: any[]; meta: { next_cursor: string | null; per_page: number } } {
   return {
     data: lotNumbers.map((ln) => ({
       lot_number: ln,
@@ -36,6 +36,7 @@ function makePage(lotNumbers: (number | string)[]): { data: any[] } {
       year: 2020,
       title: `2020 Toyota Camry ${ln}`,
       vin: `VIN${ln}`,
+      platform: 'copart',
       pricing: { current_bid_usd: 5000, buy_now_usd: 10000 },
       media: { items: [] },
       condition: {},
@@ -43,6 +44,10 @@ function makePage(lotNumbers: (number | string)[]): { data: any[] } {
       location: {},
       auction: {},
     })),
+    meta: {
+      next_cursor: hasNextCursor ? `cursor_${lotNumbers.length}_${Date.now()}_${Math.random()}` : null,
+      per_page: 20,
+    },
   };
 }
 
@@ -523,8 +528,8 @@ describe('CopartService — behavioral tests', () => {
 
   // ── Req 11: Reordered repeated page ──
   it('11. reordered repeated page detected', async () => {
-    const page1 = { data: [{ lot_number: 10, make: 'A', model: 'A', year: 2020, title: 'A', pricing: {} }, { lot_number: 20, make: 'B', model: 'B', year: 2020, title: 'B', pricing: {} }, { lot_number: 30, make: 'C', model: 'C', year: 2020, title: 'C', pricing: {} }] };
-    const page2 = { data: [{ lot_number: 30, make: 'C', model: 'C', year: 2020, title: 'C', pricing: {} }, { lot_number: 10, make: 'A', model: 'A', year: 2020, title: 'A', pricing: {} }, { lot_number: 20, make: 'B', model: 'B', year: 2020, title: 'B', pricing: {} }] };
+    const page1 = { data: [{ lot_number: 10, make: 'A', model: 'A', year: 2020, title: 'A', pricing: {} }, { lot_number: 20, make: 'B', model: 'B', year: 2020, title: 'B', pricing: {} }, { lot_number: 30, make: 'C', model: 'C', year: 2020, title: 'C', pricing: {} }], meta: { next_cursor: 'cursor_page2', per_page: 20 } };
+    const page2 = { data: [{ lot_number: 30, make: 'C', model: 'C', year: 2020, title: 'C', pricing: {} }, { lot_number: 10, make: 'A', model: 'A', year: 2020, title: 'A', pricing: {} }, { lot_number: 20, make: 'B', model: 'B', year: 2020, title: 'B', pricing: {} }], meta: { next_cursor: null, per_page: 20 } };
     let callNum = 0;
     mockedProviderFetch.mockImplementation(async () => {
       callNum++;

@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
-// Strong Auto — Provider Adapter Tests (Task 036 Phase C)
-// Tests for PageLimitProviderAdapter, CursorProviderAdapter,
+// Strong Auto — Provider Adapter Tests (Task 036)
+// Tests for PageLimitProviderAdapter (stub), CursorProviderAdapter,
 // LoopDetector, and unsupported filter rejection.
 // ─────────────────────────────────────────────────────────────
 
@@ -10,58 +10,37 @@ import { CursorProviderAdapter } from './cursor-adapter';
 import { UnsupportedFilterError } from './provider-adapter.interface';
 import type { DiscoveryPartition } from './types';
 
-describe('PageLimitProviderAdapter', () => {
+describe('PageLimitProviderAdapter (stub)', () => {
   const adapter = new PageLimitProviderAdapter('copart');
 
   it('has correct providerId', () => {
     expect(adapter.providerId).toBe('copart');
   });
 
-  it('supportsFilter returns true for known filters', () => {
-    expect(adapter.supportsFilter('make')).toBe(true);
-    expect(adapter.supportsFilter('model')).toBe(true);
-    expect(adapter.supportsFilter('year')).toBe(true);
-    expect(adapter.supportsFilter('buyNow')).toBe(true);
-    expect(adapter.supportsFilter('lifecycleState')).toBe(true);
-  });
-
-  it('supportsFilter returns false for unknown filters', () => {
+  it('supportsFilter returns false for all filters (deprecated)', () => {
+    expect(adapter.supportsFilter('make')).toBe(false);
     expect(adapter.supportsFilter('vin')).toBe(false);
-    expect(adapter.supportsFilter('seller')).toBe(false);
-    expect(adapter.supportsFilter('unknown')).toBe(false);
   });
 
-  it('isValidContinuation accepts valid tokens', () => {
+  it('isValidContinuation returns false for all tokens (deprecated)', () => {
     const token = Buffer.from(JSON.stringify({ page: 2, exhausted: false })).toString('base64');
-    expect(adapter.isValidContinuation(token)).toBe(true);
-  });
-
-  it('isValidContinuation rejects malformed tokens', () => {
-    expect(adapter.isValidContinuation('not-a-token')).toBe(false);
-    expect(adapter.isValidContinuation('')).toBe(false);
-  });
-
-  it('isValidContinuation rejects tokens with invalid page', () => {
-    const token = Buffer.from(JSON.stringify({ page: -1, exhausted: false })).toString('base64');
     expect(adapter.isValidContinuation(token)).toBe(false);
   });
 
-  it('listPartition returns empty result without provider call', async () => {
+  it('listPartition throws error (deprecated)', async () => {
     const partition: DiscoveryPartition = {
       provider: 'copart',
       priority: 1,
     };
-    const result = await adapter.listPartition(partition);
-    expect(result.lots).toHaveLength(0);
-    expect(result.exhausted).toBe(true);
-    expect(result.nextContinuation).toBeNull();
-    expect(result.metadata.requestCount).toBe(0);
+    await expect(adapter.listPartition(partition)).rejects.toThrow(
+      'Page-limit adapter is not used for RapidAPI cursor contract',
+    );
   });
 
-  it('getDetail returns null lot without provider call', async () => {
-    const result = await adapter.getDetail('copart', '123');
-    expect(result.lot).toBeNull();
-    expect(result.metadata.requestCount).toBe(0);
+  it('getDetail throws error (deprecated)', async () => {
+    await expect(adapter.getDetail('copart', '123')).rejects.toThrow(
+      'Page-limit adapter is not used for RapidAPI cursor contract',
+    );
   });
 });
 
@@ -93,20 +72,19 @@ describe('CursorProviderAdapter', () => {
     expect(adapter.isValidContinuation('')).toBe(false);
   });
 
-  it('listPartition returns empty result without provider call', async () => {
+  it('listPartition throws when transport is not configured', async () => {
     const partition: DiscoveryPartition = {
       provider: 'iaai',
       priority: 1,
     };
-    const result = await adapter.listPartition(partition);
-    expect(result.lots).toHaveLength(0);
-    expect(result.exhausted).toBe(true);
-    expect(result.nextContinuation).toBeNull();
+    // Without a configured transport, this will throw
+    await expect(adapter.listPartition(partition)).rejects.toThrow();
   });
 
-  it('getDetail returns null lot without provider call', async () => {
+  it('getDetail returns null lot (not yet implemented)', async () => {
     const result = await adapter.getDetail('iaai', '456');
     expect(result.lot).toBeNull();
+    expect(result.metadata.requestCount).toBe(0);
   });
 });
 
@@ -155,40 +133,5 @@ describe('UnsupportedFilterError', () => {
   it('has correct error name', () => {
     const error = new UnsupportedFilterError('iaai', 'seller');
     expect(error.name).toBe('UnsupportedFilterError');
-  });
-});
-
-describe('Provider adapter — partition handling', () => {
-  const adapter = new PageLimitProviderAdapter('copart');
-
-  it('handles partition with lifecycle filter', async () => {
-    const partition: DiscoveryPartition = {
-      provider: 'copart',
-      lifecycleFilter: [],
-      priority: 1,
-    };
-    const result = await adapter.listPartition(partition);
-    expect(result.metadata.partitionLabel).toContain('copart');
-  });
-
-  it('handles partition with date window', async () => {
-    const partition: DiscoveryPartition = {
-      provider: 'copart',
-      dateWindowStart: new Date('2026-08-01'),
-      dateWindowEnd: new Date('2026-08-31'),
-      priority: 2,
-    };
-    const result = await adapter.listPartition(partition);
-    expect(result.metadata).toBeDefined();
-  });
-
-  it('handles partition with Buy Now priority', async () => {
-    const partition: DiscoveryPartition = {
-      provider: 'copart',
-      buyNowFirst: true,
-      priority: 0,
-    };
-    const result = await adapter.listPartition(partition);
-    expect(result.metadata).toBeDefined();
   });
 });

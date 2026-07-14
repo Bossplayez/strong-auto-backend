@@ -1,19 +1,15 @@
 /**
- * Page-checkpoint-based auction discovery service.
+ * Cursor-based auction discovery service.
  *
- * CONFIRMED provider contract (Task 033P, 13/13 HTTP 200):
- *   GET /vehicles?platform={copart|iaai}&page={n}&limit=20
- *   Response: { ok, data: [...], meta: { next_cursor, per_page, prev_cursor } }
- *
- * IMPORTANT: Despite the meta field name "next_cursor", the provider
- * uses PAGE-BASED pagination (integer page number). The "next_cursor"
- * field contains the next page number as a string, not an opaque token.
- * This was confirmed by Task 033P probe: all requests used ?page=N and
- * returned HTTP 200.
+ * VERIFIED provider contract (Task 036):
+ *   GET /vehicles?auction_type={1|2}&per_page={N}&cursor={opaque}
+ *   auction_type=1 → Copart, auction_type=2 → IAAI
+ *   cursor is an opaque token from meta.next_cursor — forwarded byte-for-byte
+ *   NEVER generate/increment cursor tokens
  *
  * Features:
- * - Page checkpoint persisted per provider + query fingerprint
- * - Safe resume after interruption (advance page only in same tx as page persist)
+ * - Cursor checkpoint persisted per provider + query fingerprint
+ * - Safe resume after interruption (advance cursor only in same tx as lot persist)
  * - Loop detection (identical lot set across pages)
  * - Repeated-lot-page detection
  * - Copart/IAAI independent checkpoint state
@@ -91,12 +87,18 @@ export class DiscoveryService {
     return `fp_${Math.abs(hash).toString(36)}`;
   }
 
-  /** Build the API URL from params and page number. */
-  private buildUrl(params: DiscoveryParams, page: number): string {
+  /** Map provider to auction_type: copart=1, iaai=2 */
+  private static readonly AUCTION_TYPE_MAP: Record<string, number> = {
+    copart: 1,
+    iaai: 2,
+  };
+
+  /** Build the API URL from params and cursor. */
+  private buildUrl(params: DiscoveryParams, cursor: string | null): string {
     const url = new URL(`${this.RAPIDAPI_BASE}/vehicles`);
-    url.searchParams.set('platform', params.platform);
-    url.searchParams.set('page', String(page));
-    url.searchParams.set('limit', String(params.limit ?? 20));
+    url.searchParams.set('auction_type', String(DiscoveryService.AUCTION_TYPE_MAP[params.platform] ?? 1));
+    url.searchParams.set('per_page', String(params.limit ?? 20));
+    if (cursor) url.searchParams.set('cursor', cursor);
     if (params.make) url.searchParams.set('make', params.make);
     if (params.year) url.searchParams.set('year', String(params.year));
     if (params.search) url.searchParams.set('search', params.search);
@@ -118,11 +120,11 @@ export class DiscoveryService {
 
   /**
    * Run a bounded discovery pass for a provider + query.
-   * Resumes from the last page checkpoint.
+   * Resumes from the last cursor checkpoint.
    *
-   * Page checkpoint advancement is atomic: the page number is advanced
+   * Cursor checkpoint advancement is atomic: the cursor is advanced
    * only in the same fenced transaction that persists the discovered lots.
-   * A failed page does NOT advance the checkpoint.
+   * A failed request does NOT advance the checkpoint.
    */
   async runDiscovery(
     params: DiscoveryParams,
@@ -184,8 +186,9 @@ export class DiscoveryService {
       };
     }
 
-    // Resume from the next page after last successful page
-    const startPage = (checkpoint.lastPage ?? 0) + 1;
+    // Resume from stored cursor (opaque token, forwarded byte-for-byte)
+    // The lastPage field stores the cursor token in the new contract
+    let currentCursor: string | null = checkpoint.lastPage ? String(checkpoint.lastPage) : null;
 
     const headers = {
       'x-rapidapi-host': this.RAPIDAPI_HOST,
@@ -201,13 +204,13 @@ export class DiscoveryService {
     let lotsDiscovered = 0;
     let lotsUpdated = 0;
     let newLots = 0;
-    let currentPage = startPage;
     let exhausted = false;
     let terminalReason = 'completed';
     const errors: string[] = [];
 
     // Track page identities for loop detection
     const pageIdentities: Map<number, string[]> = new Map();
+    let pageSeq = 0; // sequential counter for loop detection only
 
     while (pagesCompleted < maxPgs) {
       if (Date.now() >= jobDeadlineMs) {
@@ -224,7 +227,7 @@ export class DiscoveryService {
       }
 
       // Budget reservation
-      const attemptId = `disc-${params.platform}-${queryFingerprint}-p${currentPage}-${crypto.randomUUID()}`;
+      const attemptId = `disc-${params.platform}-${queryFingerprint}-c${pageSeq}-${crypto.randomUUID()}`;
       const reservation = await this.budgetService.reserve(
         params.platform as ProviderId,
         null,
@@ -236,8 +239,8 @@ export class DiscoveryService {
         break;
       }
 
-      const url = this.buildUrl(params, currentPage);
-      this.logger.log(`Discovery ${params.platform} page ${currentPage} (checkpoint: last=${checkpoint.lastPage}, this=page ${currentPage}/${startPage + maxPgs - 1})`);
+      const url = this.buildUrl(params, currentCursor);
+      this.logger.log(`Discovery ${params.platform} cursor ${currentCursor ? '[present]' : '[initial]'} (page ${pageSeq + 1}/${maxPgs})`);
 
       const result = await providerFetch<any>(
         url,
@@ -262,7 +265,7 @@ export class DiscoveryService {
 
       if (!result.ok) {
         const f = result.failure;
-        errors.push(`Page ${currentPage}: ${f.kind} - ${f.message}`);
+        errors.push(`Cursor ${currentCursor ?? 'initial'}: ${f.kind} - ${f.message}`);
 
         if (f.kind === 'HTTP_4XX') {
           terminalReason = 'non_retryable_http_error';
@@ -280,13 +283,18 @@ export class DiscoveryService {
       // Validate response
       const validation = validateProviderResponse(result.data);
       if (!validation.ok) {
-        errors.push(`Page ${currentPage}: malformed - ${validation.reason}`);
+        errors.push(`Cursor ${currentCursor ?? 'initial'}: malformed - ${validation.reason}`);
         terminalReason = 'malformed_response';
         // Do NOT advance checkpoint on malformed response
         break;
       }
 
       const items = validation.items as Record<string, any>[];
+
+      // ── Extract next cursor from meta.next_cursor ──
+      const body = result.data;
+      const nextCursor: string | null =
+        body?.meta?.next_cursor ?? null;
 
       // Empty page — exhausted
       if (items.length === 0) {
@@ -310,12 +318,12 @@ export class DiscoveryService {
         }
       }
       if (isRepeated) {
-        this.logger.warn(`Page ${currentPage} repeats previous page lot IDs — stopping`);
+        this.logger.warn(`Page seq ${pageSeq} repeats previous page lot IDs — stopping`);
         exhausted = true;
         terminalReason = 'loop_detected';
         break;
       }
-      pageIdentities.set(currentPage, currentPageId);
+      pageIdentities.set(pageSeq, currentPageId);
 
       // Atomic checkpoint advancement: persist lots AND advance page in one transaction
       // This ensures a failed page does NOT advance the checkpoint.
@@ -366,11 +374,12 @@ export class DiscoveryService {
         }
 
         // Advance checkpoint ONLY after successful lot persistence
+        // Store the opaque cursor token (forwarded byte-for-byte)
         await tx.discoveryCheckpoint.update({
           where: { id: checkpoint.id },
           data: {
-            lastPage: currentPage,
-            lastSuccessfulPage: currentPage,
+            lastPage: nextCursor as any,
+            lastSuccessfulPage: nextCursor as any,
             lastCompletedAt: new Date(),
           },
         });
@@ -385,14 +394,17 @@ export class DiscoveryService {
       lotsUpdated += txResult.txUpdated;
 
       pagesCompleted++;
-      currentPage++;
+      pageSeq++;
 
-      // Check if fewer than limit items returned — likely last page
-      if (items.length < (params.limit ?? 20)) {
+      // ── Cursor-based exhaustion: if meta.next_cursor is null/absent, we're done ──
+      if (!nextCursor) {
         exhausted = true;
-        terminalReason = 'exhausted_short_page';
+        terminalReason = 'exhausted';
         break;
       }
+
+      // Advance cursor for next iteration (opaque token, forwarded byte-for-byte)
+      currentCursor = nextCursor;
     }
 
     // Final checkpoint update
@@ -419,7 +431,7 @@ export class DiscoveryService {
       checkpointAdvanced: pagesCompleted > 0,
       exhausted,
       terminalReason,
-      nextPage: exhausted ? null : currentPage,
+      nextPage: exhausted ? null : (currentCursor as any),
       errors,
     };
   }
@@ -440,7 +452,7 @@ export class DiscoveryService {
       isExhausted: c.exhaustedAt !== null,
       lastError: c.lastError,
       contractVersion: c.contractVersion,
-      paginationType: 'page_based',
+      paginationType: 'cursor_based',
     }));
   }
 }

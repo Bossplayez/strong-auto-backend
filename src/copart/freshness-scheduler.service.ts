@@ -2,13 +2,13 @@
  * Truthful freshness scheduler — quota-aware, detail-endpoint-based.
  *
  * PHASE 4 FIX (033S2): The previous implementation falsely claimed that
- * list queries (`GET /vehicles?page=N`) refresh tracked lots. In reality,
+ * list queries (`GET /vehicles?cursor=X`) refresh tracked lots. In reality,
  * the provider API has NO batch-fetch-by-ID endpoint. List queries return
  * arbitrary lots from the provider's catalogue, NOT the specific tracked
  * lots we need to refresh.
  *
  * TRUTHFUL MODEL:
- * - Discovery: List endpoint `GET /vehicles?platform=X&page=N` → 20 lots/request
+ * - Discovery: List endpoint `GET /vehicles?auction_type=Y&per_page=20&cursor=Z` → 20 lots/request
  *   (finds NEW lots, does NOT refresh known ones)
  * - Search: List endpoint with filters → 20 lots/request
  *   (user-driven, returns matching lots)

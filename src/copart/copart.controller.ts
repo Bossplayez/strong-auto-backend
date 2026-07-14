@@ -25,7 +25,7 @@ export class CopartController {
   async search(@Query() query: Record<string, string>) {
     return this.copartService.search({
       platform: (query.platform as 'copart' | 'iaai') ?? 'copart',
-      page: query.page ? Number(query.page) : 1,
+      cursor: query.cursor ?? null,
       limit: query.limit ? Number(query.limit) : 20,
       make: query.make,
       model: query.model,

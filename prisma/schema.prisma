@@ -1044,14 +1044,14 @@ model DiscoveredLot {
   // Task 036: AuctionLot domain fields
   lifecycleState        AuctionLifecycleState @default(NOT_READY) @map("lifecycle_state")
   freshnessState        AuctionFreshnessState @default(FRESH) @map("freshness_state")
-  auctionTime           DateTime?            @map("auction_time")
-  auctionTimezoneOffset Int?                 @map("auction_timezone_offset")
-  firstSeenAt           DateTime             @default(now()) @map("first_seen_at")
-  terminalAt            DateTime?            @map("terminal_at")
-  mediaUrls             String[]             @default([]) @map("media_urls")
+  auctionTime           DateTime?             @map("auction_time")
+  auctionTimezoneOffset Int?                  @map("auction_timezone_offset")
+  firstSeenAt           DateTime              @default(now()) @map("first_seen_at")
+  terminalAt            DateTime?             @map("terminal_at")
+  mediaUrls             String[]              @default([]) @map("media_urls")
 
-  createdAt             DateTime           @default(now()) @map("created_at")
-  updatedAt             DateTime           @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([provider, externalLotId])
   @@index([provider, freshnessTier, nextRefreshAt])

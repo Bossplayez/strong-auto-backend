@@ -279,6 +279,7 @@ export class CopartService {
 
       const lots: Record<string, any>[] = [];
       let page = 1;
+      let cursor: string | null = null; // opaque cursor from meta.next_cursor
       let deadlineReached = false;
       let terminalReason: TerminalReason | null = null;
       let repeatedPage: { laterPage: number; earlierPage: number } | null = null;
@@ -362,8 +363,8 @@ export class CopartService {
           return { allowed: true };
         };
 
-        const url = `${this.RAPIDAPI_BASE}/vehicles?platform=${platform}&page=${page}&limit=${this.BATCH_SIZE}`;
-        this.logger.log(`Fetching ${platform} page ${page}/${this.maxPages} (remaining: ${Math.floor(remaining / 1000)}s)`);
+        const url = `${this.RAPIDAPI_BASE}/vehicles?auction_type=${platform === 'iaai' ? 2 : 1}&per_page=${this.BATCH_SIZE}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+        this.logger.log(`Fetching ${platform} batch ${page}/${this.maxPages} (cursor: ${cursor ? '[present]' : '[initial]'}) (remaining: ${Math.floor(remaining / 1000)}s)`);
 
         const result = await providerFetch<any>(
           url,
@@ -441,6 +442,10 @@ export class CopartService {
 
         const data = validation.items as Record<string, any>[];
 
+        // ── Extract next cursor from meta.next_cursor ──
+        const responseBody = result.data;
+        const nextCursor: string | null = responseBody?.meta?.next_cursor ?? null;
+
         // ── Empty page: terminal signal ──
         if (data.length === 0) {
           this.logger.log(`Empty page at ${page}, stopping pagination`);
@@ -510,6 +515,16 @@ export class CopartService {
         // we've reached the end.  Continue until an explicit stop
         // signal (empty page, repeated page, configured max, deadline,
         // malformed response, or terminal provider failure).
+
+        // ── Cursor-based exhaustion: stop if meta.next_cursor is null/absent ──
+        if (!nextCursor) {
+          this.logger.log(`Cursor exhausted at page ${page} — meta.next_cursor is null`);
+          terminalReason = terminalReason ?? 'empty_page';
+          break;
+        }
+
+        // Advance cursor (opaque token, forwarded byte-for-byte)
+        cursor = nextCursor;
         page++;
       }
 
@@ -731,32 +746,48 @@ export class CopartService {
 
   async search(params: {
     platform?: 'copart' | 'iaai';
-    page?: number;
+    cursor?: string | null;
     limit?: number;
     make?: string;
     model?: string;
     year_from?: number;
     year_to?: number;
     search?: string;
-  }): Promise<{ items: Record<string, any>[]; total: number; page: number; hasMore: boolean }> {
+  }): Promise<{ items: Record<string, any>[]; total: number; cursor: string | null; hasMore: boolean }> {
     const apiKey = this.config.get('RAPIDAPI_KEY');
     if (!apiKey) throw new Error('RAPIDAPI_KEY not configured');
 
     const platform = params.platform ?? 'copart';
-    const page = params.page ?? 1;
     const limit = Math.min(params.limit ?? 20, 50);
+    const cursor = (params as any).cursor ?? null;
 
     const url = new URL(`${this.RAPIDAPI_BASE}/vehicles`);
-    url.searchParams.set('platform', platform);
-    url.searchParams.set('page', String(page));
-    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('auction_type', String(platform === 'iaai' ? 2 : 1));
+    url.searchParams.set('per_page', String(limit));
+    if (cursor) url.searchParams.set('cursor', cursor);
     if (params.make) url.searchParams.set('make', params.make);
     if (params.model) url.searchParams.set('model', params.model);
     if (params.year_from) url.searchParams.set('year_from', String(params.year_from));
     if (params.year_to) url.searchParams.set('year_to', String(params.year_to));
     if (params.search) url.searchParams.set('search', params.search);
 
-    this.logger.log(`Searching ${platform}: page ${page}, limit ${limit}`);
+    // ── Quota gate: reserve before HTTP call ──
+    const budgetCheck = await this.budgetService.canMakeRoutineRequest();
+    if (!budgetCheck.allowed) {
+      throw new Error(`Budget exhausted: ${budgetCheck.usage.allocated}/${budgetCheck.usage.budget}`);
+    }
+    const attemptId = `search-${platform}-${crypto.randomUUID()}`;
+    const reservation = await this.budgetService.reserve(
+      platform as ProviderId,
+      null,
+      attemptId,
+      'routine',
+    );
+    if (!reservation.allowed) {
+      throw new Error(`Budget reservation denied: ${reservation.reason}`);
+    }
+
+    this.logger.log(`Searching ${platform}: cursor=${cursor ? '[present]' : '[initial]'}, per_page=${limit}`);
 
     const result = await providerFetch<any>(
       url.toString(),
@@ -768,12 +799,27 @@ export class CopartService {
       this.logger,
     );
 
+    // ── Confirm + complete quota ──
+    await this.budgetService.confirm(attemptId);
+    const success = result.ok;
+    let failureKind: FailureKind | undefined;
+    if (!success) {
+      const f = result.failure;
+      if (f.kind === 'HTTP_429') failureKind = 'rateLimit';
+      else if (f.kind === 'HTTP_5XX') failureKind = 'server';
+      else if (f.kind === 'NETWORK_ERROR') failureKind = 'network';
+      else if (f.kind === 'HTTP_4XX') failureKind = 'client';
+      else failureKind = 'timeout';
+    }
+    await this.budgetService.complete(attemptId, success, failureKind);
+
     if (!result.ok) {
       throw new Error(`Provider search error: ${result.failure.kind}${result.failure.status ? ` (${result.failure.status})` : ''}`);
     }
 
     const body = result.data;
     const items = body?.data ?? [];
+    const nextCursor: string | null = body?.meta?.next_cursor ?? null;
 
     // Mark items that are already imported
     const lotNumbers = items.map((v: any) => String(v.lot_number)).filter(Boolean);
@@ -791,8 +837,8 @@ export class CopartService {
     return {
       items,
       total: items.length,
-      page,
-      hasMore: items.length === limit,
+      cursor: nextCursor,
+      hasMore: nextCursor !== null,
     };
   }
 
@@ -825,8 +871,24 @@ export class CopartService {
       };
     }
 
+    // ── Quota gate: reserve before HTTP call ──
+    const budgetCheck = await this.budgetService.canMakeRoutineRequest();
+    if (!budgetCheck.allowed) {
+      throw new Error(`Budget exhausted: ${budgetCheck.usage.allocated}/${budgetCheck.usage.budget}`);
+    }
+    const attemptId = `import-${platform}-${lotNumber}-${crypto.randomUUID()}`;
+    const reservation = await this.budgetService.reserve(
+      platform as ProviderId,
+      null,
+      attemptId,
+      'routine',
+    );
+    if (!reservation.allowed) {
+      throw new Error(`Budget reservation denied: ${reservation.reason}`);
+    }
+
     // Fetch single vehicle details
-    const url = `${this.RAPIDAPI_BASE}/vehicles/${lotNumber}?platform=${platform}`;
+    const url = `${this.RAPIDAPI_BASE}/vehicles/${lotNumber}?auction_type=${platform === 'iaai' ? 2 : 1}`;
     this.logger.log(`Fetching single vehicle: lot ${lotNumber}, platform ${platform}`);
 
     const result = await providerFetch<any>(
@@ -838,6 +900,20 @@ export class CopartService {
       { ...this.getFetchConfig(), jobDeadlineMs: Date.now() + this.config.get<number>('IMPORT_REQUEST_TIMEOUT_MS')! * 2 },
       this.logger,
     );
+
+    // ── Confirm + complete quota ──
+    await this.budgetService.confirm(attemptId);
+    const success = result.ok;
+    let failureKind: FailureKind | undefined;
+    if (!success) {
+      const f = result.failure;
+      if (f.kind === 'HTTP_429') failureKind = 'rateLimit';
+      else if (f.kind === 'HTTP_5XX') failureKind = 'server';
+      else if (f.kind === 'NETWORK_ERROR') failureKind = 'network';
+      else if (f.kind === 'HTTP_4XX') failureKind = 'client';
+      else failureKind = 'timeout';
+    }
+    await this.budgetService.complete(attemptId, success, failureKind);
 
     if (!result.ok) {
       throw new Error(`Provider fetch error: ${result.failure.kind}${result.failure.status ? ` (${result.failure.status})` : ''}`);

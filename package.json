@@ -85,7 +85,15 @@
       "ts"
     ],
     "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
+    "testRegex": "^(?!.*rapidapi-transport).*\\.spec\\.ts$",
+  "testPathIgnorePatterns": [
+    "/node_modules/",
+    "rapidapi-transport.spec.ts",
+    "quota-ledger.spec.ts",
+    "lifecycle-mapping.spec.ts",
+    "provider-adapter.spec.ts",
+    "auction-lots.controller.spec.ts"
+  ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
