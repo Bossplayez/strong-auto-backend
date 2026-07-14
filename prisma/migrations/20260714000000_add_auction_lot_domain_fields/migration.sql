@@ -26,20 +26,20 @@ UPDATE "discovered_lots" SET first_seen_at = created_at WHERE first_seen_at IS N
 
 -- Populate lifecycle_state from auction_state where available
 UPDATE "discovered_lots" SET lifecycle_state = CASE
-  WHEN LOWER(auction_state) IN ('sold') THEN 'SOLD'
-  WHEN LOWER(auction_state) IN ('removed', 'cancelled') THEN 'REMOVED'
-  WHEN LOWER(auction_state) IN ('ended') THEN 'ENDED'
-  WHEN LOWER(auction_state) IN ('live', 'on', 'open') THEN 'LIVE'
-  WHEN LOWER(auction_state) IN ('upcoming', 'pending') THEN 'UPCOMING'
-  ELSE 'NOT_READY'
+  WHEN LOWER(auction_state) IN ('sold') THEN 'SOLD'::"AuctionLifecycleState"
+  WHEN LOWER(auction_state) IN ('removed', 'cancelled') THEN 'REMOVED'::"AuctionLifecycleState"
+  WHEN LOWER(auction_state) IN ('ended') THEN 'ENDED'::"AuctionLifecycleState"
+  WHEN LOWER(auction_state) IN ('live', 'on', 'open') THEN 'LIVE'::"AuctionLifecycleState"
+  WHEN LOWER(auction_state) IN ('upcoming', 'pending') THEN 'UPCOMING'::"AuctionLifecycleState"
+  ELSE 'NOT_READY'::"AuctionLifecycleState"
 END WHERE auction_state IS NOT NULL;
 
 -- Populate freshness_state from existing tier/misses
 UPDATE "discovered_lots" SET freshness_state = CASE
-  WHEN NOT availability_confirmed AND consecutive_misses >= 3 THEN 'TERMINAL'
-  WHEN consecutive_misses >= 2 THEN 'STALE'
-  WHEN freshness_tier = 'COLD' AND consecutive_misses >= 1 THEN 'STALE'
-  ELSE 'FRESH'
+  WHEN NOT availability_confirmed AND consecutive_misses >= 3 THEN 'TERMINAL'::"AuctionFreshnessState"
+  WHEN consecutive_misses >= 2 THEN 'STALE'::"AuctionFreshnessState"
+  WHEN freshness_tier = 'COLD' AND consecutive_misses >= 1 THEN 'STALE'::"AuctionFreshnessState"
+  ELSE 'FRESH'::"AuctionFreshnessState"
 END;
 
 -- Indexes for public eligibility queries
