@@ -927,6 +927,27 @@ enum DiscoveredLotState {
   UNAVAILABLE
 }
 
+/// Auction lifecycle state — maps to provider auction state strings.
+/// NOT_READY | UPCOMING | OPEN | LIVE | ENDED | SOLD | REMOVED
+enum AuctionLifecycleState {
+  NOT_READY
+  UPCOMING
+  OPEN
+  LIVE
+  ENDED
+  SOLD
+  REMOVED
+}
+
+/// Auction freshness state — reflects recency of provider confirmation.
+/// FRESH | STALE | DEFERRED | TERMINAL
+enum AuctionFreshnessState {
+  FRESH
+  STALE
+  DEFERRED
+  TERMINAL
+}
+
 /// Cursor state per provider + normalized query fingerprint.
 /// Supports safe resume after interruption.
 /// Page-checkpoint state for discovery pagination.
@@ -1016,8 +1037,19 @@ model DiscoveredLot {
   deferralReason        String?            @map("deferral_reason")
   attemptCost           Int                @default(1) @map("attempt_cost")
   // Import state
+  // Import state
   state                 DiscoveredLotState @default(DISCOVERED) @map("state")
   vehicleId             String?            @map("vehicle_id")
+
+  // Task 036: AuctionLot domain fields
+  lifecycleState        AuctionLifecycleState @default(NOT_READY) @map("lifecycle_state")
+  freshnessState        AuctionFreshnessState @default(FRESH) @map("freshness_state")
+  auctionTime           DateTime?            @map("auction_time")
+  auctionTimezoneOffset Int?                 @map("auction_timezone_offset")
+  firstSeenAt           DateTime             @default(now()) @map("first_seen_at")
+  terminalAt            DateTime?            @map("terminal_at")
+  mediaUrls             String[]             @default([]) @map("media_urls")
+
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
 
@@ -1026,6 +1058,9 @@ model DiscoveredLot {
   @@index([provider, state])
   @@index([nextRefreshAt])
   @@index([isBuyNow, auctionState])
+  @@index([lifecycleState, freshnessState])
+  @@index([auctionTime])
+  @@index([firstSeenAt])
   @@map("discovered_lots")
 }
 
