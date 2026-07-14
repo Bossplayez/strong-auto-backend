@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsInt, IsString, IsBoolean } from 'class-validator';
 
 /**
  * Public auction lot card — minimal data for list view.
@@ -147,33 +148,53 @@ export class PublicAuctionLotStatsDto {
  * Public auction lot list query parameters.
  */
 export class PublicAuctionLotQueryDto {
+  @IsOptional()
+  @IsInt()
   @ApiPropertyOptional({ description: 'Page number (1-based)' })
   page?: number;
 
+  @IsOptional()
+  @IsInt()
   @ApiPropertyOptional({ description: 'Page size (max 50)' })
   pageSize?: number;
 
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional({ description: 'Filter by provider (copart, iaai)' })
   provider?: string;
 
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional({ description: 'Filter by make' })
   make?: string;
 
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional({ description: 'Filter by model' })
   model?: string;
 
+  @IsOptional()
+  @IsInt()
   @ApiPropertyOptional({ description: 'Filter by year' })
   year?: number;
 
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional({ description: 'Filter by lifecycle state' })
   lifecycleState?: string;
 
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional({ description: 'Filter by Buy Now availability' })
   buyNow?: boolean;
 
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional({ description: 'Sort field' })
   sort?: string;
 
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional({ description: 'Sort direction (asc, desc)' })
   sortDir?: 'asc' | 'desc';
 }
