@@ -7,6 +7,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsInt, IsString, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /**
  * Public auction lot card — minimal data for list view.
@@ -150,11 +151,13 @@ export class PublicAuctionLotStatsDto {
 export class PublicAuctionLotQueryDto {
   @IsOptional()
   @IsInt()
+  @Type(() => Number)
   @ApiPropertyOptional({ description: 'Page number (1-based)' })
   page?: number;
 
   @IsOptional()
   @IsInt()
+  @Type(() => Number)
   @ApiPropertyOptional({ description: 'Page size (max 50)' })
   pageSize?: number;
 
@@ -175,6 +178,7 @@ export class PublicAuctionLotQueryDto {
 
   @IsOptional()
   @IsInt()
+  @Type(() => Number)
   @ApiPropertyOptional({ description: 'Filter by year' })
   year?: number;
 
@@ -185,6 +189,7 @@ export class PublicAuctionLotQueryDto {
 
   @IsOptional()
   @IsBoolean()
+  @Type(() => Boolean)
   @ApiPropertyOptional({ description: 'Filter by Buy Now availability' })
   buyNow?: boolean;
 
