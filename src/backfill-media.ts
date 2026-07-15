@@ -56,7 +56,7 @@ async function main() {
 
   const rawMap = new Map<string, Record<string, any>>();
   for (const raw of rawImports) {
-    rawMap.set(`${raw.provider}|${raw.externalLotId}`, raw.payloadJsonb);
+    rawMap.set(`${raw.provider}|${raw.externalLotId}`, raw.payloadJsonb as Record<string, any>);
   }
 
   const lots = await prisma.discoveredLot.findMany({

@@ -83,7 +83,7 @@ function normalizeLot(raw: any, platform: string) {
     title: raw.title || '',
     make: raw.make || '',
     model: raw.model || '',
-    year: raw.year ? Number(raw.year) : null,
+    year: raw.year ? Number(raw.year) : new Date().getFullYear(),
     vin: raw.vin || null,
     slugVin: raw.slug_vin || null,
     ad: auctionDate,
