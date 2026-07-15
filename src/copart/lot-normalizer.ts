@@ -8,7 +8,7 @@ export interface NormalizedLotData {
   title: string;
   make: string;
   model: string;
-  year: number;
+  year: number | null;
   vin: string | null;
   slugVin: string | null;
   platformId: number | null;
@@ -16,6 +16,7 @@ export interface NormalizedLotData {
   ad: Date | null;
   auctionState: string | null;
   auctionFormatted: string | null;
+  auctionTimezoneOffset: number | null;
   auctionTime: Date | null;
   isBuyNow: boolean;
   buyNowUsd: number | null;
@@ -79,12 +80,13 @@ function toDate(v: unknown): Date | null {
  * Prefers full URLs, falls back to thumb.
  * Only keeps HTTPS URLs — rejects anything with credentials or non-HTTPS.
  */
-function extractMediaUrls(media: Record<string, any> | undefined): string[] {
-  if (!media || !Array.isArray(media.items)) return [];
+function extractMediaUrls(media: unknown): string[] {
+  if (!isRecord(media)) return [];
   const urls: string[] = [];
   const seen = new Set<string>();
 
-  for (const item of media.items) {
+  const itemsRaw = Array.isArray(media.items) ? media.items : [];
+  for (const item of itemsRaw) {
     if (typeof item === 'string') {
       if (item.startsWith('https://') && !seen.has(item)) {
         seen.add(item);
@@ -93,8 +95,9 @@ function extractMediaUrls(media: Record<string, any> | undefined): string[] {
       continue;
     }
     if (item && typeof item === 'object') {
+      const obj = item as Record<string, unknown>;
       // Prefer full, then large, then thumb
-      const candidate = item.full ?? item.large ?? item.thumb ?? '';
+      const candidate = obj.full ?? obj.large ?? obj.thumb ?? '';
       if (candidate && typeof candidate === 'string' && candidate.startsWith('https://') && !seen.has(candidate)) {
         seen.add(candidate);
         urls.push(candidate);
@@ -105,30 +108,51 @@ function extractMediaUrls(media: Record<string, any> | undefined): string[] {
   return urls;
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
 export function normalizeDiscoveredLot(
-  raw: Record<string, any>,
+  raw: unknown,
   _provider: string,
 ): NormalizedLotData {
-  const auction = raw.auction ?? {};
-  const pricing = raw.pricing ?? {};
-  const condition = raw.condition ?? {};
-  const specs = raw.vehicle_specs ?? {};
-  const media = raw.media ?? {};
-  const location = raw.location ?? {};
-  const facility = raw.facility ?? {};
-  const seller = raw.seller ?? {};
-  const saleDoc = raw.sale_document ?? {};
-  const odometer = raw.odometer ?? {};
+  if (!isRecord(raw)) {
+    throw new Error('normalizeDiscoveredLot: expected object, got ' + typeof raw);
+  }
+
+  const auction = isRecord(raw.auction) ? raw.auction : {};
+  const pricing = isRecord(raw.pricing) ? raw.pricing : {};
+  const condition = isRecord(raw.condition) ? raw.condition : {};
+  const specs = isRecord(raw.vehicle_specs) ? raw.vehicle_specs : {};
+  const media = isRecord(raw.media) ? raw.media : {};
+  const location = isRecord(raw.location) ? raw.location : {};
+  const facility = isRecord(raw.facility) ? raw.facility : {};
+  const seller = isRecord(raw.seller) ? raw.seller : {};
+  const saleDoc = isRecord(raw.sale_document) ? raw.sale_document : {};
+  const odometer = isRecord(raw.odometer) ? raw.odometer : {};
 
   // Map real auction timestamp from provider (not discovery time)
-  // Provider field: auction.auction_at (same as copart.service.ts mapRawToVehicle)
-  const auctionTime = toDate(auction.auction_at) ?? toDate(auction.auctionTime) ?? null;
+  // Provider field: auction.auction_at (ISO 8601 with timezone offset)
+  // Also extract timezone offset from the same ISO string
+  const auctionTimeRaw =
+    (typeof auction.auction_at === 'string' ? auction.auction_at : null) ??
+    (typeof auction.full_date === 'string' ? auction.full_date : null) ??
+    (typeof auction.ad === 'string' ? auction.ad : null);
+  const auctionTime = toDate(auctionTimeRaw);
+  // Extract timezone offset in minutes from ISO string (e.g. "+00:00" → 0, "-05:00" → -300)
+  let auctionTimezoneOffset: number | null = null;
+  if (auctionTimeRaw) {
+    const tzMatch = auctionTimeRaw.match(/[+-](\d{2}):(\d{2})$/);
+    if (tzMatch) {
+      auctionTimezoneOffset = (parseInt(tzMatch[1], 10) * 60 + parseInt(tzMatch[2], 10)) * (tzMatch[0].startsWith('-') ? -1 : 1);
+    }
+  }
 
   return {
     title: String(raw.title ?? `${raw.year ?? ''} ${raw.make ?? ''} ${raw.model ?? ''}`).trim(),
     make: String(raw.make ?? 'Unknown').trim(),
     model: String(raw.model ?? 'Unknown').trim(),
-    year: toNumber(raw.year) ?? new Date().getFullYear(),
+    year: toNumber(raw.year),
     vin: raw.vin ? String(raw.vin) : null,
     slugVin: raw.slug_vin ? String(raw.slug_vin) : null,
     platformId: toNumber(raw.platform_id),
@@ -136,6 +160,7 @@ export function normalizeDiscoveredLot(
     ad: toDate(auction.ad),
     auctionState: auction.state ? String(auction.state) : null,
     auctionFormatted: auction.formatted ? String(auction.formatted) : null,
+    auctionTimezoneOffset,
     auctionTime,
     isBuyNow: toBool(auction.is_buy_now) ?? false,
     buyNowUsd: toNumber(pricing.buy_now_usd),

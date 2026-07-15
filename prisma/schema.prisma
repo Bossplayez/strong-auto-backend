@@ -211,7 +211,7 @@ model Vehicle {
   title               String                      @map("title")
   make                String                      @map("make")
   model               String                      @map("model")
-  year                Int                         @map("year")
+  year                Int?                        @map("year")
   priceAmount         Decimal                     @map("price_amount") @db.Decimal
   currency            String                      @default("USD") @map("currency")
   odometerValue       Int?                        @map("odometer_value")
@@ -745,18 +745,25 @@ model AppEvent {
 /// CONFIRMED: provider uses page-based pagination (?page=N),
 /// NOT opaque cursor tokens. See Task 033P probe results.
 model DiscoveryCheckpoint {
-  id                 String    @id @default(uuid()) @map("id")
-  provider           String    @map("provider")
-  queryFingerprint   String    @map("query_fingerprint")
-  lastPage           Int?      @map("last_page")
-  lastSuccessfulPage Int?      @map("last_successful_page")
-  lastStartedAt      DateTime? @map("last_started_at")
-  lastCompletedAt    DateTime? @map("last_completed_at")
-  exhaustedAt        DateTime? @map("exhausted_at")
-  contractVersion    String    @default("v1_page") @map("contract_version")
-  lastError          String?   @map("last_error")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  id                   String    @id @default(uuid()) @map("id")
+  provider             String    @map("provider")
+  queryFingerprint     String    @map("query_fingerprint")
+
+  // Deprecated: legacy Int page counters — do NOT use for cursor operations
+  lastPage             Int?      @map("last_page")
+  lastSuccessfulPage   Int?      @map("last_successful_page")
+
+  // Opaque cursor tokens from provider meta.next_cursor — forwarded byte-for-byte
+  lastCursor           String?   @map("last_cursor")
+  lastSuccessfulCursor String?   @map("last_successful_cursor")
+
+  lastStartedAt        DateTime? @map("last_started_at")
+  lastCompletedAt      DateTime? @map("last_completed_at")
+  exhaustedAt          DateTime? @map("exhausted_at")
+  contractVersion      String    @default("v2_cursor") @map("contract_version")
+  lastError            String?   @map("last_error")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   @@unique([provider, queryFingerprint])
   @@map("discovery_checkpoints")
@@ -772,7 +779,7 @@ model DiscoveredLot {
   title                 String                @map("title")
   make                  String                @map("make")
   model                 String                @map("model")
-  year                  Int                   @map("year")
+  year                  Int?                  @map("year")
   vin                   String?               @map("vin")
   slugVin               String?               @map("slug_vin")
   platformId            Int?                  @map("platform_id")

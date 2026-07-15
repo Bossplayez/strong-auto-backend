@@ -27,7 +27,7 @@ export class VehiclesService {
     title: string;
     make: string;
     model: string;
-    year: number;
+    year: number | null;
     priceAmount: number;
     currency?: string;
     sourceType?: 'INTERNAL' | 'COPART' | 'IAAI';
@@ -168,8 +168,8 @@ export class VehiclesService {
     });
   }
 
-  async generateSlug(make: string, model: string, year: number): Promise<string> {
-    const base = `${make}-${model}-${year}`
+  async generateSlug(make: string, model: string, year: number | null): Promise<string> {
+    const base = `${make}-${model}-${year ?? 'unknown'}`
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');

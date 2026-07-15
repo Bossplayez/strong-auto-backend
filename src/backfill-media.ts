@@ -12,8 +12,12 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-function extractMediaUrls(media: Record<string, any> | undefined): string[] {
-  if (!media) return [];
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function extractMediaUrls(media: unknown): string[] {
+  if (!isRecord(media)) return [];
   const urls: string[] = [];
   const seen = new Set<string>();
 
@@ -54,9 +58,13 @@ async function main() {
   });
   console.log(`Raw imports: ${rawImports.length}`);
 
-  const rawMap = new Map<string, Record<string, any>>();
+  const rawMap = new Map<string, Record<string, unknown>>();
   for (const raw of rawImports) {
-    rawMap.set(`${raw.provider}|${raw.externalLotId}`, raw.payloadJsonb as Record<string, any>);
+    if (!isRecord(raw.payloadJsonb)) {
+      console.warn(`Skipping raw import ${raw.provider}|${raw.externalLotId}: invalid payload`);
+      continue;
+    }
+    rawMap.set(`${raw.provider}|${raw.externalLotId}`, raw.payloadJsonb);
   }
 
   const lots = await prisma.discoveredLot.findMany({

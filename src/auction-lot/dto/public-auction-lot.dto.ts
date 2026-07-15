@@ -25,8 +25,8 @@ export class PublicAuctionLotCardDto {
   @ApiProperty({ description: 'Vehicle model' })
   model: string;
 
-  @ApiProperty({ description: 'Vehicle year' })
-  year: number;
+  @ApiPropertyOptional({ description: 'Vehicle year (null if unknown)' })
+  year: number | null;
 
   @ApiPropertyOptional({ description: 'Vehicle title' })
   title?: string | null;
@@ -176,8 +176,20 @@ export class PublicAuctionLotQueryDto {
   @IsOptional()
   @IsInt()
   @Type(() => Number)
-  @ApiPropertyOptional({ description: 'Filter by year' })
+  @ApiPropertyOptional({ description: 'Filter by exact year' })
   year?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  @ApiPropertyOptional({ description: 'Filter: year from (inclusive)' })
+  yearFrom?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  @ApiPropertyOptional({ description: 'Filter: year to (inclusive)' })
+  yearTo?: number;
 
   @IsOptional()
   @IsString()

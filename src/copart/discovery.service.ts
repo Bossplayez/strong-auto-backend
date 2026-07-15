@@ -181,14 +181,14 @@ export class DiscoveryService {
         checkpointAdvanced: false,
         exhausted: true,
         terminalReason: 'already_exhausted',
-        nextPage: checkpoint.lastPage,
+        nextPage: null,
         errors: [],
       };
     }
 
-    // Resume from stored cursor (opaque token, forwarded byte-for-byte)
-    // The lastPage field stores the cursor token in the new contract
-    let currentCursor: string | null = checkpoint.lastPage ? String(checkpoint.lastPage) : null;
+    // Resume from stored opaque cursor (byte-for-byte from provider meta.next_cursor)
+    // Old Int lastPage field is deprecated — only use lastCursor for resumption.
+    let currentCursor: string | null = checkpoint.lastCursor ?? null;
 
     const headers = {
       'x-rapidapi-host': this.RAPIDAPI_HOST,
@@ -289,7 +289,7 @@ export class DiscoveryService {
         break;
       }
 
-      const items = validation.items as Record<string, any>[];
+      const items = validation.items as Record<string, unknown>[];
 
       // ── Extract next cursor from meta.next_cursor ──
       const body = result.data;
@@ -374,11 +374,13 @@ export class DiscoveryService {
         }
 
         // Advance checkpoint ONLY after successful lot persistence
-        // Note: lastPage/lastSuccessfulPage are Int columns — we store a page counter,
-        // not opaque cursor tokens. The cursor is kept in-memory per session.
+        // Store opaque cursor byte-for-byte — never decode or synthesize
         await tx.discoveryCheckpoint.update({
           where: { id: checkpoint.id },
           data: {
+            lastCursor: currentCursor,
+            lastSuccessfulCursor: currentCursor,
+            // Keep legacy Int fields in sync for backward compat (page counter only)
             lastPage: pagesCompleted + 1,
             lastSuccessfulPage: pagesCompleted + 1,
             lastCompletedAt: new Date(),
@@ -432,7 +434,7 @@ export class DiscoveryService {
       checkpointAdvanced: pagesCompleted > 0,
       exhausted,
       terminalReason,
-      nextPage: exhausted ? null : (currentCursor as any),
+      nextPage: null,
       errors,
     };
   }
@@ -445,6 +447,9 @@ export class DiscoveryService {
     });
     return checkpoints.map((c) => ({
       queryFingerprint: c.queryFingerprint,
+      lastCursor: c.lastCursor,
+      lastSuccessfulCursor: c.lastSuccessfulCursor,
+      // Deprecated legacy fields
       lastPage: c.lastPage,
       lastSuccessfulPage: c.lastSuccessfulPage,
       lastStartedAt: c.lastStartedAt,

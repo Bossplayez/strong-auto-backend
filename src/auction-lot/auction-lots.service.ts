@@ -172,6 +172,8 @@ export class AuctionLotsService {
     make?: string;
     model?: string;
     year?: number;
+    yearFrom?: number;
+    yearTo?: number;
     lifecycleState?: string;
     buyNow?: boolean;
     sort?: string;
@@ -203,21 +205,30 @@ export class AuctionLotsService {
       freshnessState: { not: 'TERMINAL' },
     };
 
-    // Exclude terminal lifecycle
-    where.NOT = {
-      lifecycleState: { in: ['SOLD', 'REMOVED'] },
-    };
+    // Exclude terminal lifecycle by default from public feed
+    // Only UPCOMING, OPEN, LIVE are "current" — unless user explicitly filters
+    if (query.lifecycleState) {
+      where.lifecycleState = query.lifecycleState as LifecycleStateType;
+    } else {
+      // Default: only current lots
+      where.NOT = {
+        lifecycleState: { in: ['SOLD', 'REMOVED', 'ENDED', 'NOT_READY'] },
+      };
+      where.freshnessState = { notIn: ['TERMINAL', 'STALE'] };
+    }
 
     if (query.provider) where.provider = query.provider;
     if (query.make) where.make = { equals: query.make, mode: 'insensitive' };
     if (query.model) where.model = { equals: query.model, mode: 'insensitive' };
     if (query.year) where.year = query.year;
+    if (query.yearFrom || query.yearTo) {
+      where.year = {};
+      if (query.yearFrom) (where.year as any).gte = query.yearFrom;
+      if (query.yearTo) (where.year as any).lte = query.yearTo;
+    }
     if (query.buyNow) {
       where.isBuyNow = true;
       where.buyNowUsd = { not: null };
-    }
-    if (query.lifecycleState) {
-      where.lifecycleState = query.lifecycleState as LifecycleStateType;
     }
 
     // Build order by
@@ -305,8 +316,8 @@ export class AuctionLotsService {
       where: {
         availabilityConfirmed: true,
         consecutiveMisses: { lt: 3 },
-        freshnessState: { not: 'TERMINAL' },
-        NOT: { lifecycleState: { in: ['SOLD', 'REMOVED'] } },
+        freshnessState: { notIn: ['TERMINAL', 'STALE'] },
+        NOT: { lifecycleState: { in: ['SOLD', 'REMOVED', 'ENDED', 'NOT_READY'] } },
       },
       select: {
         auctionState: true,

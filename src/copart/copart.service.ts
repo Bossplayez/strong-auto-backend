@@ -681,7 +681,8 @@ export class CopartService {
   // provider returns the same ordered lot identifiers twice.
 
   mapRawToVehicle(raw: Record<string, any>, platform: 'copart' | 'iaai') {
-    const year = Number(raw.year) || new Date().getFullYear();
+    const yearNum = Number(raw.year);
+    const year = Number.isFinite(yearNum) && yearNum >= 1900 ? yearNum : null;
     const make = String(raw.make ?? 'Unknown').trim();
     const model = String(raw.model ?? 'Unknown').trim();
 

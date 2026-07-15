@@ -42,7 +42,7 @@ export interface NormalizedAuctionLot {
   // Vehicle facts
   make: string;
   model: string;
-  year: number;
+  year: number | null;
   title: string;
   bodyStyle?: string | null;
   fuelType?: string | null;

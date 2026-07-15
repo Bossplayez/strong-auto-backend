@@ -87,7 +87,6 @@ describe('AuctionLotsController', () => {
         liveLotCount: 2,
         buyNowCount: 5,
         upcomingCount: 3,
-        curatedVehicleCount: 50,
       };
       vi.mocked(service.getStats).mockResolvedValue(mockStats);
 
@@ -330,7 +329,6 @@ describe('AuctionLotsService (stats counters)', () => {
     expect(stats.liveLotCount).toBe(1);
     expect(stats.buyNowCount).toBe(1);
     expect(stats.upcomingCount).toBe(1);
-    expect(stats.curatedVehicleCount).toBe(42);
   });
 
   it('does not count STALE or TERMINAL lots as current', async () => {
