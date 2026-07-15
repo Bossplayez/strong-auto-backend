@@ -11,6 +11,9 @@ export class CatalogService {
   async findAll(filters: VehicleFilterDto): Promise<PaginatedResponseDto<any>> {
     const where: Prisma.VehicleWhereInput = {
       publicationStatus: 'PUBLISHED',
+      // Task 036: Exclude USA region — auction lots are served via the DiscoveredLot feed.
+      // Legacy USA vehicles are parser-created rows, not the canonical auction catalog.
+      sourceRegion: { not: 'USA' },
     };
 
     // ── Dynamic filters ──
@@ -115,6 +118,8 @@ export class CatalogService {
     const where: Prisma.VehicleWhereInput = {
       publicationStatus: 'PUBLISHED',
       availabilityStatus: { in: ['AVAILABLE', 'RESERVED'] },
+      // Task 036: Exclude USA region — auction lots are served via the DiscoveredLot feed.
+      sourceRegion: { not: 'USA' },
     };
 
     // Price range excludes zero (unknown price) vehicles

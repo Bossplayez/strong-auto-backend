@@ -43,6 +43,8 @@ function toPublicCardDto(lot: DiscoveredLot): PublicAuctionLotCardDto {
     lot.auctionState,
     lot.auctionTime ?? lot.ad,
     now,
+    lot.isBuyNow ?? false,
+    lot.buyNowUsd ? Number(lot.buyNowUsd) : null,
   );
 
   const tier = lot.freshnessTier ?? 'COLD';
@@ -118,7 +120,8 @@ function toPublicDetailDto(lot: DiscoveredLot): PublicAuctionLotDetailDto {
 
 /**
  * Check if a lot counts as "current" for public stats.
- * Must be: public-eligible, FRESH, nonterminal, NOT_READY|UPCOMING|OPEN|LIVE
+ * Must be: public-eligible, FRESH, nonterminal, UPCOMING|OPEN|LIVE
+ * NOT_READY lots are excluded — they lack truthful time or Buy Now.
  */
 function isCurrentLot(lot: Pick<DiscoveredLot, 'auctionState' | 'auctionTime' | 'ad' | 'lastSeenAt' | 'nextRefreshAt' | 'consecutiveMisses' | 'availabilityConfirmed' | 'freshnessTier' | 'lifecycleState' | 'freshnessState' | 'isBuyNow' | 'buyNowUsd'>): boolean {
   const now = new Date();
@@ -126,6 +129,8 @@ function isCurrentLot(lot: Pick<DiscoveredLot, 'auctionState' | 'auctionTime' | 
     lot.auctionState,
     lot.auctionTime ?? lot.ad,
     now,
+    lot.isBuyNow ?? false,
+    lot.buyNowUsd ? Number(lot.buyNowUsd) : null,
   );
   const tier = lot.freshnessTier ?? 'COLD';
   const staleAfterMs =
@@ -146,7 +151,6 @@ function isCurrentLot(lot: Pick<DiscoveredLot, 'auctionState' | 'auctionTime' | 
     return false;
 
   return [
-    AuctionLifecycleState.NOT_READY,
     AuctionLifecycleState.UPCOMING,
     AuctionLifecycleState.OPEN,
     AuctionLifecycleState.LIVE,
@@ -334,6 +338,8 @@ export class AuctionLotsService {
         lot.auctionState,
         lot.auctionTime ?? lot.ad,
         now,
+        lot.isBuyNow ?? false,
+        lot.buyNowUsd ? Number(lot.buyNowUsd) : null,
       );
 
       if (lifecycle === AuctionLifecycleState.LIVE) {
@@ -352,17 +358,11 @@ export class AuctionLotsService {
       }
     }
 
-    // Curated published vehicles (separate counter)
-    const curatedCount = await this.prisma.vehicle.count({
-      where: { publicationStatus: 'PUBLISHED' },
-    });
-
     return {
       currentLotCount,
       liveLotCount,
       buyNowCount,
       upcomingCount,
-      curatedVehicleCount: curatedCount,
     };
   }
 }

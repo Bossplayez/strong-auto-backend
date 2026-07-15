@@ -16,6 +16,7 @@ export interface NormalizedLotData {
   ad: Date | null;
   auctionState: string | null;
   auctionFormatted: string | null;
+  auctionTime: Date | null;
   isBuyNow: boolean;
   buyNowUsd: number | null;
   currentBidUsd: number | null;
@@ -45,6 +46,7 @@ export interface NormalizedLotData {
   has360: boolean;
   hasVideo: boolean;
   thumbsCount: number;
+  mediaUrls: string[];
   sellerClass: string | null;
   sellerType: string | null;
   saleDocumentName: string | null;
@@ -72,6 +74,37 @@ function toDate(v: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Extract media URLs from provider response.
+ * Prefers full URLs, falls back to thumb.
+ * Only keeps HTTPS URLs — rejects anything with credentials or non-HTTPS.
+ */
+function extractMediaUrls(media: Record<string, any> | undefined): string[] {
+  if (!media || !Array.isArray(media.items)) return [];
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of media.items) {
+    if (typeof item === 'string') {
+      if (item.startsWith('https://') && !seen.has(item)) {
+        seen.add(item);
+        urls.push(item);
+      }
+      continue;
+    }
+    if (item && typeof item === 'object') {
+      // Prefer full, then large, then thumb
+      const candidate = item.full ?? item.large ?? item.thumb ?? '';
+      if (candidate && typeof candidate === 'string' && candidate.startsWith('https://') && !seen.has(candidate)) {
+        seen.add(candidate);
+        urls.push(candidate);
+      }
+    }
+  }
+
+  return urls;
+}
+
 export function normalizeDiscoveredLot(
   raw: Record<string, any>,
   _provider: string,
@@ -87,6 +120,10 @@ export function normalizeDiscoveredLot(
   const saleDoc = raw.sale_document ?? {};
   const odometer = raw.odometer ?? {};
 
+  // Map real auction timestamp from provider (not discovery time)
+  // Provider field: auction.auction_at (same as copart.service.ts mapRawToVehicle)
+  const auctionTime = toDate(auction.auction_at) ?? toDate(auction.auctionTime) ?? null;
+
   return {
     title: String(raw.title ?? `${raw.year ?? ''} ${raw.make ?? ''} ${raw.model ?? ''}`).trim(),
     make: String(raw.make ?? 'Unknown').trim(),
@@ -99,6 +136,7 @@ export function normalizeDiscoveredLot(
     ad: toDate(auction.ad),
     auctionState: auction.state ? String(auction.state) : null,
     auctionFormatted: auction.formatted ? String(auction.formatted) : null,
+    auctionTime,
     isBuyNow: toBool(auction.is_buy_now) ?? false,
     buyNowUsd: toNumber(pricing.buy_now_usd),
     currentBidUsd: toNumber(pricing.current_bid_usd),
@@ -128,6 +166,7 @@ export function normalizeDiscoveredLot(
     has360: toBool(media.has_360) ?? false,
     hasVideo: toBool(media.has_video) ?? false,
     thumbsCount: toNumber(media.thumbs_count) ?? 0,
+    mediaUrls: extractMediaUrls(media),
     sellerClass: seller.class ? String(seller.class) : null,
     sellerType: seller.type ? String(seller.type) : null,
     saleDocumentName: saleDoc.name ? String(saleDoc.name) : null,

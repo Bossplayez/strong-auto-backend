@@ -129,7 +129,7 @@ export class PublicAuctionLotDetailDto extends PublicAuctionLotCardDto {
  * Public auction lot stats — semantic counters.
  */
 export class PublicAuctionLotStatsDto {
-  @ApiProperty({ description: 'Public-eligible, FRESH, nonterminal lots in NOT_READY|UPCOMING|OPEN|LIVE' })
+  @ApiProperty({ description: 'Public-eligible, FRESH, nonterminal lots in UPCOMING|OPEN|LIVE' })
   currentLotCount: number;
 
   @ApiProperty({ description: 'FRESH LIVE lots only' })
@@ -140,9 +140,6 @@ export class PublicAuctionLotStatsDto {
 
   @ApiProperty({ description: 'FRESH UPCOMING lots with valid future auction timestamp' })
   upcomingCount: number;
-
-  @ApiProperty({ description: 'Curated published Vehicle count (separate from auction lots)' })
-  curatedVehicleCount: number;
 }
 
 /**

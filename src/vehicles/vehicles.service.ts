@@ -42,6 +42,7 @@ export class VehiclesService {
     locationCountry?: string;
     locationCity?: string;
     locationState?: string;
+    publicationStatus?: 'DRAFT' | 'READY' | 'PUBLISHED' | 'HIDDEN' | 'ARCHIVED';
     specs?: Record<string, any>;
     mediaUrls?: string[];
   }) {
@@ -58,7 +59,7 @@ export class VehiclesService {
         currency: data.currency ?? 'USD',
         sourceType: data.sourceType ?? 'INTERNAL',
         sourceRegion: (data.sourceRegion as any) ?? 'USA',
-        publicationStatus: 'PUBLISHED',
+        publicationStatus: data.publicationStatus ?? 'PUBLISHED',
         publishedAt: new Date(),
         availabilityStatus: 'AVAILABLE',
         vin: data.vin,

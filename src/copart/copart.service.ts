@@ -571,6 +571,7 @@ export class CopartService {
               ...mapped,
               sourceType: platform === 'iaai' ? 'IAAI' : 'COPART',
               sourceRegion: 'USA',
+              publicationStatus: 'DRAFT',
             });
 
             const pricing = raw.pricing ?? {};
@@ -932,6 +933,7 @@ export class CopartService {
       ...mapped,
       sourceType: platform === 'iaai' ? 'IAAI' : 'COPART',
       sourceRegion: 'USA',
+      publicationStatus: 'DRAFT',
     });
 
     const pricing = raw.pricing ?? {};

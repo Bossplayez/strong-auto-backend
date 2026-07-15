@@ -11,11 +11,21 @@ import { AuctionLifecycleState, AuctionFreshnessState } from './types';
  * Provider state → internal lifecycle mapping.
  * Each provider may use different strings for the same concept.
  * This function is the ONLY place where this mapping happens.
+ *
+ * Priority rules:
+ * 1. Terminal provider states (sold, removed, ended/closed) → terminal lifecycle
+ * 2. Explicit live provider evidence → LIVE
+ * 3. If auction date is in the PAST → ENDED (unless Buy Now is active)
+ * 4. If auction date is in the FUTURE → UPCOMING
+ * 5. If no date and active state (open/on/bidding) → OPEN
+ * 6. Otherwise → NOT_READY
  */
 export function normalizeLifecycleState(
   providerRawState: string | null | undefined,
   auctionDate: Date | null | undefined,
   now: Date = new Date(),
+  isBuyNow: boolean = false,
+  buyNowUsd: number | null = null,
 ): AuctionLifecycleState {
   if (!providerRawState) {
     // No state string — rely on auction date
@@ -34,16 +44,32 @@ export function normalizeLifecycleState(
   if (s === 'ended' || s.includes('ended') || s.includes('closed'))
     return AuctionLifecycleState.ENDED;
 
-  // Active states
+  // Explicit live evidence → LIVE (regardless of date)
   if (s === 'live' || s.includes('live')) return AuctionLifecycleState.LIVE;
-  if (s === 'open' || s === 'on' || s.includes('open') || s.includes('bidding'))
+
+  // Active states (open/on/bidding)
+  // If auction date is in the past → ENDED (unless Buy Now active)
+  if (s === 'open' || s === 'on' || s.includes('open') || s.includes('bidding')) {
+    if (auctionDate && auctionDate <= now) {
+      // Past auction date — check Buy Now
+      if (isBuyNow && buyNowUsd != null && buyNowUsd > 0) {
+        return AuctionLifecycleState.OPEN; // Buy Now keeps it available
+      }
+      return AuctionLifecycleState.ENDED;
+    }
     return AuctionLifecycleState.OPEN;
+  }
 
   // Upcoming — has future auction date
   if (auctionDate && auctionDate > now) return AuctionLifecycleState.UPCOMING;
 
   // If we have a past date but no terminal state, treat as ended
-  if (auctionDate && auctionDate <= now) return AuctionLifecycleState.ENDED;
+  if (auctionDate && auctionDate <= now) {
+    if (isBuyNow && buyNowUsd != null && buyNowUsd > 0) {
+      return AuctionLifecycleState.OPEN;
+    }
+    return AuctionLifecycleState.ENDED;
+  }
 
   // No date, unknown state
   return AuctionLifecycleState.NOT_READY;
@@ -103,7 +129,7 @@ export const STALE_AFTER_MS = {
 /**
  * Check if a lot is public-eligible:
  * - FRESH freshness
- * - Non-terminal lifecycle
+ * - Non-terminal lifecycle (NOT_READY excluded — needs truthful time or Buy Now)
  * - availabilityConfirmed = true
  * - consecutiveMisses < 3
  */
@@ -119,7 +145,8 @@ export function isPublicEligible(
   if (freshnessState === AuctionFreshnessState.STALE) return false;
   if (
     lifecycleState === AuctionLifecycleState.SOLD ||
-    lifecycleState === AuctionLifecycleState.REMOVED
+    lifecycleState === AuctionLifecycleState.REMOVED ||
+    lifecycleState === AuctionLifecycleState.NOT_READY
   )
     return false;
   return true;
