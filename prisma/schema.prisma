@@ -1,8 +1,3 @@
-// ─────────────────────────────────────────────────────────────
-// Strong Auto — car import / delivery platform (USA → Ukraine)
-// Prisma schema · PostgreSQL
-// ─────────────────────────────────────────────────────────────
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,131 +7,35 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ENUMS
-// ═══════════════════════════════════════════════════════════════
-
-enum UserStatus {
-  PENDING_VERIFICATION
-  ACTIVE
-  BLOCKED
-  DELETED
-}
-
-enum UserType {
-  CUSTOMER
-  STAFF
-  ADMIN
-}
-
-enum VehicleSourceType {
-  INTERNAL
-  COPART
-  IAAI
-}
-
-enum VehicleRegion {
-  USA
-  EUROPE
-  UKRAINE
-}
-
-enum VehiclePublicationStatus {
-  DRAFT
-  READY
-  PUBLISHED
-  HIDDEN
-  ARCHIVED
-}
-
-enum VehicleAvailabilityStatus {
-  AVAILABLE
-  RESERVED
-  SOLD
-  NOT_AVAILABLE
-}
-
-enum LeadType {
-  CONTACT_FORM
-  CALLBACK
-  CATALOG_REQUEST
-  CALCULATOR_REQUEST
-  SELECTION_REQUEST
-}
-
-enum LeadStatus {
-  NEW
-  IN_PROGRESS
-  QUALIFIED
-  WON
-  LOST
-  SPAM
-  ARCHIVED
-}
-
-enum ImportJobStatus {
-  PENDING
-  RUNNING
-  SUCCESS
-  PARTIAL_SUCCESS
-  FAILED
-  ABANDONED
-}
-
-enum NewsStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
-}
-
-enum NotificationChannel {
-  TELEGRAM
-  EMAIL
-}
-
-enum NotificationStatus {
-  PENDING
-  SENT
-  FAILED
-  CANCELED
-}
-
-// ═══════════════════════════════════════════════════════════════
-// IDENTITY / AUTH
-// ═══════════════════════════════════════════════════════════════
-
 model User {
-  id           String     @id @default(uuid()) @map("id")
-  email        String     @unique @map("email")
-  phone        String?    @unique @map("phone")
-  passwordHash String     @map("password_hash")
-  status       UserStatus @map("status")
-  userType     UserType   @map("user_type")
-  lastLoginAt  DateTime?  @map("last_login_at")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-
+  id                      String                   @id @default(uuid()) @map("id")
+  email                   String                   @unique @map("email")
+  phone                   String?                  @unique @map("phone")
+  passwordHash            String                   @map("password_hash")
+  status                  UserStatus               @map("status")
+  userType                UserType                 @map("user_type")
+  lastLoginAt             DateTime?                @map("last_login_at")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  auditLogs               AuditLog[]               @relation("AuditActor")
+  bids                    Bid[]                    @relation("UserBids")
+  broadcastsCreated       Broadcast[]              @relation("BroadcastCreator")
+  calculatorEstimates     CalculatorEstimate[]     @relation("EstimateUser")
+  emailVerificationTokens EmailVerificationToken[]
+  favorites               Favorite[]
+  filesCreated            File[]                   @relation("FileCreator")
+  importJobsCreated       ImportJob[]              @relation("ImportJobCreator")
+  leadComments            LeadComment[]            @relation("LeadCommentAuthor")
+  leadStatusChanges       LeadStatusHistory[]      @relation("LeadStatusChanger")
+  leadsAsCustomer         Lead[]                   @relation("LeadCustomer")
+  leadsAsManager          Lead[]                   @relation("LeadManager")
+  newsAuthored            News[]                   @relation("NewsAuthor")
+  passwordResetTokens     PasswordResetToken[]
+  refreshSessions         RefreshSession[]
+  savedCalculations       SavedCalculation[]
+  siteSettingsUpdated     SiteSetting[]            @relation("SiteSettingUpdater")
   profile                 UserProfile?
   userRoles               UserRole[]
-  refreshSessions         RefreshSession[]
-  passwordResetTokens     PasswordResetToken[]
-  emailVerificationTokens EmailVerificationToken[]
-
-  // reverse relations
-  newsAuthored        News[]               @relation("NewsAuthor")
-  siteSettingsUpdated SiteSetting[]        @relation("SiteSettingUpdater")
-  calculatorEstimates CalculatorEstimate[] @relation("EstimateUser")
-  leadsAsCustomer     Lead[]               @relation("LeadCustomer")
-  leadsAsManager      Lead[]               @relation("LeadManager")
-  leadComments        LeadComment[]        @relation("LeadCommentAuthor")
-  leadStatusChanges   LeadStatusHistory[]  @relation("LeadStatusChanger")
-  favorites           Favorite[]
-  bids                Bid[]                @relation("UserBids")
-  savedCalculations   SavedCalculation[]
-  broadcastsCreated   Broadcast[]          @relation("BroadcastCreator")
-  filesCreated        File[]               @relation("FileCreator")
-  importJobsCreated   ImportJob[]          @relation("ImportJobCreator")
-  auditLogs           AuditLog[]           @relation("AuditActor")
 
   @@map("users")
 }
@@ -148,18 +47,16 @@ model UserProfile {
   city                     String? @map("city")
   preferredLanguage        String? @map("preferred_language")
   notificationSettingsJson Json?   @map("notification_settings_json")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_profiles")
 }
 
 model Role {
-  id       Int     @id @default(autoincrement()) @map("id")
-  code     String  @unique @map("code")
-  name     String  @map("name")
-  isSystem Boolean @map("is_system")
-
+  id              Int              @id @default(autoincrement()) @map("id")
+  code            String           @unique @map("code")
+  name            String           @map("name")
+  isSystem        Boolean          @map("is_system")
   rolePermissions RolePermission[]
   userRoles       UserRole[]
 
@@ -167,22 +64,20 @@ model Role {
 }
 
 model Permission {
-  id     Int    @id @default(autoincrement()) @map("id")
-  code   String @unique @map("code")
-  name   String @map("name")
-  module String @map("module")
-
+  id              Int              @id @default(autoincrement()) @map("id")
+  code            String           @unique @map("code")
+  name            String           @map("name")
+  module          String           @map("module")
   rolePermissions RolePermission[]
 
   @@map("permissions")
 }
 
 model RolePermission {
-  roleId       Int @map("role_id")
-  permissionId Int @map("permission_id")
-
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  roleId       Int        @map("role_id")
+  permissionId Int        @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
   @@map("role_permissions")
@@ -191,9 +86,8 @@ model RolePermission {
 model UserRole {
   userId String @map("user_id")
   roleId Int    @map("role_id")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
   @@map("user_roles")
@@ -207,8 +101,7 @@ model RefreshSession {
   ip               String?   @map("ip")
   expiresAt        DateTime  @map("expires_at")
   revokedAt        DateTime? @map("revoked_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_sessions")
 }
@@ -219,8 +112,7 @@ model PasswordResetToken {
   tokenHash String    @map("token_hash")
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
 }
@@ -231,31 +123,25 @@ model EmailVerificationToken {
   tokenHash String    @map("token_hash")
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("email_verification_tokens")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CONTENT / CMS
-// ═══════════════════════════════════════════════════════════════
-
 model News {
-  id             Int        @id @default(autoincrement()) @map("id")
-  slug           String     @unique @map("slug")
-  status         NewsStatus @map("status")
-  publishedAt    DateTime?  @map("published_at")
-  coverFileId    String?    @map("cover_file_id")
-  authorUserId   String     @map("author_user_id")
-  seoTitle       String?    @map("seo_title")
-  seoDescription String?    @map("seo_description")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
-
-  coverFile    File?             @relation("NewsCover", fields: [coverFileId], references: [id], onDelete: SetNull)
-  author       User              @relation("NewsAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
-  translations NewsTranslation[]
+  id             Int               @id @default(autoincrement()) @map("id")
+  slug           String            @unique @map("slug")
+  status         NewsStatus        @map("status")
+  publishedAt    DateTime?         @map("published_at")
+  coverFileId    String?           @map("cover_file_id")
+  authorUserId   String            @map("author_user_id")
+  seoTitle       String?           @map("seo_title")
+  seoDescription String?           @map("seo_description")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  author         User              @relation("NewsAuthor", fields: [authorUserId], references: [id])
+  coverFile      File?             @relation("NewsCover", fields: [coverFileId], references: [id])
+  translations   NewsTranslation[]
 
   @@map("news")
 }
@@ -265,28 +151,26 @@ model NewsTranslation {
   locale         String  @map("locale")
   title          String  @map("title")
   excerpt        String? @map("excerpt")
-  body           String  @map("body") @db.Text
+  body           String  @map("body")
   seoTitle       String? @map("seo_title")
   seoDescription String? @map("seo_description")
-
-  news News @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  news           News    @relation(fields: [newsId], references: [id], onDelete: Cascade)
 
   @@unique([newsId, locale])
   @@map("news_translations")
 }
 
 model CmsPage {
-  id          Int        @id @default(autoincrement()) @map("id")
-  code        String     @unique @map("code")
-  slug        String     @unique @map("slug")
-  status      NewsStatus @map("status")
-  coverFileId String?    @map("cover_file_id")
-  sortOrder   Int        @default(0) @map("sort_order")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-
-  coverFile    File?                @relation("CmsPageCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  id           Int                  @id @default(autoincrement()) @map("id")
+  code         String               @unique @map("code")
+  slug         String               @unique @map("slug")
+  status       NewsStatus           @map("status")
+  coverFileId  String?              @map("cover_file_id")
+  sortOrder    Int                  @default(0) @map("sort_order")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
   translations CmsPageTranslation[]
+  coverFile    File?                @relation("CmsPageCover", fields: [coverFileId], references: [id])
 
   @@map("cms_pages")
 }
@@ -295,11 +179,10 @@ model CmsPageTranslation {
   pageId         Int     @map("page_id")
   locale         String  @map("locale")
   title          String  @map("title")
-  body           String  @map("body") @db.Text
+  body           String  @map("body")
   seoTitle       String? @map("seo_title")
   seoDescription String? @map("seo_description")
-
-  page CmsPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  page           CmsPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@unique([pageId, locale])
   @@map("cms_page_translations")
@@ -311,54 +194,48 @@ model SiteSetting {
   valueJson       Json     @map("value_json")
   updatedByUserId String?  @map("updated_by_user_id")
   updatedAt       DateTime @updatedAt @map("updated_at")
-
-  updatedBy User? @relation("SiteSettingUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  updatedBy       User?    @relation("SiteSettingUpdater", fields: [updatedByUserId], references: [id])
 
   @@map("site_settings")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CATALOG / VEHICLES
-// ═══════════════════════════════════════════════════════════════
-
 model Vehicle {
-  id                 String                    @id @default(uuid()) @map("id")
-  slug               String                    @unique @map("slug")
-  sourceType         VehicleSourceType         @map("source_type")
-  sourceRegion       VehicleRegion             @map("source_region")
-  publicationStatus  VehiclePublicationStatus  @map("publication_status")
-  availabilityStatus VehicleAvailabilityStatus @map("availability_status")
-  isRecommended      Boolean                   @default(false) @map("is_recommended")
-  vin                String?                   @map("vin")
-  title              String                    @map("title")
-  make               String                    @map("make")
-  model              String                    @map("model")
-  year               Int                       @map("year")
-  priceAmount        Decimal                   @map("price_amount") @db.Decimal
-  currency           String                    @default("USD") @map("currency")
-  odometerValue      Int?                      @map("odometer_value")
-  bodyType           String?                   @map("body_type")
-  fuelType           String?                   @map("fuel_type")
-  transmission       String?                   @map("transmission")
-  driveType          String?                   @map("drive_type")
-  damagePrimary      String?                   @map("damage_primary")
-  locationCountry    String?                   @map("location_country")
-  locationCity       String?                   @map("location_city")
-  locationState      String?                   @map("location_state")
-  seoTitle           String?                   @map("seo_title")
-  seoDescription     String?                   @map("seo_description")
-  publishedAt        DateTime?                 @map("published_at")
-  createdAt          DateTime                  @default(now()) @map("created_at")
-  updatedAt          DateTime                  @updatedAt @map("updated_at")
-
-  specs               VehicleSpec?
-  media               VehicleMedia[]
-  contentTranslations VehicleContentTranslation[]
-  sourceBindings      VehicleSourceBinding[]
-  favorites           Favorite[]
+  id                  String                      @id @default(uuid()) @map("id")
+  slug                String                      @unique @map("slug")
+  sourceType          VehicleSourceType           @map("source_type")
+  sourceRegion        VehicleRegion               @map("source_region")
+  publicationStatus   VehiclePublicationStatus    @map("publication_status")
+  availabilityStatus  VehicleAvailabilityStatus   @map("availability_status")
+  isRecommended       Boolean                     @default(false) @map("is_recommended")
+  vin                 String?                     @map("vin")
+  title               String                      @map("title")
+  make                String                      @map("make")
+  model               String                      @map("model")
+  year                Int                         @map("year")
+  priceAmount         Decimal                     @map("price_amount") @db.Decimal
+  currency            String                      @default("USD") @map("currency")
+  odometerValue       Int?                        @map("odometer_value")
+  bodyType            String?                     @map("body_type")
+  fuelType            String?                     @map("fuel_type")
+  transmission        String?                     @map("transmission")
+  driveType           String?                     @map("drive_type")
+  damagePrimary       String?                     @map("damage_primary")
+  locationCountry     String?                     @map("location_country")
+  locationCity        String?                     @map("location_city")
+  locationState       String?                     @map("location_state")
+  seoTitle            String?                     @map("seo_title")
+  seoDescription      String?                     @map("seo_description")
+  publishedAt         DateTime?                   @map("published_at")
+  createdAt           DateTime                    @default(now()) @map("created_at")
+  updatedAt           DateTime                    @updatedAt @map("updated_at")
   bids                Bid[]
-  leads               Lead[]                      @relation("LeadVehicle")
   calculatorEstimates CalculatorEstimate[]        @relation("EstimateVehicle")
+  favorites           Favorite[]
+  leads               Lead[]                      @relation("LeadVehicle")
+  contentTranslations VehicleContentTranslation[]
+  media               VehicleMedia[]
+  sourceBindings      VehicleSourceBinding[]
+  specs               VehicleSpec?
 
   @@index([publicationStatus, publishedAt])
   @@index([sourceType, sourceRegion])
@@ -380,10 +257,9 @@ model VehicleSpec {
   sellerName    String?   @map("seller_name")
   lotNumber     String?   @map("lot_number")
   auctionDate   DateTime? @map("auction_date")
-  saleStatus    String?   @map("sale_status")
   currentBid    Int?      @map("current_bid")
-
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  saleStatus    String?   @map("sale_status")
+  vehicle       Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@map("vehicle_specs")
 }
@@ -397,9 +273,8 @@ model VehicleMedia {
   sortOrder Int     @default(0) @map("sort_order")
   isPrimary Boolean @default(false) @map("is_primary")
   checksum  String? @map("checksum")
-
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  file    File?   @relation("VehicleMediaFile", fields: [fileId], references: [id], onDelete: SetNull)
+  file      File?   @relation("VehicleMediaFile", fields: [fileId], references: [id])
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@index([vehicleId, sortOrder])
   @@map("vehicle_media")
@@ -409,10 +284,9 @@ model VehicleContentTranslation {
   vehicleId       String  @map("vehicle_id")
   locale          String  @map("locale")
   title           String? @map("title")
-  description     String? @map("description") @db.Text
+  description     String? @map("description")
   shortBadgesJson Json?   @map("short_badges_json")
-
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@unique([vehicleId, locale])
   @@map("vehicle_content_translations")
@@ -429,31 +303,25 @@ model VehicleSourceBinding {
   buyNowAmount      Decimal?  @map("buy_now_amount") @db.Decimal
   lastSyncedAt      DateTime? @map("last_synced_at")
   sourcePayloadHash String?   @map("source_payload_hash")
-
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@unique([provider, externalLotId])
   @@map("vehicle_source_bindings")
 }
 
 model VehicleRawImport {
-  id            String   @id @default(uuid()) @map("id")
-  provider      String   @map("provider")
-  externalLotId String   @map("external_lot_id")
-  importJobId   String?  @map("import_job_id")
-  payloadJsonb  Json     @map("payload_jsonb")
-  receivedAt    DateTime @default(now()) @map("received_at")
-  checksum      String?  @map("checksum")
-
-  importJob ImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
+  id            String     @id @default(uuid()) @map("id")
+  provider      String     @map("provider")
+  externalLotId String     @map("external_lot_id")
+  importJobId   String?    @map("import_job_id")
+  payloadJsonb  Json       @map("payload_jsonb")
+  receivedAt    DateTime   @default(now()) @map("received_at")
+  checksum      String?    @map("checksum")
+  importJob     ImportJob? @relation(fields: [importJobId], references: [id])
 
   @@index([provider, externalLotId, receivedAt])
   @@map("vehicle_raw_imports")
 }
-
-// ═══════════════════════════════════════════════════════════════
-// CALCULATOR / PRICING
-// ═══════════════════════════════════════════════════════════════
 
 model AuctionFeeRule {
   id            Int       @id @default(autoincrement()) @map("id")
@@ -537,53 +405,47 @@ model ExchangeRate {
 }
 
 model CalculatorEstimate {
-  id             String   @id @default(uuid()) @map("id")
-  userId         String?  @map("user_id")
-  vehicleId      String?  @map("vehicle_id")
-  inputJsonb     Json     @map("input_jsonb")
-  outputJsonb    Json     @map("output_jsonb")
-  totalAmount    Decimal  @map("total_amount") @db.Decimal
-  totalCurrency  String   @default("USD") @map("total_currency")
-  rulesetVersion String?  @map("ruleset_version")
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  user              User?              @relation("EstimateUser", fields: [userId], references: [id], onDelete: SetNull)
-  vehicle           Vehicle?           @relation("EstimateVehicle", fields: [vehicleId], references: [id], onDelete: SetNull)
-  savedCalculations SavedCalculation[]
+  id                String             @id @default(uuid()) @map("id")
+  userId            String?            @map("user_id")
+  vehicleId         String?            @map("vehicle_id")
+  inputJsonb        Json               @map("input_jsonb")
+  outputJsonb       Json               @map("output_jsonb")
+  totalAmount       Decimal            @map("total_amount") @db.Decimal
+  totalCurrency     String             @default("USD") @map("total_currency")
+  rulesetVersion    String?            @map("ruleset_version")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  user              User?              @relation("EstimateUser", fields: [userId], references: [id])
+  vehicle           Vehicle?           @relation("EstimateVehicle", fields: [vehicleId], references: [id])
   leads             Lead[]             @relation("LeadEstimate")
+  savedCalculations SavedCalculation[]
 
   @@index([userId, createdAt])
   @@index([vehicleId])
   @@map("calculator_estimates")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// LEADS / CRM-LITE
-// ═══════════════════════════════════════════════════════════════
-
 model Lead {
-  id                   String     @id @default(uuid()) @map("id")
-  leadType             LeadType   @map("lead_type")
-  sourceChannel        String?    @map("source_channel")
-  status               LeadStatus @default(NEW) @map("status")
-  customerUserId       String?    @map("customer_user_id")
-  managerUserId        String?    @map("manager_user_id")
-  vehicleId            String?    @map("vehicle_id")
-  calculatorEstimateId String?    @map("calculator_estimate_id")
-  name                 String?    @map("name")
-  phone                String?    @map("phone")
-  email                String?    @map("email")
-  comment              String?    @map("comment") @db.Text
-  utmJsonb             Json?      @map("utm_jsonb")
-  createdAt            DateTime   @default(now()) @map("created_at")
-  updatedAt            DateTime   @updatedAt @map("updated_at")
-
-  customer           User?               @relation("LeadCustomer", fields: [customerUserId], references: [id], onDelete: SetNull)
-  manager            User?               @relation("LeadManager", fields: [managerUserId], references: [id], onDelete: SetNull)
-  vehicle            Vehicle?            @relation("LeadVehicle", fields: [vehicleId], references: [id], onDelete: SetNull)
-  calculatorEstimate CalculatorEstimate? @relation("LeadEstimate", fields: [calculatorEstimateId], references: [id], onDelete: SetNull)
-  comments           LeadComment[]
-  statusHistory      LeadStatusHistory[]
+  id                   String              @id @default(uuid()) @map("id")
+  leadType             LeadType            @map("lead_type")
+  sourceChannel        String?             @map("source_channel")
+  status               LeadStatus          @default(NEW) @map("status")
+  customerUserId       String?             @map("customer_user_id")
+  managerUserId        String?             @map("manager_user_id")
+  vehicleId            String?             @map("vehicle_id")
+  calculatorEstimateId String?             @map("calculator_estimate_id")
+  name                 String?             @map("name")
+  phone                String?             @map("phone")
+  email                String?             @map("email")
+  comment              String?             @map("comment")
+  utmJsonb             Json?               @map("utm_jsonb")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  comments             LeadComment[]
+  statusHistory        LeadStatusHistory[]
+  calculatorEstimate   CalculatorEstimate? @relation("LeadEstimate", fields: [calculatorEstimateId], references: [id])
+  customer             User?               @relation("LeadCustomer", fields: [customerUserId], references: [id])
+  manager              User?               @relation("LeadManager", fields: [managerUserId], references: [id])
+  vehicle              Vehicle?            @relation("LeadVehicle", fields: [vehicleId], references: [id])
 
   @@index([status, createdAt])
   @@index([managerUserId])
@@ -595,11 +457,10 @@ model LeadComment {
   id           String   @id @default(uuid()) @map("id")
   leadId       String   @map("lead_id")
   authorUserId String   @map("author_user_id")
-  body         String   @map("body") @db.Text
+  body         String   @map("body")
   createdAt    DateTime @default(now()) @map("created_at")
-
-  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  author User @relation("LeadCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  author       User     @relation("LeadCommentAuthor", fields: [authorUserId], references: [id])
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId, createdAt])
   @@map("lead_comments")
@@ -613,22 +474,10 @@ model LeadStatusHistory {
   changedByUserId String?     @map("changed_by_user_id")
   reason          String?     @map("reason")
   changedAt       DateTime    @default(now()) @map("changed_at")
-
-  lead      Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  changedBy User? @relation("LeadStatusChanger", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  changedBy       User?       @relation("LeadStatusChanger", fields: [changedByUserId], references: [id])
+  lead            Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@map("lead_status_history")
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AUCTION / BIDS
-// ═══════════════════════════════════════════════════════════════
-
-enum BidStatus {
-  ACTIVE
-  OUTBID
-  WON
-  CANCELLED
 }
 
 model Bid {
@@ -639,74 +488,64 @@ model Bid {
   maxAmount Decimal?  @map("max_amount") @db.Decimal
   status    BidStatus @default(ACTIVE) @map("status")
   createdAt DateTime  @default(now()) @map("created_at")
-
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  user    User    @relation("UserBids", fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation("UserBids", fields: [userId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@index([vehicleId, createdAt])
   @@index([userId])
   @@map("bids")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// FAVORITES / HISTORY / COMMUNICATIONS
-// ═══════════════════════════════════════════════════════════════
-
 model Favorite {
   userId    String   @map("user_id")
   vehicleId String   @map("vehicle_id")
   createdAt DateTime @default(now()) @map("created_at")
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, vehicleId])
   @@map("favorites")
 }
 
 model SavedCalculation {
-  userId               String   @map("user_id")
-  calculatorEstimateId String   @map("calculator_estimate_id")
-  createdAt            DateTime @default(now()) @map("created_at")
-
-  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  calculatorEstimate CalculatorEstimate @relation(fields: [calculatorEstimateId], references: [id], onDelete: Cascade)
+  userId               String             @map("user_id")
+  calculatorEstimateId String             @map("calculator_estimate_id")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  calculatorEstimate   CalculatorEstimate @relation(fields: [calculatorEstimateId], references: [id], onDelete: Cascade)
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, calculatorEstimateId])
   @@map("saved_calculations")
 }
 
 model TelegramSubscriber {
-  id             Int       @id @default(autoincrement()) @map("id")
-  telegramChatId String    @unique @map("telegram_chat_id")
-  username       String?   @map("username")
-  status         String?   @map("status")
-  locale         String?   @map("locale")
-  source         String?   @map("source")
-  subscribedAt   DateTime  @default(now()) @map("subscribed_at")
-  unsubscribedAt DateTime? @map("unsubscribed_at")
-
-  segmentLinks SubscriberSegmentLink[]
+  id             Int                     @id @default(autoincrement()) @map("id")
+  telegramChatId String                  @unique @map("telegram_chat_id")
+  username       String?                 @map("username")
+  status         String?                 @map("status")
+  locale         String?                 @map("locale")
+  source         String?                 @map("source")
+  subscribedAt   DateTime                @default(now()) @map("subscribed_at")
+  unsubscribedAt DateTime?               @map("unsubscribed_at")
+  segmentLinks   SubscriberSegmentLink[]
 
   @@map("telegram_subscribers")
 }
 
 model SubscriberSegment {
-  id   Int    @id @default(autoincrement()) @map("id")
-  code String @unique @map("code")
-  name String @map("name")
-
+  id              Int                     @id @default(autoincrement()) @map("id")
+  code            String                  @unique @map("code")
+  name            String                  @map("name")
   subscriberLinks SubscriberSegmentLink[]
 
   @@map("subscriber_segments")
 }
 
 model SubscriberSegmentLink {
-  subscriberId Int @map("subscriber_id")
-  segmentId    Int @map("segment_id")
-
-  subscriber TelegramSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
-  segment    SubscriberSegment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  subscriberId Int                @map("subscriber_id")
+  segmentId    Int                @map("segment_id")
+  segment      SubscriberSegment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  subscriber   TelegramSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
 
   @@unique([subscriberId, segmentId])
   @@map("subscriber_segment_links")
@@ -716,14 +555,13 @@ model Broadcast {
   id              String              @id @default(uuid()) @map("id")
   channel         NotificationChannel @map("channel")
   title           String              @map("title")
-  bodyTemplate    String              @map("body_template") @db.Text
+  bodyTemplate    String              @map("body_template")
   status          String              @map("status")
   createdByUserId String?             @map("created_by_user_id")
   scheduledAt     DateTime?           @map("scheduled_at")
   sentAt          DateTime?           @map("sent_at")
   createdAt       DateTime            @default(now()) @map("created_at")
-
-  createdBy User? @relation("BroadcastCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdBy       User?               @relation("BroadcastCreator", fields: [createdByUserId], references: [id])
 
   @@index([status, scheduledAt])
   @@map("broadcasts")
@@ -745,27 +583,22 @@ model NotificationMessage {
   @@map("notification_messages")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// FILES / AUDIT / OPERATIONS
-// ═══════════════════════════════════════════════════════════════
-
 model File {
-  id              String   @id @default(uuid()) @map("id")
-  bucket          String   @map("bucket")
-  storageKey      String   @map("storage_key")
-  originalName    String?  @map("original_name")
-  mimeType        String?  @map("mime_type")
-  size            Int      @map("size")
-  checksum        String?  @map("checksum")
-  width           Int?     @map("width")
-  height          Int?     @map("height")
-  createdByUserId String?  @map("created_by_user_id")
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  createdBy    User?          @relation("FileCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  newsCover    News[]         @relation("NewsCover")
-  cmsPageCover CmsPage[]      @relation("CmsPageCover")
-  vehicleMedia VehicleMedia[] @relation("VehicleMediaFile")
+  id              String         @id @default(uuid()) @map("id")
+  bucket          String         @map("bucket")
+  storageKey      String         @map("storage_key")
+  originalName    String?        @map("original_name")
+  mimeType        String?        @map("mime_type")
+  size            Int            @map("size")
+  checksum        String?        @map("checksum")
+  width           Int?           @map("width")
+  height          Int?           @map("height")
+  createdByUserId String?        @map("created_by_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  cmsPageCover    CmsPage[]      @relation("CmsPageCover")
+  createdBy       User?          @relation("FileCreator", fields: [createdByUserId], references: [id])
+  newsCover       News[]         @relation("NewsCover")
+  vehicleMedia    VehicleMedia[] @relation("VehicleMediaFile")
 
   @@unique([bucket, storageKey])
   @@index([checksum])
@@ -773,18 +606,17 @@ model File {
 }
 
 model ImportJob {
-  id              String          @id @default(uuid()) @map("id")
-  provider        String          @map("provider")
-  mode            String          @map("mode")
-  status          ImportJobStatus @default(PENDING) @map("status")
-  startedAt       DateTime?       @map("started_at")
-  finishedAt      DateTime?       @map("finished_at")
-  createdByUserId String?         @map("created_by_user_id")
-  summaryJsonb    Json?           @map("summary_jsonb")
-  errorMessage    String?         @map("error_message")
-  createdAt       DateTime        @default(now()) @map("created_at")
-
-  createdBy         User?              @relation("ImportJobCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  id                String             @id @default(uuid()) @map("id")
+  provider          String             @map("provider")
+  mode              String             @map("mode")
+  status            ImportJobStatus    @default(PENDING) @map("status")
+  startedAt         DateTime?          @map("started_at")
+  finishedAt        DateTime?          @map("finished_at")
+  createdByUserId   String?            @map("created_by_user_id")
+  summaryJsonb      Json?              @map("summary_jsonb")
+  errorMessage      String?            @map("error_message")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  createdBy         User?              @relation("ImportJobCreator", fields: [createdByUserId], references: [id])
   vehicleRawImports VehicleRawImport[]
 
   @@index([provider, status, startedAt])
@@ -889,8 +721,7 @@ model AuditLog {
   beforeJsonb Json?    @map("before_jsonb")
   afterJsonb  Json?    @map("after_jsonb")
   createdAt   DateTime @default(now()) @map("created_at")
-
-  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id])
 
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
@@ -908,9 +739,238 @@ model AppEvent {
   @@map("app_events")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AUCTION DISCOVERY (Task 033S)
-// ═══════════════════════════════════════════════════════════════
+/// Cursor state per provider + normalized query fingerprint.
+/// Supports safe resume after interruption.
+/// Page-checkpoint state for discovery pagination.
+/// CONFIRMED: provider uses page-based pagination (?page=N),
+/// NOT opaque cursor tokens. See Task 033P probe results.
+model DiscoveryCheckpoint {
+  id                 String    @id @default(uuid()) @map("id")
+  provider           String    @map("provider")
+  queryFingerprint   String    @map("query_fingerprint")
+  lastPage           Int?      @map("last_page")
+  lastSuccessfulPage Int?      @map("last_successful_page")
+  lastStartedAt      DateTime? @map("last_started_at")
+  lastCompletedAt    DateTime? @map("last_completed_at")
+  exhaustedAt        DateTime? @map("exhausted_at")
+  contractVersion    String    @default("v1_page") @map("contract_version")
+  lastError          String?   @map("last_error")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@unique([provider, queryFingerprint])
+  @@map("discovery_checkpoints")
+}
+
+/// Normalized external lot discovered via search or discovery.
+/// Separate from Vehicle — live results do NOT become catalog vehicles
+/// without explicit import action.
+model DiscoveredLot {
+  id                    String                @id @default(uuid()) @map("id")
+  provider              String                @map("provider")
+  externalLotId         String                @map("external_lot_id")
+  title                 String                @map("title")
+  make                  String                @map("make")
+  model                 String                @map("model")
+  year                  Int                   @map("year")
+  vin                   String?               @map("vin")
+  slugVin               String?               @map("slug_vin")
+  platformId            Int?                  @map("platform_id")
+  subLot                Boolean               @default(false) @map("sub_lot")
+  ad                    DateTime?             @map("ad")
+  auctionState          String?               @map("auction_state")
+  auctionFormatted      String?               @map("auction_formatted")
+  isBuyNow              Boolean               @default(false) @map("is_buy_now")
+  buyNowUsd             Decimal?              @map("buy_now_usd") @db.Decimal
+  currentBidUsd         Decimal?              @map("current_bid_usd") @db.Decimal
+  estimatedCostUsd      Decimal?              @map("estimated_cost_usd") @db.Decimal
+  lastSoldPriceUsd      Decimal?              @map("last_sold_price_usd") @db.Decimal
+  odometerMi            Int?                  @map("odometer_mi")
+  odometerKm            Int?                  @map("odometer_km")
+  primaryDamage         String?               @map("primary_damage")
+  secondaryDamage       String?               @map("secondary_damage")
+  loss                  String?               @map("loss")
+  runCondition          String?               @map("run_condition")
+  hasKey                Boolean?              @map("has_key")
+  bodyStyle             String?               @map("body_style")
+  engine                String?               @map("engine")
+  driveType             String?               @map("drive_type")
+  exteriorColor         String?               @map("exterior_color")
+  fuelType              String?               @map("fuel_type")
+  transmission          String?               @map("transmission")
+  airbags               String?               @map("airbags")
+  restraintSystem       String?               @map("restraint_system")
+  locationDisplay       String?               @map("location_display")
+  locationState         String?               @map("location_state")
+  facilityId            String?               @map("facility_id")
+  facilityOfficeName    String?               @map("facility_office_name")
+  facilityState         String?               @map("facility_state")
+  facilityZip           String?               @map("facility_zip")
+  has360                Boolean               @default(false) @map("has_360")
+  hasVideo              Boolean               @default(false) @map("has_video")
+  thumbsCount           Int                   @default(0) @map("thumbs_count")
+  sellerClass           String?               @map("seller_class")
+  sellerType            String?               @map("seller_type")
+  saleDocumentName      String?               @map("sale_document_name")
+  saleDocumentType      String?               @map("sale_document_type")
+  sourcePayloadHash     String?               @map("source_payload_hash")
+  lastSeenAt            DateTime              @default(now()) @map("last_seen_at")
+  lastProviderUpdateAt  DateTime?             @map("last_provider_update_at")
+  nextRefreshAt         DateTime?             @map("next_refresh_at")
+  freshnessTier         FreshnessTier         @default(COLD) @map("freshness_tier")
+  consecutiveMisses     Int                   @default(0) @map("consecutive_misses")
+  availabilityConfirmed Boolean               @default(true) @map("availability_confirmed")
+  state                 DiscoveredLotState    @default(DISCOVERED) @map("state")
+  vehicleId             String?               @map("vehicle_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  priorityScore         Int?                  @map("priority_score")
+  selectedAt            DateTime?             @map("selected_at")
+  deferredAt            DateTime?             @map("deferred_at")
+  deferralReason        String?               @map("deferral_reason")
+  attemptCost           Int                   @default(1) @map("attempt_cost")
+  lifecycleState        AuctionLifecycleState @default(NOT_READY) @map("lifecycle_state")
+  freshnessState        AuctionFreshnessState @default(FRESH) @map("freshness_state")
+  auctionTime           DateTime?             @map("auction_time")
+  auctionTimezoneOffset Int?                  @map("auction_timezone_offset")
+  firstSeenAt           DateTime              @default(now()) @map("first_seen_at")
+  terminalAt            DateTime?             @map("terminal_at")
+  mediaUrls             String[]              @default([]) @map("media_urls")
+
+  @@unique([provider, externalLotId])
+  @@index([provider, freshnessTier, nextRefreshAt])
+  @@index([provider, state])
+  @@index([nextRefreshAt])
+  @@index([isBuyNow, auctionState])
+  @@index([lifecycleState, freshnessState])
+  @@index([firstSeenAt], map: "discovered_lots_first_seen_idx")
+  @@map("discovered_lots")
+}
+
+/// Short-lived search result cache keyed by normalized query fingerprint.
+model SearchQueryCache {
+  id               String   @id @default(uuid()) @map("id")
+  queryFingerprint String   @unique @map("query_fingerprint")
+  provider         String   @map("provider")
+  params           Json     @map("params")
+  results          Json     @map("results")
+  nextCursor       String?  @map("next_cursor")
+  itemCount        Int      @map("item_count")
+  ttlSeconds       Int      @default(60) @map("ttl_seconds")
+  expiresAt        DateTime @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([provider, expiresAt])
+  @@map("search_query_cache")
+}
+
+/// Scheduler state — single row, controls global scheduler.
+model SchedulerState {
+  id             String    @id @default(uuid()) @map("id")
+  isPaused       Boolean   @default(false) @map("is_paused")
+  hotIntervalMs  Int       @default(900000) @map("hot_interval_ms")
+  warmIntervalMs Int       @default(10800000) @map("warm_interval_ms")
+  coldIntervalMs Int       @default(43200000) @map("cold_interval_ms")
+  lastRunAt      DateTime? @map("last_run_at")
+  nextRunAt      DateTime? @map("next_run_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("scheduler_state")
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+enum UserType {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+enum VehicleSourceType {
+  INTERNAL
+  COPART
+  IAAI
+}
+
+enum VehicleRegion {
+  USA
+  EUROPE
+  UKRAINE
+}
+
+enum VehiclePublicationStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  HIDDEN
+  ARCHIVED
+}
+
+enum VehicleAvailabilityStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  NOT_AVAILABLE
+}
+
+enum LeadType {
+  CONTACT_FORM
+  CALLBACK
+  CATALOG_REQUEST
+  CALCULATOR_REQUEST
+  SELECTION_REQUEST
+}
+
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  QUALIFIED
+  WON
+  LOST
+  SPAM
+  ARCHIVED
+}
+
+enum ImportJobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  PARTIAL_SUCCESS
+  FAILED
+  ABANDONED
+}
+
+enum NewsStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELED
+}
+
+enum BidStatus {
+  ACTIVE
+  OUTBID
+  WON
+  CANCELLED
+}
 
 enum FreshnessTier {
   HOT
@@ -946,153 +1006,4 @@ enum AuctionFreshnessState {
   STALE
   DEFERRED
   TERMINAL
-}
-
-/// Cursor state per provider + normalized query fingerprint.
-/// Supports safe resume after interruption.
-/// Page-checkpoint state for discovery pagination.
-/// CONFIRMED: provider uses page-based pagination (?page=N),
-/// NOT opaque cursor tokens. See Task 033P probe results.
-model DiscoveryCheckpoint {
-  id                 String    @id @default(uuid()) @map("id")
-  provider           String    @map("provider")
-  queryFingerprint   String    @map("query_fingerprint")
-  lastPage           String?   @map("last_page")
-  lastSuccessfulPage String?   @map("last_successful_page")
-  lastStartedAt      DateTime? @map("last_started_at")
-  lastCompletedAt    DateTime? @map("last_completed_at")
-  exhaustedAt        DateTime? @map("exhausted_at")
-  contractVersion    String    @default("v1_page") @map("contract_version")
-  lastError          String?   @map("last_error")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-
-  @@unique([provider, queryFingerprint])
-  @@map("discovery_checkpoints")
-}
-
-/// Normalized external lot discovered via search or discovery.
-/// Separate from Vehicle — live results do NOT become catalog vehicles
-/// without explicit import action.
-model DiscoveredLot {
-  id                    String             @id @default(uuid()) @map("id")
-  provider              String             @map("provider")
-  externalLotId         String             @map("external_lot_id")
-  title                 String             @map("title")
-  make                  String             @map("make")
-  model                 String             @map("model")
-  year                  Int                @map("year")
-  vin                   String?            @map("vin")
-  slugVin               String?            @map("slug_vin")
-  platformId            Int?               @map("platform_id")
-  subLot                Boolean            @default(false) @map("sub_lot")
-  ad                    DateTime?          @map("ad")
-  auctionState          String?            @map("auction_state")
-  auctionFormatted      String?            @map("auction_formatted")
-  isBuyNow              Boolean            @default(false) @map("is_buy_now")
-  buyNowUsd             Decimal?           @map("buy_now_usd") @db.Decimal
-  currentBidUsd         Decimal?           @map("current_bid_usd") @db.Decimal
-  estimatedCostUsd      Decimal?           @map("estimated_cost_usd") @db.Decimal
-  lastSoldPriceUsd      Decimal?           @map("last_sold_price_usd") @db.Decimal
-  odometerMi            Int?               @map("odometer_mi")
-  odometerKm            Int?               @map("odometer_km")
-  primaryDamage         String?            @map("primary_damage")
-  secondaryDamage       String?            @map("secondary_damage")
-  loss                  String?            @map("loss")
-  runCondition          String?            @map("run_condition")
-  hasKey                Boolean?           @map("has_key")
-  bodyStyle             String?            @map("body_style")
-  engine                String?            @map("engine")
-  driveType             String?            @map("drive_type")
-  exteriorColor         String?            @map("exterior_color")
-  fuelType              String?            @map("fuel_type")
-  transmission          String?            @map("transmission")
-  airbags               String?            @map("airbags")
-  restraintSystem       String?            @map("restraint_system")
-  locationDisplay       String?            @map("location_display")
-  locationState         String?            @map("location_state")
-  facilityId            String?            @map("facility_id")
-  facilityOfficeName    String?            @map("facility_office_name")
-  facilityState         String?            @map("facility_state")
-  facilityZip           String?            @map("facility_zip")
-  has360                Boolean            @default(false) @map("has_360")
-  hasVideo              Boolean            @default(false) @map("has_video")
-  thumbsCount           Int                @default(0) @map("thumbs_count")
-  sellerClass           String?            @map("seller_class")
-  sellerType            String?            @map("seller_type")
-  saleDocumentName      String?            @map("sale_document_name")
-  saleDocumentType      String?            @map("sale_document_type")
-  sourcePayloadHash     String?            @map("source_payload_hash")
-  // Freshness tracking
-  lastSeenAt            DateTime           @default(now()) @map("last_seen_at")
-  lastProviderUpdateAt  DateTime?          @map("last_provider_update_at")
-  nextRefreshAt         DateTime?          @map("next_refresh_at")
-  freshnessTier         FreshnessTier      @default(COLD) @map("freshness_tier")
-  consecutiveMisses     Int                @default(0) @map("consecutive_misses")
-  availabilityConfirmed Boolean            @default(true) @map("availability_confirmed")
-  // Scheduler priority and deferral (Task 033T Phase 3)
-  priorityScore         Int?               @map("priority_score")
-  selectedAt            DateTime?          @map("selected_at")
-  deferredAt            DateTime?          @map("deferred_at")
-  deferralReason        String?            @map("deferral_reason")
-  attemptCost           Int                @default(1) @map("attempt_cost")
-  // Import state
-  // Import state
-  state                 DiscoveredLotState @default(DISCOVERED) @map("state")
-  vehicleId             String?            @map("vehicle_id")
-
-  // Task 036: AuctionLot domain fields
-  lifecycleState        AuctionLifecycleState @default(NOT_READY) @map("lifecycle_state")
-  freshnessState        AuctionFreshnessState @default(FRESH) @map("freshness_state")
-  auctionTime           DateTime?             @map("auction_time")
-  auctionTimezoneOffset Int?                  @map("auction_timezone_offset")
-  firstSeenAt           DateTime              @default(now()) @map("first_seen_at")
-  terminalAt            DateTime?             @map("terminal_at")
-  mediaUrls             String[]              @default([]) @map("media_urls")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([provider, externalLotId])
-  @@index([provider, freshnessTier, nextRefreshAt])
-  @@index([provider, state])
-  @@index([nextRefreshAt])
-  @@index([isBuyNow, auctionState])
-  @@index([lifecycleState, freshnessState])
-  @@index([auctionTime])
-  @@index([firstSeenAt])
-  @@map("discovered_lots")
-}
-
-/// Short-lived search result cache keyed by normalized query fingerprint.
-model SearchQueryCache {
-  id               String   @id @default(uuid()) @map("id")
-  queryFingerprint String   @unique @map("query_fingerprint")
-  provider         String   @map("provider")
-  params           Json     @map("params")
-  results          Json     @map("results")
-  nextCursor       String?  @map("next_cursor")
-  itemCount        Int      @map("item_count")
-  ttlSeconds       Int      @default(60) @map("ttl_seconds")
-  expiresAt        DateTime @map("expires_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  @@index([provider, expiresAt])
-  @@map("search_query_cache")
-}
-
-/// Scheduler state — single row, controls global scheduler.
-model SchedulerState {
-  id             String    @id @default(uuid()) @map("id")
-  isPaused       Boolean   @default(false) @map("is_paused")
-  hotIntervalMs  Int       @default(900000) @map("hot_interval_ms")
-  warmIntervalMs Int       @default(10800000) @map("warm_interval_ms")
-  coldIntervalMs Int       @default(43200000) @map("cold_interval_ms")
-  lastRunAt      DateTime? @map("last_run_at")
-  nextRunAt      DateTime? @map("next_run_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-
-  @@map("scheduler_state")
 }

@@ -374,12 +374,13 @@ export class DiscoveryService {
         }
 
         // Advance checkpoint ONLY after successful lot persistence
-        // Store the opaque cursor token (forwarded byte-for-byte)
+        // Note: lastPage/lastSuccessfulPage are Int columns — we store a page counter,
+        // not opaque cursor tokens. The cursor is kept in-memory per session.
         await tx.discoveryCheckpoint.update({
           where: { id: checkpoint.id },
           data: {
-            lastPage: nextCursor as any,
-            lastSuccessfulPage: nextCursor as any,
+            lastPage: pagesCompleted + 1,
+            lastSuccessfulPage: pagesCompleted + 1,
             lastCompletedAt: new Date(),
           },
         });
