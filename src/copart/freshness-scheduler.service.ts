@@ -466,8 +466,30 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       .filter(l => l && !l.isExpired)
       .map(l => l!.provider);
 
-    // Discovery status from last run
-    const d = this.lastDiscovery;
+    // Discovery status from last run (in-memory or fallback to DB checkpoints)
+    let d = this.lastDiscovery;
+    if (!d) {
+      const checkpoints = await this.prisma.discoveryCheckpoint.findMany({
+        where: { lastCompletedAt: { not: null } },
+        orderBy: { lastCompletedAt: 'desc' },
+      });
+      if (checkpoints.length > 0) {
+        const latest = checkpoints[0];
+        d = {
+          runAt: latest.lastCompletedAt!,
+          providers: checkpoints.map(cp => ({
+            provider: cp.provider,
+            pagesCompleted: 0,
+            lotsDiscovered: 0,
+            newLots: 0,
+            lotsUpdated: 0,
+            skipped: 0,
+            terminalReason: cp.exhaustedAt ? 'exhausted' : cp.lastError ? 'error' : null,
+            errors: cp.lastError ? [cp.lastError] : [],
+          })),
+        };
+      }
+    }
 
     return {
       isPaused: state.isPaused,
