@@ -26,6 +26,8 @@ import {
 import { RequestBudgetService, type FailureKind } from './request-budget.service';
 import type { ProviderId } from './provider-lease.service';
 import { normalizeDiscoveredLot, sanitizeLotForResponse } from './lot-normalizer';
+import { normalizeLifecycleState, computeFreshnessState, STALE_AFTER_MS } from '../auction-lot/lifecycle-mapping';
+import { AuctionLifecycleState } from '../auction-lot/types';
 
 export interface SearchParams {
   platform: 'copart' | 'iaai';
@@ -242,7 +244,26 @@ export class AuctionSearchService {
       const lotId = String(raw.lot_number);
       const normalized = normalizeDiscoveredLot(raw, params.platform);
 
-      // Idempotent upsert
+      // Compute lifecycle and freshness at write time (same as discovery.service.ts)
+      const observedAt = new Date();
+      const lifecycleState = normalizeLifecycleState(
+        normalized.auctionState,
+        normalized.auctionTime ?? normalized.ad,
+        observedAt,
+        normalized.isBuyNow,
+        normalized.buyNowUsd,
+      );
+      const freshnessState = computeFreshnessState(
+        observedAt,
+        null,
+        0,
+        true,
+        lifecycleState,
+        STALE_AFTER_MS.COLD,
+        observedAt,
+      );
+
+      // Idempotent upsert with computed lifecycle/freshness
       await this.prisma.discoveredLot.upsert({
         where: {
           provider_externalLotId: {
@@ -254,11 +275,19 @@ export class AuctionSearchService {
           provider: params.platform,
           externalLotId: lotId,
           ...normalized,
-          lastSeenAt: new Date(),
+          lifecycleState,
+          freshnessState,
+          lastSeenAt: observedAt,
+          lastProviderUpdateAt: observedAt,
+          consecutiveMisses: 0,
+          availabilityConfirmed: true,
         },
         update: {
           ...normalized,
-          lastSeenAt: new Date(),
+          lifecycleState,
+          freshnessState,
+          lastSeenAt: observedAt,
+          lastProviderUpdateAt: observedAt,
           consecutiveMisses: 0,
           availabilityConfirmed: true,
         },
