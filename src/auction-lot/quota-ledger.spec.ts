@@ -4,7 +4,6 @@
 // behavior and degradation order.
 // ─────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from 'vitest';
 import {
   simulateQuota,
   QuotaLedger,

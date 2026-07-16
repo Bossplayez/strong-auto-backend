@@ -5,15 +5,11 @@
 // ─────────────────────────────────────────────────────────────
 
 import { Module } from '@nestjs/common';
-import { AuctionLotsController } from './auction-lots.controller';
+import { AuctionImportCompatibilityController, AuctionLotsController } from './auction-lots.controller';
 import { AuctionLotsService } from './auction-lots.service';
 
-const AUCTION_LOTS_ENABLED =
-  process.env.AUCTION_LOTS_ENABLED === 'true' ||
-  process.env.NODE_ENV === 'development';
-
 @Module({
-  controllers: AUCTION_LOTS_ENABLED ? [AuctionLotsController] : [],
+  controllers: [AuctionLotsController, AuctionImportCompatibilityController],
   providers: [AuctionLotsService],
   exports: [AuctionLotsService],
 })

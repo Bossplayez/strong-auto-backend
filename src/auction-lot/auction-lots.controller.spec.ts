@@ -3,11 +3,12 @@
 // Tests for route ordering, DTO validation, and redaction.
 // ─────────────────────────────────────────────────────────────
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuctionLotsController } from './auction-lots.controller';
 import { AuctionLotsService } from './auction-lots.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AuctionLotsModule } from './auction-lots.module';
+
+const vi = jest;
 
 describe('AuctionLotsController', () => {
   let controller: AuctionLotsController;
@@ -15,9 +16,9 @@ describe('AuctionLotsController', () => {
 
   beforeEach(() => {
     service = {
-      findAll: vi.fn(),
-      findOne: vi.fn(),
-      getStats: vi.fn(),
+      findAll: jest.fn(),
+      findOne: jest.fn(),
+      getStats: jest.fn(),
     } as any;
     controller = new AuctionLotsController(service);
   });
@@ -49,7 +50,7 @@ describe('AuctionLotsController', () => {
   describe('findAll — delegates to service', () => {
     it('calls service.findAll with query params', async () => {
       const mockResult = { items: [], total: 0, page: 1, pageSize: 20, hasMore: false };
-      vi.mocked(service.findAll).mockResolvedValue(mockResult);
+      jest.mocked(service.findAll).mockResolvedValue(mockResult as any);
 
       const result = await controller.findAll({
         page: 1,
@@ -63,7 +64,7 @@ describe('AuctionLotsController', () => {
 
   describe('findOne — delegates to service which validates provider', () => {
     it('propagates BadRequestException from service for invalid provider', async () => {
-      vi.mocked(service.findOne).mockRejectedValue(
+      jest.mocked(service.findOne).mockRejectedValue(
         new BadRequestException('Invalid provider'),
       );
       await expect(controller.findOne('invalid', '123')).rejects.toThrow(
@@ -73,7 +74,7 @@ describe('AuctionLotsController', () => {
 
     it('calls service.findOne for valid provider', async () => {
       const mockLot = { provider: 'copart', externalLotId: '123' };
-      vi.mocked(service.findOne).mockResolvedValue(mockLot as any);
+      jest.mocked(service.findOne).mockResolvedValue(mockLot as any);
 
       await controller.findOne('copart', '123');
       expect(service.findOne).toHaveBeenCalledWith('copart', '123');
@@ -83,12 +84,18 @@ describe('AuctionLotsController', () => {
   describe('getStats — returns stats', () => {
     it('calls service.getStats', async () => {
       const mockStats = {
-        currentLotCount: 10,
-        liveLotCount: 2,
-        buyNowCount: 5,
-        upcomingCount: 3,
+        contractVersion: 'unified-auction-rc-v1' as const,
+        current: 10,
+        live: 2,
+        buyNow: 5,
+        upcoming: 3,
+        byProvider: {
+          copart: { current: 6, live: 1, buyNow: 3, upcoming: 2 },
+          iaai: { current: 4, live: 1, buyNow: 2, upcoming: 1 },
+        },
+        asOf: '2026-07-16T00:00:00.000Z',
       };
-      vi.mocked(service.getStats).mockResolvedValue(mockStats);
+      jest.mocked(service.getStats).mockResolvedValue(mockStats);
 
       const result = await controller.getStats();
       expect(service.getStats).toHaveBeenCalled();
@@ -229,8 +236,8 @@ describe('AuctionLotsService (validation)', () => {
     );
   });
 
-  it('rejects invalid lifecycleState in findAll', async () => {
-    await expect(service.findAll({ lifecycleState: 'INVALID' })).rejects.toThrow(
+  it('rejects invalid lifecycle in findAll', async () => {
+    await expect(service.findAll({ lifecycle: 'INVALID' })).rejects.toThrow(
       BadRequestException,
     );
   });
@@ -248,17 +255,15 @@ describe('AuctionLotsService (validation)', () => {
     );
   });
 
-  it('caps pageSize at 50', async () => {
-    await service.findAll({ pageSize: 100 });
-    expect(mockPrisma.discoveredLot.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 50 }),
+  it('rejects pageSize above 50 without clamping', async () => {
+    await expect(service.findAll({ pageSize: 100 })).rejects.toThrow(
+      BadRequestException,
     );
   });
 
-  it('enforces minimum page of 1', async () => {
-    await service.findAll({ page: 0, pageSize: 10 });
-    expect(mockPrisma.discoveredLot.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 0 }),
+  it('rejects page below 1 without clamping', async () => {
+    await expect(service.findAll({ page: 0, pageSize: 10 })).rejects.toThrow(
+      BadRequestException,
     );
   });
 });
@@ -325,10 +330,10 @@ describe('AuctionLotsService (stats counters)', () => {
     const service = new AuctionLotsService(mockPrisma as any);
     const stats = await service.getStats();
 
-    expect(stats.currentLotCount).toBe(3); // LIVE + UPCOMING + Buy Now
-    expect(stats.liveLotCount).toBe(1);
-    expect(stats.buyNowCount).toBe(1);
-    expect(stats.upcomingCount).toBe(1);
+    expect(stats.current).toBe(3); // LIVE + UPCOMING + Buy Now
+    expect(stats.live).toBe(1);
+    expect(stats.buyNow).toBe(1);
+    expect(stats.upcoming).toBe(1);
   });
 
   it('does not count STALE or TERMINAL lots as current', async () => {
@@ -363,9 +368,9 @@ describe('AuctionLotsService (stats counters)', () => {
     const service = new AuctionLotsService(mockPrisma as any);
     const stats = await service.getStats();
 
-    expect(stats.currentLotCount).toBe(0);
-    expect(stats.liveLotCount).toBe(0);
-    expect(stats.buyNowCount).toBe(0);
-    expect(stats.upcomingCount).toBe(0);
+    expect(stats.current).toBe(0);
+    expect(stats.live).toBe(0);
+    expect(stats.buyNow).toBe(0);
+    expect(stats.upcoming).toBe(0);
   });
 });

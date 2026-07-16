@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehicleFilterDto } from './dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { auctionItem, eligibleLot, filterItems, page, parseInventoryQuery, sortItems, vehicleItem } from '../auction-lot/inventory-projection';
 
 @Injectable()
 export class CatalogService {
@@ -95,6 +96,44 @@ export class CatalogService {
     ]);
 
     return new PaginatedResponseDto(items, total, filters.page, filters.pageSize);
+  }
+
+  async inventory(query: Record<string, unknown>) {
+    const parsed = parseInventoryQuery(query);
+    const [lots, vehicles] = await Promise.all([
+      this.prisma.discoveredLot.findMany(),
+      this.prisma.vehicle.findMany({ where: { publicationStatus: 'PUBLISHED' }, include: { media: { orderBy: { sortOrder: 'asc' }, select: { sourceUrl: true } } } }),
+    ]);
+    const publishedVehicleIds = new Set(vehicles.map((vehicle) => vehicle.id));
+    const projectedLots = lots.filter(eligibleLot).filter((lot) =>
+      parsed.view !== 'all' || !lot.vehicleId || !publishedVehicleIds.has(lot.vehicleId));
+    const items = [...projectedLots.map(auctionItem), ...vehicles.map(vehicleItem)];
+    const newestAt = new Map([...lots.map((lot) => [`auctionLot:${lot.provider}:${lot.externalLotId}`, lot.firstSeenAt] as const), ...vehicles.map((vehicle) => [`vehicle:${vehicle.id}`, vehicle.createdAt] as const)]);
+    const filtered = sortItems(filterItems(items, parsed), parsed.sort, newestAt);
+    const offset = (parsed.page - 1) * parsed.pageSize;
+    return page(filtered.slice(offset, offset + parsed.pageSize), filtered.length, parsed.page, parsed.pageSize);
+  }
+
+  async inventoryFilterOptions(query: Record<string, unknown>) {
+    const parsed = parseInventoryQuery(query, undefined, false);
+    const [lots, vehicles] = await Promise.all([
+      this.prisma.discoveredLot.findMany(),
+      this.prisma.vehicle.findMany({ where: { publicationStatus: 'PUBLISHED' }, include: { media: { orderBy: { sortOrder: 'asc' }, select: { sourceUrl: true } } } }),
+    ]);
+    const publishedVehicleIds = new Set(vehicles.map((vehicle) => vehicle.id));
+    const projectedLots = lots.filter(eligibleLot).filter((lot) =>
+      parsed.view !== 'all' || !lot.vehicleId || !publishedVehicleIds.has(lot.vehicleId));
+    const items = [...projectedLots.map(auctionItem), ...vehicles.map(vehicleItem)];
+    const fields: Record<string, string> = { makes: 'make', models: 'model', bodyTypes: 'bodyType', fuelTypes: 'fuelType', transmissions: 'transmission', driveTypes: 'driveType', sources: 'source', providers: 'provider', locationStates: 'locationState', lifecycles: 'lifecycle' };
+    const options = Object.fromEntries(Object.entries(fields).map(([name, field]) => {
+      const eligible = filterItems(items, parsed, field as any);
+      const counts = new Map<string, number>();
+      eligible.forEach((item: any) => { const value = item[field]; if (value) counts.set(value, (counts.get(value) ?? 0) + 1); });
+      return [name, [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([value, count]) => ({ value, label: value, count }))];
+    }));
+    const eligible = filterItems(items, parsed);
+    const range = (selector: (item: any) => number | null) => { const values = eligible.map(selector).filter((value): value is number => typeof value === 'number' && value > 0); return values.length ? { min: Math.min(...values), max: Math.max(...values) } : null; };
+    return { contractVersion: 'unified-auction-rc-v1', view: parsed.view, options, ranges: { year: range((item) => item.year), priceUsd: range((item) => item.price.primaryUsd), mileageKm: range((item) => item.odometerKm) }, applicability: { provider: { enabled: parsed.view !== 'curated', reason: parsed.view === 'curated' ? 'Auction-only filter.' : null }, lifecycle: { enabled: parsed.view !== 'curated', reason: parsed.view === 'curated' ? 'Auction-only filter.' : null }, buyNow: { enabled: parsed.view !== 'curated', reason: parsed.view === 'curated' ? 'Auction-only filter.' : null } }, asOf: new Date().toISOString() };
   }
 
   async findBySlug(slug: string): Promise<any> {

@@ -4,7 +4,6 @@
 // LoopDetector, and unsupported filter rejection.
 // ─────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from 'vitest';
 import { PageLimitProviderAdapter, LoopDetector } from './page-limit-adapter';
 import { CursorProviderAdapter } from './cursor-adapter';
 import { UnsupportedFilterError } from './provider-adapter.interface';

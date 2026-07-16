@@ -7,6 +7,7 @@ import { CopartModule } from '../copart/copart.module';
 import { BroadcastsModule } from '../broadcasts/broadcasts.module';
 import { AuditModule } from '../audit/audit.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuctionLotsModule } from '../auction-lot/auction-lots.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     BroadcastsModule,
     AuditModule,
     PrismaModule,
+    AuctionLotsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

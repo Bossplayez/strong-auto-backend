@@ -20,6 +20,7 @@ import { FreshnessSchedulerService } from '../copart/freshness-scheduler.service
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { AuctionLotsService } from '../auction-lot/auction-lots.service';
 
 describe('Admin Import — Runtime Authorization (Task 033R1)', () => {
   let app: INestApplication;
@@ -61,6 +62,15 @@ describe('Admin Import — Runtime Authorization (Task 033R1)', () => {
         { provide: DiscoveryService, useValue: { getCheckpointState: jest.fn().mockResolvedValue([]), runDiscovery: jest.fn() } },
         { provide: AuctionSearchService, useValue: { search: jest.fn(), importLot: jest.fn() } },
         { provide: FreshnessSchedulerService, useValue: { getStatus: jest.fn(), pause: jest.fn(), resume: jest.fn(), updateCadence: jest.fn(), tick: jest.fn() } },
+        {
+          provide: AuctionLotsService,
+          useValue: {
+            importPersistedLot: jest.fn(),
+            listAdminLots: jest.fn(),
+            adminLotDetail: jest.fn(),
+            adminMetrics: jest.fn(),
+          },
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -122,7 +132,8 @@ describe('Admin Import — Runtime Authorization (Task 033R1)', () => {
       .set('x-test-user', JSON.stringify({ roles: ['ADMIN'] }))
       .expect(200);
 
-    expect(res.body.globalBudget).toBeDefined();
+    expect(res.body.contractVersion).toBe('unified-auction-rc-v1');
+    expect(res.body.budget).toBeDefined();
     expect(res.body.providers).toBeDefined();
     expect(JSON.stringify(res.body)).not.toContain('ownerToken');
     expect(JSON.stringify(res.body)).not.toContain('RAPIDAPI_KEY');
@@ -134,7 +145,7 @@ describe('Admin Import — Runtime Authorization (Task 033R1)', () => {
       .set('x-test-user', JSON.stringify({ roles: ['MANAGER'] }))
       .expect(200);
 
-    expect(res.body.provider).toBe('iaai');
+    expect(res.body.provider.provider).toBe('iaai');
   });
 
   it('POST /admin/import/recover/copart with ADMIN auth → 200', async () => {
@@ -149,8 +160,12 @@ describe('Admin Import — Runtime Authorization (Task 033R1)', () => {
   it('GET /admin/import/status/invalid → error response', async () => {
     const res = await request(app.getHttpServer())
       .get('/admin/import/status/invalid')
-      .set('x-test-user', JSON.stringify({ roles: ['ADMIN'] }));
+      .set('x-test-user', JSON.stringify({ roles: ['ADMIN'] }))
+      .expect(400);
 
-    expect(res.body.error).toBeDefined();
+    expect(res.body).toEqual(expect.objectContaining({
+      contractVersion: 'unified-auction-rc-v1',
+      error: expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+    }));
   });
 });

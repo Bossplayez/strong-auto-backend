@@ -20,6 +20,7 @@ import { DiscoveryService } from '../copart/discovery.service';
 import { AuctionSearchService } from '../copart/auction-search.service';
 import { FreshnessSchedulerService } from '../copart/freshness-scheduler.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionLotsService } from '../auction-lot/auction-lots.service';
 
 describe('AdminController — import operational status (Task 033R)', () => {
   let controller: AdminController;
@@ -100,6 +101,15 @@ describe('AdminController — import operational status (Task 033R)', () => {
         { provide: AuctionSearchService, useValue: { search: jest.fn(), importLot: jest.fn() } },
         { provide: FreshnessSchedulerService, useValue: { getStatus: jest.fn(), pause: jest.fn(), resume: jest.fn(), updateCadence: jest.fn(), tick: jest.fn() } },
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: AuctionLotsService,
+          useValue: {
+            importPersistedLot: jest.fn(),
+            listAdminLots: jest.fn(),
+            adminLotDetail: jest.fn(),
+            adminMetrics: jest.fn(),
+          },
+        },
         { provide: JwtAuthGuard, useValue: { canActivate: () => true } },
         { provide: RolesGuard, useValue: { canActivate: () => true } },
       ],
@@ -115,18 +125,33 @@ describe('AdminController — import operational status (Task 033R)', () => {
 
     expect(result.providers).toBeDefined();
     expect(result.providers.length).toBe(2); // copart + iaai
+    expect(result.contractVersion).toBe('unified-auction-rc-v1');
+    expect(result.month).toBe('2026-07');
 
     const copart = result.providers.find((p: any) => p.provider === 'copart');
-    expect(copart).toBeDefined();
-    expect(copart.lease).not.toBeNull();
-    expect(copart.lease.fencingToken).toBe(5);
-    expect(copart.lastJob).not.toBeNull();
-    expect(copart.lastJob.status).toBe('SUCCESS');
+    expect(copart).toEqual(expect.objectContaining({
+      provider: 'copart',
+      enabled: true,
+      circuit: 'closed',
+      counters: {
+        allocated: 3000,
+        confirmed: 2900,
+        completed: 2860,
+        succeeded: 2800,
+        failed: 60,
+      },
+    }));
 
-    // Global budget at top level
-    expect(result.globalBudget).toBeDefined();
-    expect(result.globalBudget.budget).toBe(30000);
-    expect(result.globalBudget.allocated).toBe(5000);
+    expect(result.budget).toEqual({
+      allocated: 5000,
+      confirmed: 4900,
+      completed: 4900,
+      succeeded: 4800,
+      failed: 100,
+      cap: 30000,
+      protectedReserve: 3000,
+      routineRemaining: 22000,
+    });
   });
 
   // ── Test 27: Response omits owner token, API key, raw payload ──
@@ -199,12 +224,15 @@ describe('AdminController — import operational status (Task 033R)', () => {
 
   it('getImportStatusByProvider returns single provider data', async () => {
     const result = await controller.getImportStatusByProvider('iaai');
-    expect(result.provider).toBe('iaai');
-    expect(result.lease).not.toBeNull();
+    expect(result.contractVersion).toBe('unified-auction-rc-v1');
+    expect(result.month).toBe('2026-07');
+    expect(result.provider.provider).toBe('iaai');
+    expect(result.budget.cap).toBe(30000);
   });
 
   it('getImportStatusByProvider rejects invalid provider', async () => {
-    const result = await controller.getImportStatusByProvider('invalid');
-    expect(result.error).toBeDefined();
+    await expect(controller.getImportStatusByProvider('invalid')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+    });
   });
 });

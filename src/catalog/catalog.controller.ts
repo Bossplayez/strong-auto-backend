@@ -1,14 +1,29 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, UseFilters, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CatalogService } from './catalog.service';
 import { VehicleFilterDto } from './dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { ContractErrorFilter } from '../auction-lot/contract-error.filter';
 
 @ApiTags('Catalog')
+@UseFilters(ContractErrorFilter)
 @Controller('catalog')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
+
+  @Get('inventory')
+  async inventory(@Query() query: Record<string, unknown>): Promise<any> {
+    return this.catalogService.inventory(query);
+  }
+
+  @Get('filter-options')
+  async inventoryFilterOptions(@Query() query: Record<string, unknown>): Promise<any> {
+    if (query.view === undefined) {
+      return this.catalogService.getFilterOptions();
+    }
+    return this.catalogService.inventoryFilterOptions(query);
+  }
 
   @Get('vehicles')
   @ApiOperation({ summary: 'List vehicles with filters and pagination' })
@@ -27,7 +42,7 @@ export class CatalogController {
     return this.catalogService.findBySlug(slug);
   }
 
-  @Get('filter-options')
+  @Get('vehicle-filter-options')
   @ApiOperation({ summary: 'Get available filter values (makes, body types, fuel types)' })
   @ApiResponse({ status: 200, description: 'Filter options returned' })
   async getFilterOptions() {

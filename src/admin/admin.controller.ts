@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseFilters,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,9 @@ import { DiscoveryService } from '../copart/discovery.service';
 import { AuctionSearchService } from '../copart/auction-search.service';
 import { FreshnessSchedulerService } from '../copart/freshness-scheduler.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuctionLotsService } from '../auction-lot/auction-lots.service';
+import { CONTRACT_VERSION, PROVIDERS, validationError } from '../auction-lot/inventory-projection';
+import { ContractErrorFilter } from '../auction-lot/contract-error.filter';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -43,6 +47,7 @@ import {
 @ApiTags('Admin')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
+@UseFilters(ContractErrorFilter)
 @Roles('ADMIN', 'MANAGER')
 @Controller('admin')
 export class AdminController {
@@ -55,6 +60,7 @@ export class AdminController {
     private readonly searchService: AuctionSearchService,
     private readonly schedulerService: FreshnessSchedulerService,
     private readonly prisma: PrismaService,
+    private readonly auctionLotsService: AuctionLotsService,
   ) {}
 
   // =====================
@@ -360,23 +366,16 @@ export class AdminController {
       });
     }
 
+    const counters = (provider: string) => {
+      const breakdown = globalBudget.providers.find((item) => item.provider === provider);
+      const failed = breakdown ? Object.values(breakdown.failureCounts).reduce((sum, count) => sum + count, 0) : 0;
+      return { allocated: breakdown?.allocated ?? 0, confirmed: breakdown?.confirmed ?? 0, completed: (breakdown?.completedSuccess ?? 0) + failed, succeeded: breakdown?.completedSuccess ?? 0, failed };
+    };
     return {
-      providers: results,
-      globalBudget: {
-        billingMonth: globalBudget.billingMonth,
-        allocated: globalBudget.allocated,
-        confirmed: globalBudget.confirmed,
-        completedSuccess: globalBudget.completedSuccess,
-        unresolved: globalBudget.unresolved,
-        budget: globalBudget.budget,
-        reserve: globalBudget.reserve,
-        availableForRoutine: globalBudget.availableForRoutine,
-        percentageUsed: globalBudget.percentageUsed,
-        isWarning: globalBudget.isWarning,
-        isRoutineBlocked: globalBudget.isRoutineBlocked,
-        isAbsoluteBlocked: globalBudget.isAbsoluteBlocked,
-        providerBreakdowns: globalBudget.providers,
-      },
+      contractVersion: CONTRACT_VERSION, month: globalBudget.billingMonth,
+      budget: { allocated: globalBudget.allocated, confirmed: globalBudget.confirmed, completed: globalBudget.completedSuccess + Object.values(globalBudget.failureCounts).reduce((sum, count) => sum + count, 0), succeeded: globalBudget.completedSuccess, failed: Object.values(globalBudget.failureCounts).reduce((sum, count) => sum + count, 0), cap: globalBudget.budget, protectedReserve: globalBudget.reserve, routineRemaining: Math.max(0, globalBudget.budget - globalBudget.reserve - globalBudget.allocated) },
+      providers: results.map((entry) => ({ provider: entry.provider, enabled: true, circuit: entry.lease?.isExpired ? 'open' : 'closed', counters: counters(entry.provider), lastSuccessfulAt: entry.lastJob?.status === 'SUCCESS' ? entry.lastJob.finishedAt?.toISOString() ?? null : null, lastFailureAt: entry.lastJob?.status === 'FAILED' ? entry.lastJob.finishedAt?.toISOString() ?? null : null, lastFailureKind: null })),
+      asOf: new Date().toISOString(),
     };
   }
 
@@ -384,32 +383,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Get operational import status for a single provider (admin)' })
   @ApiResponse({ status: 200, description: 'Operational status for the provider' })
   async getImportStatusByProvider(@Param('provider') provider: string): Promise<any> {
-    if (provider !== 'copart' && provider !== 'iaai') {
-      return { error: 'Invalid provider. Must be copart or iaai.' };
-    }
-
-    const p = provider as 'copart' | 'iaai';
-    const [leaseState, lastJob] = await Promise.all([
-      this.leaseService.getState(p),
-      this.prisma.importJob.findFirst({
-        where: { provider: p },
-        orderBy: { createdAt: 'desc' },
-      }),
-    ]);
-
-    return {
-      provider: p,
-      lease: leaseState ? {
-        fencingToken: leaseState.fencingToken,
-        acquiredAt: leaseState.acquiredAt,
-        heartbeatAt: leaseState.heartbeatAt,
-        expiresAt: leaseState.expiresAt,
-        isExpired: leaseState.isExpired,
-        importJobId: leaseState.importJobId,
-      } : null,
-      isStale: leaseState ? leaseState.isExpired : false,
-      lastJob,
-    };
+    if (!PROVIDERS.includes(provider as 'copart' | 'iaai')) validationError();
+    const status = await this.getImportStatus();
+    return { contractVersion: CONTRACT_VERSION, month: status.month, budget: status.budget, provider: status.providers.find((item) => item.provider === provider), asOf: new Date().toISOString() };
   }
 
   @Post('import/recover/:provider')
@@ -577,8 +553,8 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Import a discovered lot into catalog (admin)' })
   @ApiResponse({ status: 200, description: 'Import result' })
-  async importDiscoveredLot(@Body() body: { lotNumber: string; platform: 'copart' | 'iaai' }): Promise<any> {
-    return this.searchService.importLot(body.lotNumber, body.platform);
+  async importDiscoveredLot(@Body() body: Record<string, unknown>): Promise<any> {
+    return this.auctionLotsService.importPersistedLot(body);
   }
 
   @Post('auction/discovery/run')
@@ -601,74 +577,59 @@ export class AdminController {
   @Get('auction/checkpoints')
   @ApiOperation({ summary: 'Get cursor state per provider (admin)' })
   @ApiResponse({ status: 200, description: 'Cursor states' })
-  async getCheckpointStates(@Query('provider') provider?: string): Promise<any> {
-    const providers = provider ? [provider] : ['copart', 'iaai'];
-    const results: any[] = [];
-    for (const p of providers) {
-      const checkpoints = await this.discoveryService.getCheckpointState(p);
-      results.push({ provider: p, checkpoints });
-    }
-    return { providers: results };
+  async getCheckpointStates(@Query() query: Record<string, unknown>): Promise<any> {
+    if (Object.keys(query).some((key) => key !== 'provider' && key !== 'mode')) validationError();
+    const provider = query.provider === undefined ? undefined : String(query.provider);
+    const mode = query.mode === undefined ? undefined : String(query.mode);
+    if ((provider && !PROVIDERS.includes(provider as 'copart' | 'iaai')) || (mode && !['discovery', 'refresh'].includes(mode))) validationError();
+    const providers = provider ? [provider] : [...PROVIDERS];
+    const items = (await Promise.all(providers.map(async (entry) => {
+      const checkpoints = await this.discoveryService.getCheckpointState(entry);
+      return checkpoints.map((checkpoint: any) => ({
+        provider: entry, mode: checkpoint.mode ?? (String(checkpoint.queryFingerprint ?? '').includes('refresh') ? 'refresh' : 'discovery'),
+        cursor: checkpoint.lastCursor ?? checkpoint.cursor ?? null, cycleId: checkpoint.cycleId ?? null,
+        cycleStartedAt: checkpoint.lastStartedAt ? new Date(checkpoint.lastStartedAt).toISOString() : null,
+        lastSuccessfulPageAt: checkpoint.lastCompletedAt ? new Date(checkpoint.lastCompletedAt).toISOString() : null,
+        exhaustedAt: checkpoint.exhaustedAt ? new Date(checkpoint.exhaustedAt).toISOString() : null,
+        nextSweepAt: checkpoint.nextSweepAt ? new Date(checkpoint.nextSweepAt).toISOString() : null,
+        leaseVersion: Number(checkpoint.leaseVersion ?? 0),
+      }));
+    }))).flat().filter((item) => !mode || item.mode === mode).sort((left, right) => `${left.provider}:${left.mode}`.localeCompare(`${right.provider}:${right.mode}`));
+    return { contractVersion: CONTRACT_VERSION, items, asOf: new Date().toISOString() };
   }
 
   @Get('auction/discovered-lots')
   @ApiOperation({ summary: 'List discovered lots (admin)' })
   @ApiResponse({ status: 200, description: 'Paginated discovered lots' })
-  async listDiscoveredLots(
-    @Query() query: { page?: string; pageSize?: string; provider?: string; state?: string; tier?: string },
-  ): Promise<any> {
-    const page = Number(query.page) || 1;
-    const pageSize = Math.min(Number(query.pageSize) || 20, 100);
-    const where: any = {};
-    if (query.provider) where.provider = query.provider;
-    if (query.state) where.state = query.state;
-    if (query.tier) where.freshnessTier = query.tier;
+  async listDiscoveredLots(@Query() query: Record<string, unknown>): Promise<any> {
+    return this.auctionLotsService.listAdminLots(query);
+  }
 
-    const [lots, total] = await Promise.all([
-      this.prisma.discoveredLot.findMany({
-        where,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        orderBy: { lastSeenAt: 'desc' },
-        select: {
-          id: true,
-          provider: true,
-          externalLotId: true,
-          title: true,
-          make: true,
-          model: true,
-          year: true,
-          isBuyNow: true,
-          buyNowUsd: true,
-          currentBidUsd: true,
-          auctionState: true,
-          auctionFormatted: true,
-          locationDisplay: true,
-          freshnessTier: true,
-          state: true,
-          lastSeenAt: true,
-          nextRefreshAt: true,
-          consecutiveMisses: true,
-          availabilityConfirmed: true,
-          vehicleId: true,
-        },
-      }),
-      this.prisma.discoveredLot.count({ where }),
-    ]);
+  @Get('auction/discovered-lots/:provider/:externalLotId')
+  async discoveredLotDetail(@Param('provider') provider: string, @Param('externalLotId') externalLotId: string): Promise<any> {
+    return this.auctionLotsService.adminLotDetail(provider, externalLotId);
+  }
 
-    return { items: lots, total, page, pageSize };
+  @Get('auction/metrics')
+  async auctionMetrics(): Promise<any> {
+    return this.auctionLotsService.adminMetrics();
+  }
+
+  @Get('auction/scheduler')
+  async auctionScheduler(): Promise<any> {
+    const status = await this.schedulerService.getStatus();
+    return {
+      contractVersion: CONTRACT_VERSION, paused: Boolean(status.isPaused),
+      cadenceMs: { discovery: Number(status.coldIntervalMs ?? 0), refresh: Number(status.hotIntervalMs ?? 0) },
+      lastRunAt: status.lastRunAt ? new Date(status.lastRunAt).toISOString() : null,
+      nextRunAt: status.nextRunAt ? new Date(status.nextRunAt).toISOString() : null,
+      lastResult: null, asOf: new Date().toISOString(),
+    };
   }
 
   // =====================
   // Scheduler Controls (Task 033S)
   // =====================
-
-  @Get('auction/scheduler')
-  @ApiOperation({ summary: 'Get scheduler status (admin)' })
-  @ApiResponse({ status: 200, description: 'Scheduler status' })
-  async getSchedulerStatus(): Promise<any> {
-    return this.schedulerService.getStatus();
-  }
 
   @Post('auction/scheduler/pause')
   @HttpCode(HttpStatus.OK)

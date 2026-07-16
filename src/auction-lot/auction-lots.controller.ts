@@ -5,11 +5,17 @@
 // ─────────────────────────────────────────────────────────────
 
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Post,
   Query,
+  Res,
+  UseFilters,
+  UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -19,14 +25,13 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuctionLotsService } from './auction-lots.service';
-import {
-  type PublicAuctionLotListResponse,
-  type PublicAuctionLotDetailDto,
-  type PublicAuctionLotStatsDto,
-} from './dto/public-auction-lot.dto';
-import { PublicAuctionLotQueryDto } from './dto/public-auction-lot.dto';
+import { ContractErrorFilter } from './contract-error.filter';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('auction-lots')
+@UseFilters(ContractErrorFilter)
 @Controller('auction-lots')
 @Throttle({ default: { limit: 60, ttl: 60000 } })
 export class AuctionLotsController {
@@ -37,17 +42,25 @@ export class AuctionLotsController {
   @ApiResponse({ status: 200, description: 'Paginated auction lot list' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'q', required: false })
   @ApiQuery({ name: 'provider', required: false })
   @ApiQuery({ name: 'make', required: false })
   @ApiQuery({ name: 'model', required: false })
-  @ApiQuery({ name: 'year', required: false, type: Number })
-  @ApiQuery({ name: 'lifecycleState', required: false })
+  @ApiQuery({ name: 'yearFrom', required: false, type: Number })
+  @ApiQuery({ name: 'yearTo', required: false, type: Number })
+  @ApiQuery({ name: 'priceFrom', required: false, type: Number })
+  @ApiQuery({ name: 'priceTo', required: false, type: Number })
+  @ApiQuery({ name: 'mileageFrom', required: false, type: Number })
+  @ApiQuery({ name: 'mileageTo', required: false, type: Number })
+  @ApiQuery({ name: 'bodyType', required: false })
+  @ApiQuery({ name: 'fuelType', required: false })
+  @ApiQuery({ name: 'transmission', required: false })
+  @ApiQuery({ name: 'driveType', required: false })
+  @ApiQuery({ name: 'locationState', required: false })
+  @ApiQuery({ name: 'lifecycle', required: false })
   @ApiQuery({ name: 'buyNow', required: false, type: Boolean })
   @ApiQuery({ name: 'sort', required: false })
-  @ApiQuery({ name: 'sortDir', required: false, enum: ['asc', 'desc'] })
-  async findAll(
-    @Query() query: PublicAuctionLotQueryDto,
-  ): Promise<PublicAuctionLotListResponse> {
+  async findAll(@Query() query: Record<string, unknown>) {
     return this.auctionLotsService.findAll(query);
   }
 
@@ -56,7 +69,7 @@ export class AuctionLotsController {
   @Get('stats')
   @ApiOperation({ summary: 'Get public auction lot stats' })
   @ApiResponse({ status: 200, description: 'Auction lot statistics' })
-  async getStats(): Promise<PublicAuctionLotStatsDto> {
+  async getStats() {
     return this.auctionLotsService.getStats();
   }
 
@@ -69,7 +82,23 @@ export class AuctionLotsController {
   async findOne(
     @Param('provider') provider: string,
     @Param('externalLotId') externalLotId: string,
-  ): Promise<PublicAuctionLotDetailDto> {
+  ) {
     return this.auctionLotsService.findOne(provider, externalLotId);
+  }
+}
+
+@ApiTags('auction')
+@UseFilters(ContractErrorFilter)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'MANAGER')
+@Controller('auction')
+export class AuctionImportCompatibilityController {
+  constructor(private readonly auctionLotsService: AuctionLotsService) {}
+
+  @Post('import')
+  async importPersistedLot(@Body() body: Record<string, unknown>, @Res({ passthrough: true }) response: Response) {
+    response.setHeader('Deprecation', 'true');
+    response.setHeader('Link', '</admin/auction/import-lot>; rel="successor-version"');
+    return this.auctionLotsService.importPersistedLot(body);
   }
 }

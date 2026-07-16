@@ -4,7 +4,6 @@
 // current counters, and normalization rules.
 // ─────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from 'vitest';
 import {
   normalizeLifecycleState,
   computeFreshnessState,
@@ -198,10 +197,10 @@ describe('isPublicEligible', () => {
     )).toBe(true);
   });
 
-  it('returns true for FRESH NOT_READY lot', () => {
+  it('returns false for FRESH NOT_READY lot', () => {
     expect(isPublicEligible(
       AuctionFreshnessState.FRESH, AuctionLifecycleState.NOT_READY, true, 0,
-    )).toBe(true);
+    )).toBe(false);
   });
 });
 
