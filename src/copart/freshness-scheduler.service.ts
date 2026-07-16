@@ -1,42 +1,10 @@
 /**
- * Truthful freshness scheduler — quota-aware, detail-endpoint-based.
+ * Quota-aware scheduler for list-only provider supply.
  *
- * PHASE 4 FIX (033S2): The previous implementation falsely claimed that
- * list queries (`GET /vehicles?cursor=X`) refresh tracked lots. In reality,
- * the provider API has NO batch-fetch-by-ID endpoint. List queries return
- * arbitrary lots from the provider's catalogue, NOT the specific tracked
- * lots we need to refresh.
- *
- * TRUTHFUL MODEL:
- * - Discovery: List endpoint `GET /vehicles?auction_type=Y&per_page=20&cursor=Z` → 20 lots/request
- *   (finds NEW lots, does NOT refresh known ones)
- * - Search: List endpoint with filters → 20 lots/request
- *   (user-driven, returns matching lots)
- * - Tracked lot refresh: Detail endpoint `GET /vehicles/{lotNumber}` → 1 lot/request
- *   (ONLY way to get current data for a known lot)
- *
- * Quota Model:
- * - Monthly absolute: 30,000 attempts
- * - Reserve: 3,000 (emergency only)
- * - Routine: 27,000 (~900/day for 30-day month)
- * - Every request (initial + retry) = 1 attempt
- *
- * Daily Allocation Envelopes (tier-weighted):
- * - HOT detail refresh: 50% of daily envelope
- * - WARM detail refresh: 30% of daily envelope
- * - Discovery (list): 15% of daily envelope
- * - Search (list): 3% of daily envelope
- * - Retry/overhead: 2% of daily envelope
- *
- * Scheduler Behavior:
- * - For HOT/WARM: use detail endpoint (1 request/lot)
- * - Only refresh highest-priority lots that fit daily envelope
- * - Defer lower-priority lots via nextRefreshAt
- * - Expose deferred counts in admin status
- *
- * Required invariants:
- *   total routine attempts per UTC month <= 27,000
- *   absolute attempts per UTC month <= 30,000
+ * Discovery and refresh are both paginated `GET /vehicles` cycles. Each tick
+ * may commit at most two successful pages for every provider/mode pair.
+ * Returned rows are the only rows refreshed; miss accounting happens only
+ * when a complete, lease-fenced refresh cycle reaches exhaustion.
  */
 
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
@@ -110,7 +78,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
   // Normal interval — used when lots already exist.
   private static readonly DISCOVERY_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 h
   // Max pages per discovery run per provider per tick (bounded to protect budget).
-  private static readonly DISCOVERY_MAX_PAGES_PER_TICK = 3;
+  private static readonly DISCOVERY_MAX_PAGES_PER_TICK = 2;
 
   // Track latest discovery results for admin status.
   private lastDiscovery: {
@@ -370,13 +338,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     };
   }
 
-  /**
-   * Calculate how many detail requests are needed for a tier.
-   *
-   * TRUTHFUL: Each tracked lot requires 1 detail request.
-   * requests = min(eligible_lots, tier_budget)
-   * Lots beyond tier_budget are DEFERRED.
-   */
+  /** Retained quota-allocation helper for scheduler status compatibility. */
   calculateRequestsForTier(eligibleLots: number, tierBudget: number): number {
     return Math.min(eligibleLots, tierBudget);
   }
@@ -572,15 +534,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     });
   }
 
-  /**
-   * Run a single scheduler tick.
-   *
-   * TRUTHFUL behavior:
-   * - HOT tier: refresh up to hotBudget lots using DETAIL endpoint (1 request/lot)
-   * - WARM tier: refresh up to warmBudget lots using DETAIL endpoint (1 request/lot)
-   * - Deferred lots: pushed to nextRefreshAt
-   * - Discovery: uses list endpoint (20 lots/request) — separately triggered
-   */
+  /** Run one bounded discovery and refresh list cycle for each provider. */
   async tick(): Promise<{ processed: number; deferred: number; requestsUsed: number; errors: string[] }> {
     const state = await this.getState();
 
@@ -603,8 +557,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
 
     this.logger.log(
       `Scheduler tick: daily envelope=${dailyEnvelope}, ` +
-      `HOT budget=${tierBudgets.hotBudget} (detail), WARM budget=${tierBudgets.warmBudget} (detail), ` +
-      `discovery=${tierBudgets.discoveryBudget} (list), ` +
+      `discovery=${tierBudgets.discoveryBudget} (list), refresh=${tierBudgets.warmBudget} (list), ` +
       `monthly remaining=${monthlyRemaining}, days=${remainingDays}`,
     );
 
@@ -636,23 +589,8 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       );
     }
 
-    // HOT tier: detail endpoint refresh (1 request per lot)
-    if (tierBudgets.hotBudget > 0) {
-      const result = await this.processTierDetail('HOT', tierBudgets.hotBudget, state, now);
-      totalProcessed += result.processed;
-      totalDeferred += result.deferred;
-      totalRequestsUsed += result.requestsUsed;
-      errors.push(...result.errors);
-    }
-
-    // WARM tier: detail endpoint refresh (1 request per lot)
-    if (tierBudgets.warmBudget > 0) {
-      const result = await this.processTierDetail('WARM', tierBudgets.warmBudget, state, now);
-      totalProcessed += result.processed;
-      totalDeferred += result.deferred;
-      totalRequestsUsed += result.requestsUsed;
-      errors.push(...result.errors);
-    }
+    // Refresh is list re-observation through runDueDiscovery.  Do not mark
+    // selected rows successful merely because a scheduler tick ran.
 
     // Update scheduler state
     await this.prisma.schedulerState.update({
@@ -664,139 +602,6 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     });
 
     return { processed: totalProcessed, deferred: totalDeferred, requestsUsed: totalRequestsUsed, errors };
-  }
-
-  /**
-   * Process a tier using DETAIL endpoint (1 request per lot).
-   *
-   * Only the highest-priority lots (oldest nextRefreshAt) are refreshed.
-   * The rest are deferred by extending their nextRefreshAt.
-   */
-  private async processTierDetail(
-    tier: 'HOT' | 'WARM',
-    tierBudget: number,
-    state: any,
-    now: Date,
-  ): Promise<{ processed: number; deferred: number; requestsUsed: number; errors: string[] }> {
-    const intervalMs = tier === 'HOT' ? state.hotIntervalMs : state.warmIntervalMs;
-
-    // Get ALL lots that need refresh, ordered by priority score (highest first)
-    const lots = await this.prisma.discoveredLot.findMany({
-      where: {
-        freshnessTier: tier,
-        nextRefreshAt: { lte: now },
-        state: { in: ['DISCOVERED', 'IMPORTED'] },
-        availabilityConfirmed: true,
-      },
-      take: tierBudget * 5,
-      orderBy: { nextRefreshAt: 'asc' },
-      select: {
-        id: true,
-        externalLotId: true,
-        provider: true,
-        lastSeenAt: true,
-        consecutiveMisses: true,
-        ad: true,
-        auctionState: true,
-        isBuyNow: true,
-        vehicleId: true,
-        nextRefreshAt: true,
-      },
-    });
-
-    if (lots.length === 0) {
-      return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
-    }
-
-    // Calculate priority scores and sort
-    const scored = lots
-      .map(lot => ({
-        ...lot,
-        priorityScore: this.calculatePriorityScore(lot, now),
-      }))
-      .sort((a, b) => b.priorityScore - a.priorityScore);
-
-    // Split into "will refresh" and "will defer"
-    const toRefresh = scored.slice(0, tierBudget);
-    const toDefer = scored.slice(tierBudget);
-
-    this.logger.log(
-      `Processing ${tier} tier: ${lots.length} lots eligible, ` +
-      `${toRefresh.length} selected (detail, ${toRefresh.length} requests, priority ${toRefresh[0]?.priorityScore}-${toRefresh[toRefresh.length - 1]?.priorityScore}), ` +
-      `${toDefer.length} deferred`,
-    );
-
-    // Mark selected lots
-    for (const lot of toRefresh) {
-      await this.prisma.discoveredLot.update({
-        where: { id: lot.id },
-        data: {
-          priorityScore: lot.priorityScore,
-          selectedAt: now,
-          attemptCost: 1,
-          deferralReason: null,
-          deferredAt: null,
-        },
-      });
-    }
-
-    // Mark deferred lots
-    for (const lot of toDefer) {
-      await this.prisma.discoveredLot.update({
-        where: { id: lot.id },
-        data: {
-          priorityScore: lot.priorityScore,
-          deferredAt: now,
-          deferralReason: 'budget_exceeded',
-          nextRefreshAt: new Date(now.getTime() + intervalMs),
-        },
-      });
-    }
-
-    // Refresh selected lots via detail endpoint
-    // (In production, this would call providerFetch with /vehicles/{lotNumber})
-    // Here we update metadata; actual API call is delegated to CopartService.importSingle
-    const confirmationMisses = this.config.get<number>('SCHEDULER_CONFIRMATION_MISSES')!;
-
-    let processed = 0;
-    const errors: string[] = [];
-
-    for (const lot of toRefresh) {
-      try {
-        // Update lot freshness metadata
-        // Actual detail fetch would happen via CopartService in production
-        const newTier = this.classifyTier(lot);
-        await this.prisma.discoveredLot.update({
-          where: { id: lot.id },
-          data: {
-            freshnessTier: newTier,
-            nextRefreshAt: new Date(now.getTime() + intervalMs),
-            lastProviderUpdateAt: now,
-            consecutiveMisses: 0,
-          },
-        });
-        processed++;
-      } catch (error) {
-        const misses = lot.consecutiveMisses + 1;
-        const shouldMarkUnavailable = misses >= confirmationMisses;
-
-        await this.prisma.discoveredLot.update({
-          where: { id: lot.id },
-          data: {
-            consecutiveMisses: misses,
-            availabilityConfirmed: !shouldMarkUnavailable,
-            ...(shouldMarkUnavailable && {
-              state: 'UNAVAILABLE',
-              nextRefreshAt: new Date(now.getTime() + state.coldIntervalMs * 4),
-            }),
-          },
-        });
-
-        errors.push(`Lot ${lot.externalLotId}: ${error instanceof Error ? error.message : 'unknown error'}`);
-      }
-    }
-
-    return { processed, deferred: toDefer.length, requestsUsed: toRefresh.length, errors };
   }
 
   // ─── Discovery Integration ───
@@ -826,25 +631,25 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
    */
   private async isDiscoveryDue(
     provider: string,
+    mode: 'discovery' | 'refresh',
     now: Date,
     totalDiscovered: number,
   ): Promise<boolean> {
-    // Bootstrap: always due when empty
-    if (totalDiscovered === 0) return true;
-
     const fingerprint = this.discoveryService.buildQueryFingerprint({
       platform: provider as 'copart' | 'iaai',
     });
 
     const checkpoint = await this.prisma.discoveryCheckpoint.findUnique({
-      where: { provider_queryFingerprint: { provider, queryFingerprint: fingerprint } },
+      where: { provider_queryFingerprint: { provider, queryFingerprint: `${mode}:${fingerprint}` } },
     });
 
     if (!checkpoint) return true; // never discovered — due
-    if (checkpoint.exhaustedAt) return false; // exhausted — not due
+    if (checkpoint.exhaustedAt) return !checkpoint.nextDueAt || checkpoint.nextDueAt <= now;
     if (!checkpoint.lastCompletedAt) return true; // started but never completed
 
-    const interval = FreshnessSchedulerService.DISCOVERY_INTERVAL_MS;
+    const interval = totalDiscovered === 0
+      ? FreshnessSchedulerService.DISCOVERY_BOOTSTRAP_INTERVAL_MS
+      : FreshnessSchedulerService.DISCOVERY_INTERVAL_MS;
     return now.getTime() - checkpoint.lastCompletedAt.getTime() >= interval;
   }
 
@@ -882,74 +687,71 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     }> = [];
 
     for (const provider of ['copart', 'iaai'] as const) {
-      try {
-        const due = await this.isDiscoveryDue(provider, now, totalDiscovered);
-        if (!due) {
-          this.logger.debug(`Discovery for ${provider} not due — skipping`);
-          continue;
+      for (const mode of ['discovery', 'refresh'] as const) {
+        try {
+          const due = await this.isDiscoveryDue(provider, mode, now, totalDiscovered);
+          if (!due) {
+            this.logger.debug(`${mode} for ${provider} not due — skipping`);
+            continue;
+          }
+
+          const maxPages = FreshnessSchedulerService.DISCOVERY_MAX_PAGES_PER_TICK;
+          this.logger.log(`Running bounded ${mode} for ${provider} (maxPages=${maxPages})`);
+
+          const result = await this.discoveryService.runDiscovery(
+            { platform: provider, mode },
+            maxPages,
+          );
+
+          results.push({
+            provider: result.provider,
+            pagesCompleted: result.pagesCompleted,
+            lotsDiscovered: result.lotsDiscovered,
+            lotsUpdated: result.lotsUpdated,
+            newLots: result.newLots,
+            terminalReason: result.terminalReason,
+            errors: result.errors,
+          });
+        } catch (err) {
+          this.logger.error(
+            `${mode} failed for ${provider}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          results.push({
+            provider,
+            pagesCompleted: 0,
+            lotsDiscovered: 0,
+            lotsUpdated: 0,
+            newLots: 0,
+            terminalReason: 'error',
+            errors: [err instanceof Error ? err.message : String(err)],
+          });
         }
-
-        const maxPages = FreshnessSchedulerService.DISCOVERY_MAX_PAGES_PER_TICK;
-        this.logger.log(
-          `Running bounded discovery for ${provider} (maxPages=${maxPages})`,
-        );
-
-        const result = await this.discoveryService.runDiscovery(
-          { platform: provider },
-          maxPages,
-        );
-
-        results.push({
-          provider: result.provider,
-          pagesCompleted: result.pagesCompleted,
-          lotsDiscovered: result.lotsDiscovered,
-          lotsUpdated: result.lotsUpdated,
-          newLots: result.newLots,
-          terminalReason: result.terminalReason,
-          errors: result.errors,
-        });
-      } catch (err) {
-        this.logger.error(
-          `Discovery failed for ${provider}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        results.push({
-          provider,
-          pagesCompleted: 0,
-          lotsDiscovered: 0,
-          lotsUpdated: 0,
-          newLots: 0,
-          terminalReason: 'error',
-          errors: [err instanceof Error ? err.message : String(err)],
-        });
       }
     }
 
     return results;
   }
 
-  /** Classify a lot into a freshness tier. */
-  private classifyTier(lot: any): 'HOT' | 'WARM' | 'COLD' {
+  /** Preserve tier classification for status and scheduling policy consumers. */
+  private classifyTier(lot: {
+    ad?: Date | string | null;
+    auctionState?: string | null;
+    isBuyNow?: boolean | null;
+    lastSeenAt?: Date | string | null;
+  }): 'HOT' | 'WARM' | 'COLD' {
     if (lot.ad) {
       const auctionDate = new Date(lot.ad);
       const hoursUntilAuction = (auctionDate.getTime() - Date.now()) / (1000 * 60 * 60);
-      if (hoursUntilAuction > 0 && hoursUntilAuction <= 24) {
-        return 'HOT';
-      }
+      if (hoursUntilAuction > 0 && hoursUntilAuction <= 24) return 'HOT';
     }
 
-    if (lot.auctionState === 'open' || lot.auctionState === 'active') {
-      return 'HOT';
-    }
-
-    if (lot.isBuyNow) {
-      return 'WARM';
-    }
+    if (lot.auctionState === 'open' || lot.auctionState === 'active') return 'HOT';
+    if (lot.isBuyNow) return 'WARM';
 
     if (lot.lastSeenAt) {
-      const daysSinceSeen = (Date.now() - new Date(lot.lastSeenAt).getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceSeen <= 7) {
-        return 'WARM';
-      }
+      const daysSinceSeen =
+        (Date.now() - new Date(lot.lastSeenAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceSeen <= 7) return 'WARM';
     }
 
     return 'COLD';

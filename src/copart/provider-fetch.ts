@@ -26,6 +26,7 @@ export type FetchFailureKind =
   | 'HTTP_429'
   | 'HTTP_5XX'
   | 'HTTP_4XX'
+  | 'MALFORMED_RESPONSE'
   | 'DEADLINE_EXCEEDED'
   | 'ABORTED';
 
@@ -79,6 +80,8 @@ export function parseRetryAfter(
 }
 
 export type PreRequestHook = () => Promise<{ allowed: boolean; reason?: string }>;
+export type ResponseHook = (response: Response, attempt: number) => Promise<void> | void;
+export type FailureHook = (failure: FetchFailure, attempt: number) => Promise<void> | void;
 
 export async function providerFetch<T = unknown>(
   url: string,
@@ -88,8 +91,11 @@ export async function providerFetch<T = unknown>(
   jitter: JitterFn = defaultJitter,
   fetchImpl: typeof fetch = fetch,
   preRequestHook?: PreRequestHook,
+  onResponse?: ResponseHook,
+  onFailure?: FailureHook,
 ): Promise<ProviderFetchOutcome<T>> {
-  const maxAttempts = config.maxRetryAttempts + 1;
+  // Provider contract permits at most the initial request plus two retries.
+  const maxAttempts = Math.min(3, Math.max(1, config.maxRetryAttempts + 1));
   let lastFailure: FetchFailure | null = null;
   let consecutiveErrors = 0;
 
@@ -119,6 +125,8 @@ export async function providerFetch<T = unknown>(
         message: 'Provider job deadline exceeded before request',
         retryable: false,
       };
+
+      await onFailure?.(lastFailure, attempt);
       break;
     }
 
@@ -131,20 +139,36 @@ export async function providerFetch<T = unknown>(
         signal: AbortSignal.timeout(timeoutMs),
       });
 
+      await onResponse?.(response, attempt);
+
       if (response.ok) {
-        const body = await response.json() as T;
+        let body: T;
+        try {
+          body = await response.json() as T;
+        } catch {
+          const failure: FetchFailure = {
+            kind: 'MALFORMED_RESPONSE',
+            status: response.status,
+            message: 'Provider returned malformed JSON',
+            retryable: false,
+          };
+          await onFailure?.(failure, attempt);
+          return { ok: false, failure, attempts: attempt };
+        }
         return { ok: true, data: body, attempts: attempt };
       }
 
       if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        const failure: FetchFailure = {
+          kind: 'HTTP_4XX',
+          status: response.status,
+          message: `Provider returned HTTP ${response.status}`,
+          retryable: false,
+        };
+        await onFailure?.(failure, attempt);
         return {
           ok: false,
-          failure: {
-            kind: 'HTTP_4XX',
-            status: response.status,
-            message: `Provider returned HTTP ${response.status}`,
-            retryable: false,
-          },
+          failure,
           attempts: attempt,
         };
       }
@@ -157,6 +181,8 @@ export async function providerFetch<T = unknown>(
         message: `Provider returned HTTP ${response.status}`,
         retryable: RETRYABLE_STATUSES.has(response.status),
       };
+
+      await onFailure?.(lastFailure, attempt);
 
       consecutiveErrors++;
 
@@ -185,13 +211,13 @@ export async function providerFetch<T = unknown>(
             message: 'Provider request aborted: job deadline exceeded',
             retryable: false,
           };
-          break;
+        } else {
+          lastFailure = {
+            kind: 'ABORTED',
+            message: `Provider request timed out after ${timeoutMs}ms`,
+            retryable: true,
+          };
         }
-        lastFailure = {
-          kind: 'ABORTED',
-          message: `Provider request timed out after ${timeoutMs}ms`,
-          retryable: true,
-        };
       } else {
         lastFailure = {
           kind: 'NETWORK_ERROR',
@@ -199,6 +225,8 @@ export async function providerFetch<T = unknown>(
           retryable: true,
         };
       }
+
+      await onFailure?.(lastFailure, attempt);
 
       logger.warn(
         `Provider request error (attempt ${attempt}/${maxAttempts}): ${lastFailure.message}`,
@@ -235,8 +263,12 @@ function computeBackoffDelay(
   const jitteredMs = exponentialMs * jitter();
   const clampedMs = Math.min(jitteredMs, config.maxRetryDelayMs);
 
-  if (retryAfterMs !== null && retryAfterMs > clampedMs) {
-    return Math.min(retryAfterMs, config.maxRetryDelayMs);
+  if (
+    retryAfterMs !== null &&
+    retryAfterMs <= 2_000 &&
+    retryAfterMs > clampedMs
+  ) {
+    return retryAfterMs;
   }
 
   return Math.max(0, Math.floor(clampedMs));

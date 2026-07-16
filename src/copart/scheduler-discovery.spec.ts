@@ -170,14 +170,22 @@ describe('Task 033T — Discovery Integration', () => {
       await service.tick();
 
       // Both copart and iaai discovery should be called
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(2);
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(4);
       expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
-        { platform: 'copart' },
-        3, // DISCOVERY_MAX_PAGES_PER_TICK
+        { platform: 'copart', mode: 'discovery' },
+        2,
       );
       expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
-        { platform: 'iaai' },
-        3,
+        { platform: 'copart', mode: 'refresh' },
+        2,
+      );
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
+        { platform: 'iaai', mode: 'discovery' },
+        2,
+      );
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
+        { platform: 'iaai', mode: 'refresh' },
+        2,
       );
     });
 
@@ -237,7 +245,7 @@ describe('Task 033T — Discovery Integration', () => {
 
       await service.tick();
 
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(2);
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(4);
     });
   });
 
@@ -368,9 +376,9 @@ describe('Task 033T — Discovery Integration', () => {
       await service.tick();
       const status = await service.getStatus();
 
-      expect(status.discoveryCreated).toBe(100); // 60 + 40
-      expect(status.discoveryLotsReceived).toBe(100);
-      expect(status.discoveryPagesAttempted).toBe(5); // 3 + 2
+      expect(status.discoveryCreated).toBe(180);
+      expect(status.discoveryLotsReceived).toBe(180);
+      expect(status.discoveryPagesAttempted).toBe(9);
     });
   });
 
@@ -417,7 +425,7 @@ describe('Task 033T — Discovery Integration', () => {
       const status = await service.getStatus();
 
       expect(status.discoveryUpdated).toBe(38); // 35 + 3
-      expect(status.discoveryCreated).toBe(22); // 5 + 17
+      expect(status.discoveryCreated).toBe(102);
     });
   });
 
@@ -537,11 +545,11 @@ describe('Task 033T — Discovery Integration', () => {
       const result = await service.tick();
 
       // Both providers were attempted
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(2);
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(4);
 
       // IAAI lots were discovered
       const status = await service.getStatus();
-      expect(status.discoveryLotsReceived).toBe(40);
+      expect(status.discoveryLotsReceived).toBe(120);
     });
   });
 
@@ -558,7 +566,7 @@ describe('Task 033T — Discovery Integration', () => {
       const status = await service.getStatus();
 
       // 2 providers × default result (2 pages each) = 4 total
-      expect(status.discoveryPagesAttempted).toBe(4);
+      expect(status.discoveryPagesAttempted).toBe(8);
     });
 
     it('discoveryCreated matches sum of newLots', async () => {
@@ -571,7 +579,7 @@ describe('Task 033T — Discovery Integration', () => {
       await service.tick();
       const status = await service.getStatus();
 
-      expect(status.discoveryCreated).toBe(80); // 40 + 40 from default mock
+      expect(status.discoveryCreated).toBe(160);
     });
 
     it('discoveryTerminalReason reflects first provider terminal reason', async () => {

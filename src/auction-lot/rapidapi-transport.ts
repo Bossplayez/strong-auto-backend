@@ -49,6 +49,8 @@ export interface TransportResult {
   retryCount: number;
 }
 
+export type PersistListPage = (page: Omit<TransportResult, 'requestCount' | 'retryCount'>) => Promise<void>;
+
 /** Options for a transport list call. */
 export interface TransportListOptions {
   provider: ProviderId;
@@ -83,6 +85,13 @@ export class TransportMalformedError extends Error {
   }
 }
 
+export class TransportLeaseLostError extends Error {
+  constructor(message = 'Provider lease was lost before persistence committed') {
+    super(message);
+    this.name = 'TransportLeaseLostError';
+  }
+}
+
 /**
  * Centralized RapidAPI transport for Copart/IAAI.
  *
@@ -112,7 +121,7 @@ export class RapidApiTransport {
     const url = new URL(`${this.RAPIDAPI_BASE}/vehicles`);
     const auctionType = AUCTION_TYPE_MAP[options.provider];
     url.searchParams.set('auction_type', String(auctionType));
-    url.searchParams.set('per_page', String(options.perPage ?? DEFAULT_PER_PAGE));
+    url.searchParams.set('per_page', String(DEFAULT_PER_PAGE));
 
     // Forward cursor byte-for-byte — NEVER decode/generate/increment
     if (options.cursor) {
@@ -136,9 +145,9 @@ export class RapidApiTransport {
     const deadline = jobDeadlineMs ?? Date.now() + this.config.get<number>('IMPORT_REQUEST_TIMEOUT_MS')! * 2;
     return {
       requestTimeoutMs: this.config.get<number>('IMPORT_REQUEST_TIMEOUT_MS')!,
-      maxRetryAttempts: this.config.get<number>('IMPORT_MAX_RETRY_ATTEMPTS')!,
-      initialRetryDelayMs: this.config.get<number>('IMPORT_INITIAL_RETRY_DELAY_MS')!,
-      maxRetryDelayMs: this.config.get<number>('IMPORT_MAX_RETRY_DELAY_MS')!,
+      maxRetryAttempts: Math.min(2, this.config.get<number>('IMPORT_MAX_RETRY_ATTEMPTS') ?? 2),
+      initialRetryDelayMs: 250,
+      maxRetryDelayMs: 2_000,
       jobDeadlineMs: deadline,
     };
   }
@@ -178,7 +187,10 @@ export class RapidApiTransport {
    *
    * Budget lifecycle: reserve → confirm → complete
    */
-  async listVehicles(options: TransportListOptions): Promise<TransportResult> {
+  async listVehicles(
+    options: TransportListOptions,
+    persist?: PersistListPage,
+  ): Promise<TransportResult> {
     const apiKey = this.config.get<string>('RAPIDAPI_KEY');
     if (!apiKey) {
       throw new TransportMalformedError('RAPIDAPI_KEY not configured');
@@ -193,6 +205,7 @@ export class RapidApiTransport {
 
     // ── Budget reservation via pre-request hook ──
     const attemptCounter = { n: 0 };
+    const attemptIds = new Map<number, string>();
     let lastAttemptId: string | undefined;
 
     const preRequestHook = async () => {
@@ -208,11 +221,20 @@ export class RapidApiTransport {
         return { allowed: false, reason: reservation.reason };
       }
       lastAttemptId = attemptId;
+      attemptIds.set(attemptCounter.n, attemptId);
       return { allowed: true };
     };
 
+    const toFailureKind = (kind: string): FailureKind => {
+      if (kind === 'HTTP_429') return 'rateLimit';
+      if (kind === 'HTTP_5XX') return 'server';
+      if (kind === 'NETWORK_ERROR') return 'network';
+      if (kind === 'HTTP_4XX' || kind === 'MALFORMED_RESPONSE') return 'clientContract';
+      return 'timeout';
+    };
+
     this.logger.debug(
-      `${options.provider}: listVehicles auction_type=${AUCTION_TYPE_MAP[options.provider]} per_page=${options.perPage ?? DEFAULT_PER_PAGE} cursor=${options.cursor ? '[present]' : '[absent]'}`,
+      `${options.provider}: listVehicles auction_type=${AUCTION_TYPE_MAP[options.provider]} per_page=${DEFAULT_PER_PAGE} cursor=${options.cursor ? '[present]' : '[absent]'}`,
     );
 
     const outcome: ProviderFetchOutcome<any> = await providerFetch<any>(
@@ -220,27 +242,27 @@ export class RapidApiTransport {
       headers,
       fetchConfig,
       this.logger,
-      undefined,
+      () => 1,
       undefined,
       preRequestHook,
+      async (response, attempt) => {
+        const attemptId = attemptIds.get(attempt);
+        if (!attemptId) return;
+        const remaining = Number(response.headers.get('x-ratelimit-remaining'));
+        const reset = Number(response.headers.get('x-ratelimit-reset'));
+        await this.budgetService.confirm(attemptId, {
+          status: response.status,
+          remaining: Number.isFinite(remaining) ? remaining : undefined,
+          resetEpochMs: Number.isFinite(reset) ? reset * 1000 : undefined,
+        });
+      },
+      async (failure, attempt) => {
+        const attemptId = attemptIds.get(attempt);
+        if (attemptId) await this.budgetService.complete(attemptId, false, toFailureKind(failure.kind));
+      },
     );
 
     // ── Confirm + complete budget ──
-    if (lastAttemptId) {
-      await this.budgetService.confirm(lastAttemptId);
-      const success = outcome.ok;
-      let failureKind: FailureKind | undefined;
-      if (!success) {
-        const f = outcome.failure;
-        if (f.kind === 'HTTP_429') failureKind = 'rateLimit';
-        else if (f.kind === 'HTTP_5XX') failureKind = 'server';
-        else if (f.kind === 'NETWORK_ERROR') failureKind = 'network';
-        else if (f.kind === 'HTTP_4XX') failureKind = 'client';
-        else failureKind = 'timeout';
-      }
-      await this.budgetService.complete(lastAttemptId, success, failureKind);
-    }
-
     if (!outcome.ok) {
       const f = outcome.failure;
       throw new TransportMalformedError(
@@ -252,6 +274,7 @@ export class RapidApiTransport {
 
     // Validate response shape
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      if (lastAttemptId) await this.budgetService.complete(lastAttemptId, false, 'clientContract');
       throw new TransportMalformedError(`Expected JSON object, received ${typeof body}`);
     }
 
@@ -261,11 +284,16 @@ export class RapidApiTransport {
     const meta: TransportMeta = {
       next_cursor: typeof rawMeta.next_cursor === 'string' ? rawMeta.next_cursor : null,
       prev_cursor: typeof rawMeta.prev_cursor === 'string' ? rawMeta.prev_cursor : null,
-      per_page: typeof rawMeta.per_page === 'number' ? rawMeta.per_page : (options.perPage ?? DEFAULT_PER_PAGE),
+      per_page: DEFAULT_PER_PAGE,
     };
 
     // ── Provider identity validation ──
-    this.validateProviderIdentity(items, options.provider);
+    try {
+      this.validateProviderIdentity(items, options.provider);
+    } catch (error) {
+      if (lastAttemptId) await this.budgetService.complete(lastAttemptId, false, 'clientContract');
+      throw error;
+    }
 
     const retryCount = Math.max(0, outcome.attempts - 1);
 
@@ -273,6 +301,24 @@ export class RapidApiTransport {
       `${options.provider}: listVehicles returned ${items.length} items, next_cursor=${meta.next_cursor ? '[present]' : '[null]'}, attempts=${outcome.attempts}`,
     );
 
+    const page = { items, meta };
+    if (persist) {
+      try {
+        await persist(page);
+      } catch (error) {
+        if (lastAttemptId) {
+          await this.budgetService.complete(
+            lastAttemptId,
+            false,
+            error instanceof TransportLeaseLostError ? 'leaseLost' :
+              error instanceof TransportMalformedError ? 'clientContract' : 'persistence',
+          );
+        }
+        throw error;
+      }
+    }
+
+    if (lastAttemptId) await this.budgetService.complete(lastAttemptId, true);
     return {
       items,
       meta,

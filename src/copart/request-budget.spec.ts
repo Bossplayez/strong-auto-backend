@@ -28,10 +28,12 @@ function makeTxMock(allocated: number, existing: any = null) {
       findUnique: jest.fn().mockResolvedValue(existing),
       create: jest.fn().mockResolvedValue({}),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(0),
     },
     $queryRaw: jest.fn().mockResolvedValue([{ allocated }]),
     $executeRaw: jest.fn().mockResolvedValue(1),
+    $executeRawUnsafe: jest.fn().mockResolvedValue(1),
     globalRequestBudget: {
       findUnique: jest.fn().mockResolvedValue({
         allocated,
@@ -167,5 +169,53 @@ describe('RequestBudgetService (global billing account)', () => {
     const usage = await service.getUsage();
     expect(usage.percentageUsed).toBe(83.33);
     expect(usage.isWarning).toBe(true);
+  });
+
+  it('9a. duplicate confirmation increments counters once', async () => {
+    const tx = makeTxMock(1, {
+      id: 'att-confirm',
+      provider: 'copart',
+      billingMonth: '2026-07',
+      status: 'allocated',
+    });
+    tx.requestAttemptReservation.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+    wireTx(tx);
+
+    await service.confirm('att-confirm', { status: 200, remaining: 99 });
+    await service.confirm('att-confirm', { status: 200, remaining: 99 });
+
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('9b. success cannot complete an unconfirmed allocation', async () => {
+    const tx = makeTxMock(1, {
+      id: 'att-unconfirmed',
+      provider: 'copart',
+      billingMonth: '2026-07',
+      status: 'allocated',
+    });
+    tx.requestAttemptReservation.updateMany.mockResolvedValue({ count: 0 });
+    wireTx(tx);
+
+    await service.complete('att-unconfirmed', true);
+
+    expect(tx.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('9c. lease loss records one terminal failure counter', async () => {
+    const tx = makeTxMock(1, {
+      id: 'att-lease',
+      provider: 'iaai',
+      billingMonth: '2026-07',
+      status: 'confirmed',
+    });
+    wireTx(tx);
+
+    await service.complete('att-lease', false, 'leaseLost');
+
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(2);
+    expect(tx.$executeRawUnsafe.mock.calls[0][0]).toContain('failure_lease_lost');
   });
 });

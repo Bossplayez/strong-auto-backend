@@ -10,7 +10,8 @@
  * - Concurrent identical-query deduplication
  * - Cache hit causing zero provider calls
  * - Quota block causing zero provider calls
- * - Scheduler tier selection
+ * - Scheduler tier selection compatibility
+ * - Scheduler discovery and refresh list modes
  * - Quota-based cadence degradation
  * - Sold/removed lifecycle
  * - Selected-lot import idempotency
@@ -274,6 +275,20 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
     leaseService = {
       getState: jest.fn().mockResolvedValue(null),
       recoverStaleJobs: jest.fn().mockResolvedValue({ recoveredJobIds: [] }),
+      claim: jest.fn().mockResolvedValue({
+        claimed: true,
+        ownerToken: 'test-owner',
+        fencingToken: 1,
+        lease: null,
+        conflictingLease: null,
+      }),
+      withLeasedTransaction: jest.fn(async (
+        _provider: string,
+        _ownerToken: string,
+        _fencingToken: number,
+        callback: (tx: any) => Promise<any>,
+      ) => callback(prisma)),
+      release: jest.fn().mockResolvedValue({ released: true }),
     };
 
     configService = {
@@ -443,7 +458,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
     });
   });
 
-  // ── Scheduler tier classification ──
+  // ── Scheduler tier classification compatibility ──
 
   describe('Scheduler tier selection', () => {
     it('7. classifies upcoming auction as HOT', () => {
@@ -704,12 +719,13 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         where: {
           provider_queryFingerprint: {
             provider: 'copart',
-            queryFingerprint: discoveryService.buildQueryFingerprint({ platform: 'copart' }),
+            queryFingerprint: `discovery:${discoveryService.buildQueryFingerprint({ platform: 'copart' })}`,
           },
         },
         create: {
           provider: 'copart',
-          queryFingerprint: discoveryService.buildQueryFingerprint({ platform: 'copart' }),
+          queryFingerprint: `discovery:${discoveryService.buildQueryFingerprint({ platform: 'copart' })}`,
+          mode: 'discovery',
           lastPage: 4,
           lastSuccessfulPage: 4,
           lastStartedAt: new Date(),
@@ -733,29 +749,142 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         where: {
           provider_queryFingerprint: {
             provider: 'copart',
-            queryFingerprint: fp,
+            queryFingerprint: `discovery:${fp}`,
           },
         },
         create: {
           provider: 'copart',
-          queryFingerprint: fp,
+          queryFingerprint: `discovery:${fp}`,
+          mode: 'discovery',
           lastPage: null,
           lastSuccessfulPage: 100,
           lastStartedAt: new Date(),
           lastCompletedAt: new Date(),
           exhaustedAt: new Date(),
+          nextDueAt: new Date(Date.now() + 60_000),
         },
         update: {},
       });
 
       const result = await discoveryService.runDiscovery({ platform: 'copart' });
       expect(result.exhausted).toBe(true);
-      expect(result.terminalReason).toBe('already_exhausted');
+      expect(result.terminalReason).toBe('not_due');
       expect(result.pagesCompleted).toBe(0);
     });
   });
 
   // ── Deduplication ──
+
+  describe('Unified list supply cycle', () => {
+    it('preserves opaque cursors and caps successful pages at two', async () => {
+      const firstCursor = 'opaque+/=? token';
+      const secondCursor = 'still-opaque:2';
+      const fetchSpy = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            data: [mockLot({ lot_number: 'cycle-1' })],
+            meta: { next_cursor: firstCursor, per_page: 20 },
+          }),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            data: [mockLot({ lot_number: 'cycle-2' })],
+            meta: { next_cursor: secondCursor, per_page: 20 },
+          }),
+        } as any);
+      Object.defineProperty(globalThis, 'fetch', {
+        configurable: true,
+        writable: true,
+        value: fetchSpy,
+      });
+
+      const result = await discoveryService.runDiscovery(
+        { platform: 'copart', mode: 'discovery' },
+        99,
+      );
+
+      expect(result.pagesCompleted).toBe(2);
+      expect(result.lotsObserved).toBe(2);
+      expect(result.lotsPersisted).toBe(2);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const secondUrl = new URL(fetchSpy.mock.calls[1][0] as string);
+      expect(secondUrl.searchParams.get('cursor')).toBe(firstCursor);
+      expect(secondUrl.searchParams.get('per_page')).toBe('20');
+      expect(budgetService.reserve).toHaveBeenCalledTimes(2);
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    });
+
+    it('accounts misses only at exhaustion and restarts a due cycle at null cursor', async () => {
+      const fetchSpy = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            data: [mockLot({ lot_number: 'refresh-1' })],
+            meta: { next_cursor: 'refresh-next', per_page: 20 },
+          }),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({ data: [], meta: { next_cursor: null, per_page: 20 } }),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({ data: [], meta: { next_cursor: null, per_page: 20 } }),
+        } as any);
+      Object.defineProperty(globalThis, 'fetch', {
+        configurable: true,
+        writable: true,
+        value: fetchSpy,
+      });
+
+      const first = await discoveryService.runDiscovery(
+        { platform: 'copart', mode: 'refresh' },
+        1,
+      );
+      expect(first.exhausted).toBe(false);
+      expect(prisma.discoveredLot.updateMany).not.toHaveBeenCalled();
+
+      const exhausted = await discoveryService.runDiscovery(
+        { platform: 'copart', mode: 'refresh' },
+        1,
+      );
+      expect(exhausted.exhausted).toBe(true);
+      expect(prisma.discoveredLot.updateMany).toHaveBeenCalledTimes(1);
+
+      const fingerprint = `refresh:${discoveryService.buildQueryFingerprint({ platform: 'copart' })}`;
+      await prisma.discoveryCheckpoint.upsert({
+        where: {
+          provider_queryFingerprint: {
+            provider: 'copart',
+            queryFingerprint: fingerprint,
+          },
+        },
+        create: {},
+        update: { nextDueAt: new Date(Date.now() - 1) },
+      });
+
+      const restarted = await discoveryService.runDiscovery(
+        { platform: 'copart', mode: 'refresh' },
+        1,
+      );
+      expect(restarted.pagesCompleted).toBe(1);
+      const restartUrl = new URL(fetchSpy.mock.calls[2][0] as string);
+      expect(restartUrl.searchParams.has('cursor')).toBe(false);
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    });
+  });
 
   describe('Concurrent query deduplication', () => {
     it('22. identical concurrent search deduplicates to single provider call', async () => {

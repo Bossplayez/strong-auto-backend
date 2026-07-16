@@ -6,7 +6,15 @@ import type { ProviderId } from './provider-lease.service';
 /**
  * Failure classification matching provider-fetch failure kinds.
  */
-export type FailureKind = 'timeout' | 'rateLimit' | 'server' | 'network' | 'client';
+export type FailureKind =
+  | 'timeout'
+  | 'rateLimit'
+  | 'server'
+  | 'network'
+  | 'client'
+  | 'clientContract'
+  | 'persistence'
+  | 'leaseLost';
 
 /**
  * Allocation/reservation mode.
@@ -219,21 +227,30 @@ export class RequestBudgetService {
   /**
    * Confirm that an attempt reached the provider fetch boundary.
    */
-  async confirm(attemptId: string): Promise<void> {
-    const billingMonth = RequestBudgetService.utcBillingMonth();
-
+  async confirm(
+    attemptId: string,
+    evidence?: { status?: number; remaining?: number; resetEpochMs?: number },
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const reservation = await tx.requestAttemptReservation.findUnique({
         where: { id: attemptId },
       });
 
       if (!reservation) return;
-      if (reservation.status !== 'allocated') return;
-
-      await tx.requestAttemptReservation.update({
-        where: { id: attemptId },
-        data: { status: 'confirmed', confirmedAt: new Date() },
+      const billingMonth = reservation.billingMonth;
+      const transitioned = await tx.requestAttemptReservation.updateMany({
+        where: { id: attemptId, status: 'allocated' },
+        data: {
+          status: 'confirmed',
+          confirmedAt: new Date(),
+          responseStatus: evidence?.status,
+          rateLimitRemaining: evidence?.remaining,
+          rateLimitResetAt: evidence?.resetEpochMs
+            ? new Date(evidence.resetEpochMs)
+            : undefined,
+        },
       });
+      if (transitioned.count === 0) return;
 
       await tx.$executeRaw`
         UPDATE "global_request_budgets"
@@ -258,26 +275,28 @@ export class RequestBudgetService {
     failureKind?: FailureKind,
     quotaHeaders?: { remaining?: number; resetEpochMs?: number },
   ): Promise<void> {
-    const billingMonth = RequestBudgetService.utcBillingMonth();
-
     await this.prisma.$transaction(async (tx) => {
       const reservation = await tx.requestAttemptReservation.findUnique({
         where: { id: attemptId },
       });
 
       if (!reservation) return;
-      if (reservation.status === 'completed_success' || reservation.status === 'completed_failure') return;
+      const billingMonth = reservation.billingMonth;
 
       const newStatus = success ? 'completed_success' : 'completed_failure';
 
-      await tx.requestAttemptReservation.update({
-        where: { id: attemptId },
+      const transitioned = await tx.requestAttemptReservation.updateMany({
+        where: {
+          id: attemptId,
+          status: success ? 'confirmed' : { in: ['allocated', 'confirmed'] },
+        },
         data: {
           status: newStatus,
           failureKind: success ? null : (failureKind ?? null),
           completedAt: new Date(),
         },
       });
+      if (transitioned.count === 0) return;
 
       // Update global counters
       if (success) {
@@ -293,9 +312,18 @@ export class RequestBudgetService {
         `;
       } else if (failureKind) {
         // Use $executeRawUnsafe for dynamic column names (validated enum)
-        const validColumns = new Set(['failure_timeout', 'failure_rate_limit', 'failure_server', 'failure_network', 'failure_client']);
-        const column = `failure_${failureKind}`;
-        if (validColumns.has(column)) {
+        const columns: Record<FailureKind, string> = {
+          timeout: 'failure_timeout',
+          rateLimit: 'failure_rate_limit',
+          server: 'failure_server',
+          network: 'failure_network',
+          client: 'failure_client',
+          clientContract: 'failure_client_contract',
+          persistence: 'failure_persistence',
+          leaseLost: 'failure_lease_lost',
+        };
+        const column = columns[failureKind];
+        if (column) {
           await tx.$executeRawUnsafe(
             `UPDATE "global_request_budgets" SET "${column}" = "${column}" + 1, "updated_at" = NOW() WHERE "billing_month" = $1`,
             billingMonth,
@@ -367,7 +395,7 @@ export class RequestBudgetService {
     });
 
     const unresolvedReservations = await tx.requestAttemptReservation.count({
-      where: { billingMonth, status: 'allocated' },
+      where: { billingMonth, status: { in: ['allocated', 'confirmed'] } },
     });
 
     const allocated = globalRow?.allocated ?? 0;

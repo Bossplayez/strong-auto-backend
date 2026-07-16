@@ -10,9 +10,25 @@
 //   Provider mismatch is rejected
 // ─────────────────────────────────────────────────────────────
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { RapidApiTransport, ProviderMismatchError, TransportMalformedError } from './rapidapi-transport';
+import {
+  RapidApiTransport,
+  ProviderMismatchError,
+  TransportLeaseLostError,
+  TransportMalformedError,
+} from './rapidapi-transport';
 import { Logger } from '@nestjs/common';
+
+const vi = {
+  stubGlobal: (_name: 'fetch', implementation: typeof fetch) =>
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      writable: true,
+      value: implementation,
+    }),
+  unstubAllGlobals: () => {
+    delete (globalThis as { fetch?: typeof fetch }).fetch;
+  },
+};
 
 // ── Fixtures based on verified contract ──
 
@@ -100,7 +116,7 @@ const CROSS_PROVIDER_FIXTURE = {
 // ── Mock helpers ──
 
 function createMockFetch(responseBody: any, status = 200): typeof fetch {
-  return vi.fn().mockResolvedValue({
+  return jest.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
     headers: new Map(),
@@ -110,7 +126,7 @@ function createMockFetch(responseBody: any, status = 200): typeof fetch {
 
 function createMockConfig(overrides: Record<string, any> = {}): any {
   return {
-    get: vi.fn((key: string) => {
+    get: jest.fn((key: string) => {
       const defaults: Record<string, any> = {
         RAPIDAPI_KEY: 'test-api-key',
         IMPORT_REQUEST_TIMEOUT_MS: 30000,
@@ -126,10 +142,10 @@ function createMockConfig(overrides: Record<string, any> = {}): any {
 
 function createMockBudgetService(): any {
   return {
-    reserve: vi.fn().mockResolvedValue({ allowed: true, attemptId: 'test-attempt' }),
-    confirm: vi.fn().mockResolvedValue(undefined),
-    complete: vi.fn().mockResolvedValue(undefined),
-    canMakeRoutineRequest: vi.fn().mockResolvedValue({ allowed: true, usage: {} }),
+    reserve: jest.fn().mockResolvedValue({ allowed: true, attemptId: 'test-attempt' }),
+    confirm: jest.fn().mockResolvedValue(undefined),
+    complete: jest.fn().mockResolvedValue(undefined),
+    canMakeRoutineRequest: jest.fn().mockResolvedValue({ allowed: true, usage: {} }),
   };
 }
 
@@ -175,7 +191,7 @@ describe('RapidApiTransport', () => {
   });
 
   describe('per_page parameter', () => {
-    it('per_page reaches transport unchanged', async () => {
+    it('forces the verified per_page=20 contract', async () => {
       vi.stubGlobal('fetch', createMockFetch(COPART_FIXTURE));
 
       await transport.listVehicles({
@@ -184,7 +200,7 @@ describe('RapidApiTransport', () => {
       });
 
       const calledUrl = (global.fetch as any).mock.calls[0][0];
-      expect(calledUrl).toContain('per_page=5');
+      expect(calledUrl).toContain('per_page=20');
       expect(calledUrl).not.toContain('limit=');
       vi.unstubAllGlobals();
     });
@@ -296,6 +312,77 @@ describe('RapidApiTransport', () => {
       expect(result.requestCount).toBe(1);
       expect(result.retryCount).toBe(0);
 
+      vi.unstubAllGlobals();
+    });
+  });
+
+  describe('quota and persistence ordering', () => {
+    it('completes success only after persistence returns', async () => {
+      vi.stubGlobal('fetch', createMockFetch(COPART_FIXTURE));
+      const order: string[] = [];
+      mockBudget.confirm.mockImplementation(async () => { order.push('confirm'); });
+      mockBudget.complete.mockImplementation(async (_id: string, success: boolean) => {
+        order.push(success ? 'complete-success' : 'complete-failure');
+      });
+
+      await transport.listVehicles(
+        { provider: 'copart' },
+        async () => {
+          order.push('persist-start');
+          await Promise.resolve();
+          order.push('persist-commit');
+        },
+      );
+
+      expect(order).toEqual([
+        'confirm',
+        'persist-start',
+        'persist-commit',
+        'complete-success',
+      ]);
+      vi.unstubAllGlobals();
+    });
+
+    it('reserves each retry and completes failed attempts separately', async () => {
+      const fetchMock = jest.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          headers: new Map(),
+          json: async () => ({}),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => COPART_FIXTURE,
+        });
+      vi.stubGlobal('fetch', fetchMock as typeof fetch);
+
+      await transport.listVehicles({ provider: 'copart' }, async () => undefined);
+
+      expect(mockBudget.reserve).toHaveBeenCalledTimes(2);
+      expect(mockBudget.complete).toHaveBeenNthCalledWith(1, expect.any(String), false, 'server');
+      expect(mockBudget.complete).toHaveBeenLastCalledWith(expect.any(String), true);
+      vi.unstubAllGlobals();
+    });
+
+    it('records lease loss and never records success', async () => {
+      vi.stubGlobal('fetch', createMockFetch(COPART_FIXTURE));
+
+      await expect(
+        transport.listVehicles(
+          { provider: 'copart' },
+          async () => { throw new TransportLeaseLostError(); },
+        ),
+      ).rejects.toThrow(TransportLeaseLostError);
+
+      expect(mockBudget.complete).toHaveBeenCalledWith(
+        expect.any(String),
+        false,
+        'leaseLost',
+      );
+      expect(mockBudget.complete).not.toHaveBeenCalledWith(expect.any(String), true);
       vi.unstubAllGlobals();
     });
   });
