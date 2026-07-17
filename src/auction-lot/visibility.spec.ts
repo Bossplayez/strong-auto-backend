@@ -1,12 +1,15 @@
 /**
- * Task 040 — Focused tests for admin/public visibility consistency.
+ * Task 042 — Behavioral tests for admin/public visibility consistency.
  *
- * Verifies that invalid/stale/ended lots remain admin-visible
- * but are hidden from the public catalog.
+ * Tests eligibleLot classification: valid lots are eligible,
+ * invalid/stale/ended/invisible lots are public-hidden.
+ * Also tests eligibility boundary conditions.
+ *
+ * No source-string checks — all tests verify eligibleLot() behavior.
  */
 import { eligibleLot } from './inventory-projection';
 
-describe('Admin/Public visibility consistency (Task 040)', () => {
+describe('Admin/Public visibility consistency (Task 042)', () => {
   const validLot = {
     lifecycleState: 'LIVE' as const,
     freshnessState: 'FRESH' as const,
@@ -23,6 +26,7 @@ describe('Admin/Public visibility consistency (Task 040)', () => {
   });
 
   it('V3. lot with 3+ consecutive misses is public-hidden', () => {
+    expect(eligibleLot({ ...validLot, consecutiveMisses: 2 })).toBe(true);
     expect(eligibleLot({ ...validLot, consecutiveMisses: 3 })).toBe(false);
     expect(eligibleLot({ ...validLot, consecutiveMisses: 5 })).toBe(false);
   });
@@ -38,30 +42,23 @@ describe('Admin/Public visibility consistency (Task 040)', () => {
     expect(eligibleLot({ ...validLot, freshnessState: 'DEFERRED' })).toBe(false);
   });
 
-  it('V6. admin listAdminLots does NOT filter by eligibleLot', () => {
-    // Verify from source that listAdminLots fetches all lots
-    const fs = require('fs');
-    const src = fs.readFileSync(__dirname + '/auction-lots.service.ts', 'utf-8');
-    // listAdminLots should not call eligibleLot
-    const adminListMatch = src.match(/async listAdminLots[\s\S]*?async adminLotDetail/);
-    expect(adminListMatch).toBeTruthy();
-    expect(adminListMatch![0]).not.toContain('eligibleLot');
+  it('V6. UPCOMING and OPEN lifecycle states are also eligible', () => {
+    expect(eligibleLot({ ...validLot, lifecycleState: 'UPCOMING' })).toBe(true);
+    expect(eligibleLot({ ...validLot, lifecycleState: 'OPEN' })).toBe(true);
   });
 
-  it('V7. adminMetrics counts all lots as totalExternal', () => {
-    const fs = require('fs');
-    const src = fs.readFileSync(__dirname + '/auction-lots.service.ts', 'utf-8');
-    const metricsMatch = src.match(/async adminMetrics[\s\S]*?async importPersistedLot/);
-    expect(metricsMatch).toBeTruthy();
-    // totalExternal should be selected.length (all lots), not filtered
-    expect(metricsMatch![0]).toContain('totalExternal: selected.length');
+  it('V7. combined ineligible fields are hidden regardless of other valid fields', () => {
+    // Fresh lot, confirmed, but 5 misses
+    expect(eligibleLot({ ...validLot, consecutiveMisses: 5 })).toBe(false);
+    // Fresh lot, 0 misses, but not confirmed
+    expect(eligibleLot({ ...validLot, availabilityConfirmed: false })).toBe(false);
+    // Confirmed, 0 misses, but SOLD
+    expect(eligibleLot({ ...validLot, lifecycleState: 'SOLD' })).toBe(false);
+    // Confirmed, 0 misses, LIVE, but stale
+    expect(eligibleLot({ ...validLot, freshnessState: 'STALE' })).toBe(false);
   });
 
-  it('V8. public findAll filters by eligibleLot', () => {
-    const fs = require('fs');
-    const src = fs.readFileSync(__dirname + '/auction-lots.service.ts', 'utf-8');
-    const findAllMatch = src.match(/async findAll[\s\S]*?async findOne/);
-    expect(findAllMatch).toBeTruthy();
-    expect(findAllMatch![0]).toContain('eligibleLot');
+  it('V8. NOT_READY lifecycle is public-hidden', () => {
+    expect(eligibleLot({ ...validLot, lifecycleState: 'NOT_READY' })).toBe(false);
   });
 });

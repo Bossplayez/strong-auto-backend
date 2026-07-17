@@ -10,6 +10,7 @@ import {
   RapidApiTransport,
   TransportLeaseLostError,
   TransportMalformedError,
+  type AttemptBudget,
 } from '../auction-lot/rapidapi-transport';
 import { normalizeDiscoveredLot } from './lot-normalizer';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
@@ -44,6 +45,7 @@ export interface DiscoveryResult {
   terminalReason: string;
   nextPage: number | null;
   errors: string[];
+  attemptsReserved: number;
 }
 
 interface PageCommitResult {
@@ -87,11 +89,16 @@ export class DiscoveryService {
   async runDiscovery(
     params: DiscoveryParams,
     maxPages?: number,
+    attemptBudget?: AttemptBudget,
   ): Promise<DiscoveryResult> {
     const mode = params.mode ?? 'discovery';
     const queryFingerprint = this.buildQueryFingerprint(params);
     const checkpointFingerprint = `${mode}:${queryFingerprint}`;
     const pageLimit = Math.min(2, Math.max(1, maxPages ?? 2));
+
+    // Local attempt budget — creates a permissive one if not passed (manual calls)
+    const localBudget: AttemptBudget = attemptBudget ?? { remaining: Number.MAX_SAFE_INTEGER, used: 0 };
+    const usedBeforeRun = localBudget.used;
 
     if (!this.config.get<string>('RAPIDAPI_KEY')) {
       return this.result(params.platform, queryFingerprint, 'configuration_error', [
@@ -191,6 +198,11 @@ export class DiscoveryService {
       cycleStartedAt = checkpoint.cycleStartedAt ?? now;
 
       while (pagesCompleted < pageLimit && Date.now() < jobDeadlineMs) {
+        if (localBudget.remaining <= 0) {
+          terminalReason = 'tick_attempt_cap_reached';
+          break;
+        }
+
         let committed: PageCommitResult | null = null;
 
         await transport.listVehicles(
@@ -207,6 +219,7 @@ export class DiscoveryService {
               sale_status: params.saleStatus,
               sort: params.sort,
             },
+            attemptBudget: localBudget,
           },
           async (page) => {
             const validation = validateProviderResponse({ data: page.items });
@@ -363,23 +376,31 @@ export class DiscoveryService {
 
       if (Date.now() >= jobDeadlineMs && !exhausted) terminalReason = 'deadline_exceeded';
     } catch (error) {
-      terminalReason = error instanceof TransportLeaseLostError
-        ? 'lease_lost'
-        : error instanceof TransportMalformedError
-          ? 'provider_error'
-          : 'persistence_error';
-      errors.push(error instanceof Error ? error.message : String(error));
+      // Check if failure was due to tick attempt budget exhaustion
+      if (localBudget.remaining <= 0) {
+        terminalReason = 'tick_attempt_cap_reached';
+      } else if (error instanceof TransportMalformedError
+          && error.message.includes('tick_attempt_cap_reached')) {
+        terminalReason = 'tick_attempt_cap_reached';
+      } else {
+        terminalReason = error instanceof TransportLeaseLostError
+          ? 'lease_lost'
+          : error instanceof TransportMalformedError
+            ? 'provider_error'
+            : 'persistence_error';
+        errors.push(error instanceof Error ? error.message : String(error));
 
-      if (!(error instanceof TransportLeaseLostError) && checkpoint) {
-        await this.leaseService.withLeasedTransaction(
-          params.platform,
-          ownerToken,
-          fencingToken,
-          async (tx) => tx.discoveryCheckpoint.update({
-            where: { id: checkpoint.id },
-            data: { lastError: errors[errors.length - 1] },
-          }),
-        );
+        if (!(error instanceof TransportLeaseLostError) && checkpoint) {
+          await this.leaseService.withLeasedTransaction(
+            params.platform,
+            ownerToken,
+            fencingToken,
+            async (tx) => tx.discoveryCheckpoint.update({
+              where: { id: checkpoint.id },
+              data: { lastError: errors[errors.length - 1] },
+            }),
+          );
+        }
       }
     } finally {
       await this.leaseService.release(params.platform, ownerToken, fencingToken);
@@ -404,6 +425,7 @@ export class DiscoveryService {
       terminalReason,
       nextPage: null,
       errors,
+      attemptsReserved: localBudget.used - usedBeforeRun,
     };
   }
 
@@ -452,6 +474,7 @@ export class DiscoveryService {
       terminalReason,
       nextPage: null,
       errors,
+      attemptsReserved: 0,
       ...overrides,
     };
   }

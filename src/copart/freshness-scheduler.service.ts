@@ -559,7 +559,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     });
   }
 
-  /** Run one bounded sweep cycle for each provider. Task 040 unified model. */
+  /** Run one bounded sweep cycle with shared tick queue and attempt budget. Task 042 rework. */
   async tick(): Promise<{ processed: number; deferred: number; requestsUsed: number; errors: string[] }> {
     const state = await this.getState();
 
@@ -577,10 +577,11 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       return { processed: 0, deferred: 0, requestsUsed: 0, errors: [`budget_blocked:${budget.dailyBlockReason ?? 'unknown'}`] };
     }
 
-    // ── Pacing: how many pages this tick? ──
+    // ── Pacing: how many charged attempts this tick? ──
     const now = new Date();
     const utcDayStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
     const elapsedUtcDayMs = Math.max(0, now.getTime() - utcDayStartMs);
+    const tickIntervalMs = this.config.get<number>('SCHEDULER_TICK_INTERVAL_MS', 5 * 60 * 1000);
     const pacedTarget = Math.floor((budget.dailyCap * elapsedUtcDayMs) / 86_400_000);
     const tickPages = Math.min(budget.dailyRemaining, Math.max(0, pacedTarget - budget.dailyUsed), 4);
 
@@ -588,53 +589,60 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       this.logger.debug(
         `Scheduler: ahead of pace — dailyCap=${budget.dailyCap}, elapsed=${elapsedUtcDayMs}ms, used=${budget.dailyUsed}, target=${pacedTarget}`,
       );
-      // Still update scheduler state
       await this.prisma.schedulerState.update({
         where: { id: state.id },
-        data: { lastRunAt: now, nextRunAt: new Date(now.getTime() + state.hotIntervalMs) },
+        data: { lastRunAt: now, nextRunAt: new Date(now.getTime() + tickIntervalMs) },
       });
       return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
     }
 
+    // ── Determine provider rotation order (Task 042: true round-robin) ──
+    const slot = Math.floor(elapsedUtcDayMs / tickIntervalMs);
+    const first: ProviderId = slot % 2 === 0 ? 'copart' : 'iaai';
+    const second: ProviderId = first === 'copart' ? 'iaai' : 'copart';
+    const providerOrder: ProviderId[] = [first, second];
+
     this.logger.log(
-      `Scheduler tick: dailyCap=${budget.dailyCap}, dailyUsed=${budget.dailyUsed}, dailyRemaining=${budget.dailyRemaining}, ` +
-      `pacedTarget=${pacedTarget}, tickPages=${tickPages}`,
+      `Scheduler tick: slot=${slot}, first=${first}, dailyCap=${budget.dailyCap}, ` +
+      `dailyUsed=${budget.dailyUsed}, tickPages=${tickPages}`,
     );
+
+    // ── Shared attempt budget and tick queue (Task 042: real lending) ──
+    const attemptBudget = { remaining: tickPages, used: 0 };
+    const runnableProviders = new Set<ProviderId>([first, second]);
+    const unavailableReasons = new Set([
+      'lease_held', 'configuration_error', 'not_due',
+      'exhausted', 'lease_lost', 'persistence_error', 'provider_error',
+    ]);
 
     const errors: string[] = [];
     let totalProcessed = 0;
-    let totalRequestsUsed = 0;
-
-    // ── Allocate pages round-robin across providers ──
-    const providerList: ProviderId[] = ['copart', 'iaai'];
-    let pagesRemaining = tickPages;
-    const providerPages = new Map<ProviderId, number>();
-
-    // First pass: give each provider floor(tickPages / 2)
-    const baseAllocation = Math.floor(tickPages / 2);
-    for (const p of providerList) providerPages.set(p, baseAllocation);
-    pagesRemaining -= baseAllocation * providerList.length;
-
-    // If odd, give the extra to a random/first provider
-    if (pagesRemaining > 0) {
-      providerPages.set(providerList[0], providerPages.get(providerList[0])! + 1);
-      pagesRemaining--;
-    }
-
-    // Run each provider's sweep — failures don't block the other
+    let slotIdx = 0;
     const discoveryResults: any[] = [];
-    for (const provider of providerList) {
-      const pages = providerPages.get(provider) ?? 0;
-      if (pages <= 0) continue;
+
+    while (attemptBudget.remaining > 0 && runnableProviders.size > 0) {
+      // Select next runnable provider in rotating order
+      let provider: ProviderId | null = null;
+      for (let i = 0; i < providerOrder.length; i++) {
+        const idx = (slotIdx + i) % providerOrder.length;
+        if (runnableProviders.has(providerOrder[idx])) {
+          provider = providerOrder[idx];
+          break;
+        }
+      }
+      if (!provider) break;
+      slotIdx++;
+
+      const pages = Math.min(attemptBudget.remaining, FreshnessSchedulerService.DISCOVERY_MAX_PAGES_PER_TICK);
 
       try {
         const result = await this.discoveryService.runDiscovery(
-          { platform: provider, mode: 'discovery' }, // single unified sweep
+          { platform: provider, mode: 'discovery' },
           pages,
+          attemptBudget,
         );
 
         totalProcessed += result.lotsPersisted;
-        totalRequestsUsed += result.pagesCompleted;
 
         discoveryResults.push({
           provider: result.provider,
@@ -642,22 +650,21 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
           lotsDiscovered: result.lotsDiscovered,
           newLots: result.newLots,
           lotsUpdated: result.lotsUpdated,
+          attemptsReserved: result.attemptsReserved,
           terminalReason: result.terminalReason,
           errors: result.errors,
         });
 
-        // If provider failed or was leased, try giving remaining pages to the other provider
-        if (result.pagesCompleted < pages && result.terminalReason !== 'exhausted') {
-          const unused = pages - result.pagesCompleted;
-          const otherProvider = providerList.find(p => p !== provider)!;
-          providerPages.set(otherProvider, (providerPages.get(otherProvider) ?? 0) + unused);
-          this.logger.log(`Provider ${provider} used ${result.pagesCompleted}/${pages} pages — lending ${unused} to ${otherProvider}`);
+        if (unavailableReasons.has(result.terminalReason)) {
+          runnableProviders.delete(provider);
+          this.logger.log(`Provider ${provider} unavailable (${result.terminalReason}) — removed from tick queue`);
         }
       } catch (err) {
         this.logger.error(
           `Sweep failed for ${provider}: ${err instanceof Error ? err.message : String(err)}`,
         );
         errors.push(`${provider}: ${err instanceof Error ? err.message : String(err)}`);
+        runnableProviders.delete(provider);
       }
     }
 
@@ -665,18 +672,18 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       this.lastDiscovery = { runAt: now, providers: discoveryResults };
     }
 
-    // Update scheduler state
+    // Update scheduler state — use resolved tick interval (not hot freshness interval)
     await this.prisma.schedulerState.update({
       where: { id: state.id },
-      data: { lastRunAt: now, nextRunAt: new Date(now.getTime() + state.hotIntervalMs) },
+      data: { lastRunAt: now, nextRunAt: new Date(now.getTime() + tickIntervalMs) },
     });
 
     this.logger.log(
-      `Tick done: processed=${totalProcessed}, requestsUsed=${totalRequestsUsed}, ` +
+      `Tick done: processed=${totalProcessed}, requestsUsed=${attemptBudget.used}, ` +
       `tickPages=${tickPages}, errors=${errors.length}`,
     );
 
-    return { processed: totalProcessed, deferred: 0, requestsUsed: totalRequestsUsed, errors };
+    return { processed: totalProcessed, deferred: 0, requestsUsed: attemptBudget.used, errors };
   }
 
   // ─── Discovery Integration ───

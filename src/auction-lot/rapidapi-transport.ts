@@ -49,6 +49,12 @@ export interface TransportResult {
   retryCount: number;
 }
 
+/** Per-tick execution-scoped attempt budget. Prevents bursts across providers. */
+export interface AttemptBudget {
+  remaining: number;
+  used: number;
+}
+
 export type PersistListPage = (page: Omit<TransportResult, 'requestCount' | 'retryCount'>) => Promise<void>;
 
 /** Options for a transport list call. */
@@ -60,6 +66,8 @@ export interface TransportListOptions {
   filters?: Record<string, string | number | boolean | undefined>;
   /** Job deadline in ms epoch. If not set, uses config default. */
   jobDeadlineMs?: number;
+  /** Per-tick attempt budget — caps total HTTP attempts including retries. */
+  attemptBudget?: AttemptBudget;
 }
 
 /** Error thrown when provider identity mismatch is detected. */
@@ -209,6 +217,11 @@ export class RapidApiTransport {
     let lastAttemptId: string | undefined;
 
     const preRequestHook = async () => {
+      // Check tick-scoped attempt budget before each HTTP attempt (including retries)
+      if (options.attemptBudget && options.attemptBudget.remaining <= 0) {
+        return { allowed: false, reason: 'tick_attempt_cap_reached' };
+      }
+
       attemptCounter.n++;
       const attemptId = `transport-${options.provider}-${crypto.randomUUID()}`;
       const reservation = await this.budgetService.reserve(
@@ -220,6 +233,13 @@ export class RapidApiTransport {
       if (!reservation.allowed) {
         return { allowed: false, reason: reservation.reason };
       }
+
+      // Consume tick attempt budget after successful global reservation
+      if (options.attemptBudget) {
+        options.attemptBudget.remaining--;
+        options.attemptBudget.used++;
+      }
+
       lastAttemptId = attemptId;
       attemptIds.set(attemptCounter.n, attemptId);
       return { allowed: true };

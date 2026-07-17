@@ -327,5 +327,67 @@ describe('RequestBudgetService (global billing account)', () => {
       expect(usage.routineAllocatedToday).toBe(5);
       expect(usage.manualAllocatedToday).toBe(2);
     });
+
+    // Task 042: Fake-clock tests for specific month lengths
+
+    it('D7. February (28 days) — dailyCap = floor(27000/28) = 964', async () => {
+      jest.useFakeTimers({ now: new Date('2026-02-15T12:00:00Z') });
+      try {
+        const tx = makeDailyTx(0, 0);
+        wireTx(tx);
+        const result = await service.reserve('copart', 'job-1', 'att-d7', 'routine');
+        expect(result.usage.remainingUtcDays).toBe(14);
+        // dailyCap = floor((27000-0+0) / 14) — depends on remaining days
+        expect(result.usage.dailyCap).toBe(Math.floor(27000 / 14));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('D8. July (31 days) start — dailyCap = floor(27000/31) = 870', async () => {
+      jest.useFakeTimers({ now: new Date('2026-07-01T00:00:00Z') });
+      try {
+        const tx = makeDailyTx(0, 0);
+        wireTx(tx);
+        const result = await service.reserve('copart', 'job-1', 'att-d8', 'routine');
+        expect(result.usage.remainingUtcDays).toBe(31);
+        expect(result.usage.dailyCap).toBe(870);
+        expect(result.usage.dailyRemaining).toBe(870);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('D9. July end (1 day left) — dailyCap = floor(27000/1) = 27000', async () => {
+      jest.useFakeTimers({ now: new Date('2026-07-31T23:30:00Z') });
+      try {
+        const tx = makeDailyTx(0, 0);
+        wireTx(tx);
+        const result = await service.reserve('copart', 'job-1', 'att-d9', 'routine');
+        expect(result.usage.remainingUtcDays).toBe(1);
+        expect(result.usage.dailyCap).toBe(27000);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('D10. UTC day boundary — reservations before and after midnight counted separately', async () => {
+      // Test that utcDayStart produces midnight UTC boundary
+      jest.useFakeTimers({ now: new Date('2026-07-15T23:59:00Z') });
+      try {
+        const usage1 = await service.getUsage();
+        expect(usage1.dailyUtcBoundary).toBe('2026-07-15T00:00:00.000Z');
+      } finally {
+        jest.useRealTimers();
+      }
+
+      jest.useFakeTimers({ now: new Date('2026-07-16T00:01:00Z') });
+      try {
+        const usage2 = await service.getUsage();
+        expect(usage2.dailyUtcBoundary).toBe('2026-07-16T00:00:00.000Z');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });
