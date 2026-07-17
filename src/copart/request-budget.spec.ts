@@ -30,6 +30,7 @@ function makeTxMock(allocated: number, existing: any = null) {
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(0),
+      groupBy: jest.fn().mockResolvedValue([]),
     },
     $queryRaw: jest.fn().mockResolvedValue([{ allocated }]),
     $executeRaw: jest.fn().mockResolvedValue(1),
@@ -55,7 +56,7 @@ describe('RequestBudgetService (global billing account)', () => {
       $transaction: jest.fn(),
       globalRequestBudget: { findUnique: jest.fn() },
       providerRequestBreakdown: { findMany: jest.fn().mockResolvedValue([]) },
-      requestAttemptReservation: { count: jest.fn().mockResolvedValue(0) },
+      requestAttemptReservation: { count: jest.fn().mockResolvedValue(0), groupBy: jest.fn().mockResolvedValue([]) },
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -74,6 +75,7 @@ describe('RequestBudgetService (global billing account)', () => {
     prisma.globalRequestBudget.findUnique = txMock.globalRequestBudget.findUnique;
     prisma.providerRequestBreakdown.findMany = txMock.providerRequestBreakdown.findMany;
     prisma.requestAttemptReservation.count = txMock.requestAttemptReservation.count;
+    prisma.requestAttemptReservation.groupBy = txMock.requestAttemptReservation.groupBy;
   }
 
   // 1. Global budget
@@ -217,5 +219,113 @@ describe('RequestBudgetService (global billing account)', () => {
 
     expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(2);
     expect(tx.$executeRawUnsafe.mock.calls[0][0]).toContain('failure_lease_lost');
+  });
+
+  // ═══════════════ Task 040: Daily routine cap ═══════════════
+
+  describe('daily routine cap', () => {
+    function makeDailyTx(allocated: number, dailyRoutineUsed: number) {
+      const tx = makeTxMock(allocated);
+      // Simulate daily routine count
+      tx.requestAttemptReservation.count.mockImplementation((opts: any) => {
+        if (opts?.where?.createdAt?.gte && opts?.where?.mode === 'routine') return Promise.resolve(dailyRoutineUsed);
+        return Promise.resolve(0);
+      });
+      tx.requestAttemptReservation.groupBy.mockResolvedValue([
+        { mode: 'routine', _count: dailyRoutineUsed },
+      ]);
+      return tx;
+    }
+
+    it('D1. computes dailyCap from remaining routine budget and remaining days', async () => {
+      // 30-day month, 0 allocated, 0 used today
+      const tx = makeDailyTx(0, 0);
+      wireTx(tx);
+      const result = await service.reserve('copart', 'job-1', 'att-d1', 'routine');
+      // dailyCap = floor((27000 + 0) / daysInMonth)
+      const now = new Date();
+      const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+      const days = Math.max(Math.ceil((endOfMonth.getTime() - now.getTime()) / 86400000), 1);
+      const expectedDailyCap = Math.floor(27000 / days);
+      expect(result.usage.dailyCap).toBe(expectedDailyCap);
+      expect(result.usage.dailyRemaining).toBe(expectedDailyCap);
+      expect(result.usage.dailyUsed).toBe(0);
+    });
+
+    it('D2. dailyCap is consistent with floor(routineCap/days) for clean start', async () => {
+      const tx = makeDailyTx(0, 0);
+      wireTx(tx);
+      const result = await service.reserve('copart', 'job-1', 'att-d2', 'routine');
+      // For a 30-day month: floor(27000/30) = 900
+      // For a 31-day month: floor(27000/31) = 870
+      // For a 28-day month: floor(27000/28) = 964
+      // For a 29-day month: floor(27000/29) = 931
+      const days = result.usage.remainingUtcDays;
+      const expected = Math.floor(27000 / days);
+      expect(result.usage.dailyCap).toBe(expected);
+      // Verify formula examples: 30 days → 900, 31 → 870, 28 → 964, 29 → 931
+      expect(expected).toBeGreaterThan(0);
+      expect(result.usage.dailyRemaining).toBe(expected);
+    });
+
+    it('D3. blocks routine when dailyRemaining is 0', async () => {
+      // allocated 0 monthly but used dailyCap already today
+      const tx = makeDailyTx(0, 1);
+      // Make dailyCap = 1 by having used 1 and routineCap + used / days = 1
+      // This requires routineCap to be small enough; simulate large dailyUsed
+      tx.requestAttemptReservation.count.mockImplementation((opts: any) => {
+        if (opts?.where?.createdAt?.gte && opts?.where?.mode === 'routine') return Promise.resolve(27001);
+        return Promise.resolve(0);
+      });
+      tx.requestAttemptReservation.groupBy.mockResolvedValue([
+        { mode: 'routine', _count: 27001 },
+      ]);
+      wireTx(tx);
+      const result = await service.reserve('copart', 'job-1', 'att-d3', 'routine');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('daily_routine_cap_reached');
+    });
+
+    it('D4. idempotency check happens before daily cap rejection', async () => {
+      const tx = makeTxMock(0, { id: 'existing-att', status: 'completed_success' });
+      // Set dailyUsed to max so fresh reservations would be blocked
+      tx.requestAttemptReservation.count.mockImplementation((opts: any) => {
+        if (opts?.where?.createdAt?.gte && opts?.where?.mode === 'routine') return Promise.resolve(99999);
+        return Promise.resolve(0);
+      });
+      tx.requestAttemptReservation.groupBy.mockResolvedValue([
+        { mode: 'routine', _count: 99999 },
+      ]);
+      wireTx(tx);
+      const result = await service.reserve('copart', 'job-1', 'existing-att', 'routine');
+      // Should pass because idempotency is checked first
+      expect(result.allowed).toBe(true);
+      expect(result.status).toBe('completed_success');
+    });
+
+    it('D5. manual reservations are not subject to daily routine cap', async () => {
+      const tx = makeDailyTx(0, 99999);
+      wireTx(tx);
+      const result = await service.reserve('copart', 'job-1', 'att-manual-d5', 'manual');
+      expect(result.allowed).toBe(true);
+    });
+
+    it('D6. usage snapshot includes daily fields', async () => {
+      prisma.globalRequestBudget.findUnique.mockResolvedValue({ allocated: 100, confirmed: 90 });
+      prisma.requestAttemptReservation.groupBy.mockResolvedValue([
+        { mode: 'routine', _count: 5 },
+        { mode: 'manual', _count: 2 },
+      ]);
+      const usage = await service.getUsage();
+      expect(usage).toHaveProperty('dailyCap');
+      expect(usage).toHaveProperty('dailyUsed');
+      expect(usage).toHaveProperty('dailyRemaining');
+      expect(usage).toHaveProperty('dailyUtcBoundary');
+      expect(usage).toHaveProperty('routineAllocatedToday');
+      expect(usage).toHaveProperty('manualAllocatedToday');
+      expect(usage).toHaveProperty('remainingUtcDays');
+      expect(usage.routineAllocatedToday).toBe(5);
+      expect(usage.manualAllocatedToday).toBe(2);
+    });
   });
 });

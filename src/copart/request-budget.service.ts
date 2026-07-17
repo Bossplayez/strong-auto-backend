@@ -48,6 +48,15 @@ export interface GlobalUsageSnapshot {
   isRoutineBlocked: boolean;
   isAbsoluteBlocked: boolean;
   providers: ProviderBreakdown[];
+  // ── Daily routine cap fields (Task 040) ──
+  dailyCap: number;
+  dailyUsed: number;
+  dailyRemaining: number;
+  dailyUtcBoundary: string; // ISO start of today UTC
+  routineAllocatedToday: number;
+  manualAllocatedToday: number;
+  remainingUtcDays: number;
+  dailyBlockReason: string | null;
 }
 
 export interface ProviderBreakdown {
@@ -127,6 +136,7 @@ export class RequestBudgetService {
     const billingMonth = RequestBudgetService.utcBillingMonth();
     const budget = this.budget;
     const reserve = this.reserveAmount;
+    const now = new Date();
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -176,6 +186,34 @@ export class RequestBudgetService {
               : 'Routine reserve reached — manual override required',
             usage,
           };
+        }
+
+        // 3b. Daily routine cap check (Task 040)
+        if (mode === 'routine') {
+          const utcStart = this.utcDayStart(now);
+          const dailyUsed = await tx.requestAttemptReservation.count({
+            where: {
+              billingMonth,
+              mode: 'routine',
+              createdAt: { gte: utcStart },
+            },
+          });
+
+          const remainingDays = this.remainingUtcDays(now);
+          const availableForRoutineAtMonth = Math.max(0, routineCap - currentAllocated);
+          const dailyCap = Math.floor((availableForRoutineAtMonth + dailyUsed) / remainingDays);
+          const dailyRemaining = Math.max(0, dailyCap - dailyUsed);
+
+          if (dailyRemaining <= 0) {
+            const usage = await this.buildSnapshot(tx, billingMonth, budget, this.reserveAmount);
+            return {
+              allowed: false,
+              attemptId,
+              status: 'allocated',
+              reason: 'daily_routine_cap_reached',
+              usage,
+            };
+          }
         }
 
         // 4. Atomically increment global + breakdown + insert reservation
@@ -377,6 +415,18 @@ export class RequestBudgetService {
     return { allowed: true, usage };
   }
 
+  /** UTC start-of-day for daily cap calculations. */
+  private utcDayStart(now: Date = new Date()): Date {
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  }
+
+  /** Remaining UTC days in the current billing month (including today). */
+  private remainingUtcDays(now: Date = new Date()): number {
+    const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const diffMs = endOfMonth.getTime() - now.getTime();
+    return Math.max(Math.ceil(diffMs / (24 * 60 * 60 * 1000)), 1);
+  }
+
   /**
    * Build the usage snapshot from a transaction client.
    */
@@ -426,6 +476,27 @@ export class RequestBudgetService {
     const availableForRoutine = Math.max(0, budget - reserve - allocated);
     const percentageUsed = budget > 0 ? Math.round((allocated / budget) * 10000) / 100 : 0;
 
+    // ── Daily routine cap calculation (Task 040) ──
+    const now = new Date();
+    const utcStart = this.utcDayStart(now);
+    const remainingDays = this.remainingUtcDays(now);
+
+    const dailyCounts = await tx.requestAttemptReservation.groupBy({
+      by: ['mode'],
+      where: { billingMonth, createdAt: { gte: utcStart } },
+      _count: true,
+    });
+    const routineAllocatedToday = dailyCounts.find(g => g.mode === 'routine')?._count ?? 0;
+    const manualAllocatedToday = dailyCounts.find(g => g.mode === 'manual')?._count ?? 0;
+    const dailyUsed = routineAllocatedToday;
+    const dailyCap = Math.floor((availableForRoutine + dailyUsed) / remainingDays);
+    const dailyRemaining = Math.max(0, dailyCap - dailyUsed);
+
+    let dailyBlockReason: string | null = null;
+    if (dailyRemaining <= 0) dailyBlockReason = 'daily_routine_cap_reached';
+    if (allocated >= budget - reserve) dailyBlockReason = 'monthly_routine_cap_reached';
+    if (allocated >= budget) dailyBlockReason = 'absolute_budget_cap_reached';
+
     return {
       billingMonth,
       budget,
@@ -440,9 +511,18 @@ export class RequestBudgetService {
       availableForRoutine,
       percentageUsed,
       isWarning: percentageUsed >= this.warningPercent,
-      isRoutineBlocked: allocated >= budget - reserve,
+      isRoutineBlocked: allocated >= budget - reserve || dailyRemaining <= 0,
       isAbsoluteBlocked: allocated >= budget,
       providers,
+      // Daily routine cap fields
+      dailyCap,
+      dailyUsed,
+      dailyRemaining,
+      dailyUtcBoundary: utcStart.toISOString(),
+      routineAllocatedToday,
+      manualAllocatedToday,
+      remainingUtcDays: remainingDays,
+      dailyBlockReason,
     };
   }
 }

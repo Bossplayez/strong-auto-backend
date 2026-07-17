@@ -1,10 +1,17 @@
 /**
  * Quota-aware scheduler for list-only provider supply.
  *
- * Discovery and refresh are both paginated `GET /vehicles` cycles. Each tick
- * may commit at most two successful pages for every provider/mode pair.
- * Returned rows are the only rows refreshed; miss accounting happens only
- * when a complete, lease-fenced refresh cycle reaches exhaustion.
+ * Task 040: Unified single-sweep model. Discovery and refresh are the same
+ * operation — a paginated GET /vehicles cycle. One sweep both discovers
+ * new lots and refreshes existing ones. No duplicate discovery+refresh.
+ *
+ * Pacing: On each 5-minute tick, compute how many pages the daily budget
+ * allows at this point in the UTC day.
+ *   pacedTarget = floor(dailyCap * elapsedUtcDayMs / 86_400_000)
+ *   tickPages   = min(dailyRemaining, max(0, pacedTarget - dailyUsed), 4)
+ *
+ * Provider fairness: round-robin across Copart/IAAI. If one provider is
+ * exhausted/cooling/leased/failing, the other may borrow unused capacity.
  */
 
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
@@ -54,6 +61,13 @@ export interface SchedulerStatus {
   discoveryUpdated: number;
   discoverySkipped: number;
   discoveryTerminalReason: string | null;
+  // Task 040 — unified daily cap diagnostics from the shared ledger
+  dailyCap: number;
+  dailyRemaining: number;
+  dailyUtcBoundary: string | null;
+  routineAllocatedToday: number;
+  manualAllocatedToday: number;
+  dailyBlockReason: string | null;
 }
 
 export interface QuotaAllocation {
@@ -420,6 +434,11 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     // Projected month-end usage = current usage + (dailyEnvelope × remainingDays)
     const projectedMonthEndUsage = (budget.allocated ?? 0) + (dailyEnvelope * remainingDays);
 
+    // Task 040: expose unified daily cap diagnostics from the ledger
+    const dailyCap = budget.dailyCap ?? dailyEnvelope;
+    const dailyUsed = budget.dailyUsed ?? 0;
+    const dailyRemaining = budget.dailyRemaining ?? 0;
+
     // Active provider jobs (leases held)
     const activeLeases = await Promise.all(
       (['copart', 'iaai'] as const).map(p => this.leaseService.getState(p)),
@@ -466,8 +485,14 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       deferredHot: this.calculateDeferred(pendingHot, tierBudgets.hotBudget),
       deferredWarm: this.calculateDeferred(pendingWarm, tierBudgets.warmBudget),
       totalDiscovered,
-      dailyEnvelope,
-      dailyUsed: 0,
+      dailyEnvelope: dailyCap,
+      dailyUsed,
+      dailyCap,
+      dailyRemaining,
+      dailyUtcBoundary: budget.dailyUtcBoundary ?? null,
+      routineAllocatedToday: budget.routineAllocatedToday ?? 0,
+      manualAllocatedToday: budget.manualAllocatedToday ?? 0,
+      dailyBlockReason: budget.dailyBlockReason ?? null,
       monthlyUsed: budget.allocated ?? 0,
       monthlyBudget: budget.budget ?? 30000,
       monthlyRemaining,
@@ -534,7 +559,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     });
   }
 
-  /** Run one bounded discovery and refresh list cycle for each provider. */
+  /** Run one bounded sweep cycle for each provider. Task 040 unified model. */
   async tick(): Promise<{ processed: number; deferred: number; requestsUsed: number; errors: string[] }> {
     const state = await this.getState();
 
@@ -543,65 +568,115 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
     }
 
+    // ── Read daily budget from the ledger ──
     const budget = await this.budgetService.getUsage();
-    if (budget.isRoutineBlocked) {
-      this.logger.warn('Scheduler: routine budget exhausted — skipping tick');
-      return { processed: 0, deferred: 0, requestsUsed: 0, errors: ['routine_budget_exhausted'] };
+    if (budget.isRoutineBlocked || budget.dailyRemaining <= 0) {
+      this.logger.warn(
+        `Scheduler: budget blocked — daily=${budget.dailyRemaining}, monthly=${budget.availableForRoutine}, reason=${budget.dailyBlockReason}`,
+      );
+      return { processed: 0, deferred: 0, requestsUsed: 0, errors: [`budget_blocked:${budget.dailyBlockReason ?? 'unknown'}`] };
     }
 
+    // ── Pacing: how many pages this tick? ──
     const now = new Date();
-    const remainingDays = this.getRemainingDaysInMonth(now);
-    const monthlyRemaining = budget.availableForRoutine ?? 0;
-    const dailyEnvelope = this.calculateDailyEnvelope(monthlyRemaining, remainingDays);
-    const tierBudgets = this.calculateTierBudgets(dailyEnvelope);
+    const utcDayStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const elapsedUtcDayMs = Math.max(0, now.getTime() - utcDayStartMs);
+    const pacedTarget = Math.floor((budget.dailyCap * elapsedUtcDayMs) / 86_400_000);
+    const tickPages = Math.min(budget.dailyRemaining, Math.max(0, pacedTarget - budget.dailyUsed), 4);
+
+    if (tickPages <= 0) {
+      this.logger.debug(
+        `Scheduler: ahead of pace — dailyCap=${budget.dailyCap}, elapsed=${elapsedUtcDayMs}ms, used=${budget.dailyUsed}, target=${pacedTarget}`,
+      );
+      // Still update scheduler state
+      await this.prisma.schedulerState.update({
+        where: { id: state.id },
+        data: { lastRunAt: now, nextRunAt: new Date(now.getTime() + state.hotIntervalMs) },
+      });
+      return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
+    }
 
     this.logger.log(
-      `Scheduler tick: daily envelope=${dailyEnvelope}, ` +
-      `discovery=${tierBudgets.discoveryBudget} (list), refresh=${tierBudgets.warmBudget} (list), ` +
-      `monthly remaining=${monthlyRemaining}, days=${remainingDays}`,
+      `Scheduler tick: dailyCap=${budget.dailyCap}, dailyUsed=${budget.dailyUsed}, dailyRemaining=${budget.dailyRemaining}, ` +
+      `pacedTarget=${pacedTarget}, tickPages=${tickPages}`,
     );
 
     const errors: string[] = [];
     let totalProcessed = 0;
-    let totalDeferred = 0;
     let totalRequestsUsed = 0;
 
-    // ── Discovery phase: run bounded discovery before HOT/WARM refresh ──
-    const discoveryResults = await this.runDueDiscovery(now);
-    if (discoveryResults.length > 0) {
-      this.lastDiscovery = {
-        runAt: now,
-        providers: discoveryResults.map(r => ({
-          provider: r.provider,
-          pagesCompleted: r.pagesCompleted,
-          lotsDiscovered: r.lotsDiscovered,
-          newLots: r.newLots,
-          lotsUpdated: r.lotsUpdated,
-          skipped: 0,
-          terminalReason: r.terminalReason,
-          errors: r.errors,
-        })),
-      };
-      this.logger.log(
-        `Discovery this tick: ${discoveryResults.length} provider(s), ` +
-        `${discoveryResults.reduce((s, r) => s + r.pagesCompleted, 0)} pages, ` +
-        `${discoveryResults.reduce((s, r) => s + r.lotsDiscovered, 0)} lots`,
-      );
+    // ── Allocate pages round-robin across providers ──
+    const providerList: ProviderId[] = ['copart', 'iaai'];
+    let pagesRemaining = tickPages;
+    const providerPages = new Map<ProviderId, number>();
+
+    // First pass: give each provider floor(tickPages / 2)
+    const baseAllocation = Math.floor(tickPages / 2);
+    for (const p of providerList) providerPages.set(p, baseAllocation);
+    pagesRemaining -= baseAllocation * providerList.length;
+
+    // If odd, give the extra to a random/first provider
+    if (pagesRemaining > 0) {
+      providerPages.set(providerList[0], providerPages.get(providerList[0])! + 1);
+      pagesRemaining--;
     }
 
-    // Refresh is list re-observation through runDueDiscovery.  Do not mark
-    // selected rows successful merely because a scheduler tick ran.
+    // Run each provider's sweep — failures don't block the other
+    const discoveryResults: any[] = [];
+    for (const provider of providerList) {
+      const pages = providerPages.get(provider) ?? 0;
+      if (pages <= 0) continue;
+
+      try {
+        const result = await this.discoveryService.runDiscovery(
+          { platform: provider, mode: 'discovery' }, // single unified sweep
+          pages,
+        );
+
+        totalProcessed += result.lotsPersisted;
+        totalRequestsUsed += result.pagesCompleted;
+
+        discoveryResults.push({
+          provider: result.provider,
+          pagesCompleted: result.pagesCompleted,
+          lotsDiscovered: result.lotsDiscovered,
+          newLots: result.newLots,
+          lotsUpdated: result.lotsUpdated,
+          terminalReason: result.terminalReason,
+          errors: result.errors,
+        });
+
+        // If provider failed or was leased, try giving remaining pages to the other provider
+        if (result.pagesCompleted < pages && result.terminalReason !== 'exhausted') {
+          const unused = pages - result.pagesCompleted;
+          const otherProvider = providerList.find(p => p !== provider)!;
+          providerPages.set(otherProvider, (providerPages.get(otherProvider) ?? 0) + unused);
+          this.logger.log(`Provider ${provider} used ${result.pagesCompleted}/${pages} pages — lending ${unused} to ${otherProvider}`);
+        }
+      } catch (err) {
+        this.logger.error(
+          `Sweep failed for ${provider}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        errors.push(`${provider}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    if (discoveryResults.length > 0) {
+      this.lastDiscovery = { runAt: now, providers: discoveryResults };
+    }
 
     // Update scheduler state
     await this.prisma.schedulerState.update({
       where: { id: state.id },
-      data: {
-        lastRunAt: now,
-        nextRunAt: new Date(now.getTime() + state.hotIntervalMs),
-      },
+      data: { lastRunAt: now, nextRunAt: new Date(now.getTime() + state.hotIntervalMs) },
     });
 
-    return { processed: totalProcessed, deferred: totalDeferred, requestsUsed: totalRequestsUsed, errors };
+    this.logger.log(
+      `Tick done: processed=${totalProcessed}, requestsUsed=${totalRequestsUsed}, ` +
+      `tickPages=${tickPages}, errors=${errors.length}`,
+    );
+
+    return { processed: totalProcessed, deferred: 0, requestsUsed: totalRequestsUsed, errors };
   }
 
   // ─── Discovery Integration ───
@@ -654,13 +729,9 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
   }
 
   /**
-   * Run bounded discovery for due providers.
-   *
-   * Each provider is handled independently — one failure does not block
-   * the other. Discovery respects existing lease, fencing, and quota
-   * controls inside DiscoveryService.runDiscovery().
-   *
-   * Does NOT auto-publish discovered lots to the catalog.
+   * Run a unified sweep for due providers (Task 040 single-sweep model).
+   * Called by tick() with page allocation from pacing logic.
+   * Kept for compatibility with manual admin triggers.
    */
   private async runDueDiscovery(
     now: Date,

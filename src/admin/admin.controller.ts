@@ -373,7 +373,17 @@ export class AdminController {
     };
     return {
       contractVersion: CONTRACT_VERSION, month: globalBudget.billingMonth,
-      budget: { allocated: globalBudget.allocated, confirmed: globalBudget.confirmed, completed: globalBudget.completedSuccess + Object.values(globalBudget.failureCounts).reduce((sum, count) => sum + count, 0), succeeded: globalBudget.completedSuccess, failed: Object.values(globalBudget.failureCounts).reduce((sum, count) => sum + count, 0), cap: globalBudget.budget, protectedReserve: globalBudget.reserve, routineRemaining: Math.max(0, globalBudget.budget - globalBudget.reserve - globalBudget.allocated) },
+      budget: { allocated: globalBudget.allocated, confirmed: globalBudget.confirmed, completed: globalBudget.completedSuccess + Object.values(globalBudget.failureCounts).reduce((sum, count) => sum + count, 0), succeeded: globalBudget.completedSuccess, failed: Object.values(globalBudget.failureCounts).reduce((sum, count) => sum + count, 0), cap: globalBudget.budget, protectedReserve: globalBudget.reserve, routineRemaining: Math.max(0, globalBudget.budget - globalBudget.reserve - globalBudget.allocated),
+        // Task 040: daily routine cap from shared ledger
+        dailyCap: globalBudget.dailyCap,
+        dailyUsed: globalBudget.dailyUsed,
+        dailyRemaining: globalBudget.dailyRemaining,
+        dailyUtcBoundary: globalBudget.dailyUtcBoundary,
+        routineAllocatedToday: globalBudget.routineAllocatedToday,
+        manualAllocatedToday: globalBudget.manualAllocatedToday,
+        remainingUtcDays: globalBudget.remainingUtcDays,
+        dailyBlockReason: globalBudget.dailyBlockReason,
+      },
       providers: results.map((entry) => ({ provider: entry.provider, enabled: true, circuit: entry.lease?.isExpired ? 'open' : 'closed', counters: counters(entry.provider), lastSuccessfulAt: entry.lastJob?.status === 'SUCCESS' ? entry.lastJob.finishedAt?.toISOString() ?? null : null, lastFailureAt: entry.lastJob?.status === 'FAILED' ? entry.lastJob.finishedAt?.toISOString() ?? null : null, lastFailureKind: null })),
       asOf: new Date().toISOString(),
     };
@@ -624,6 +634,11 @@ export class AdminController {
       lastRunAt: status.lastRunAt ? new Date(status.lastRunAt).toISOString() : null,
       nextRunAt: status.nextRunAt ? new Date(status.nextRunAt).toISOString() : null,
       lastResult: null, asOf: new Date().toISOString(),
+      // Task 040: daily cap diagnostics from shared ledger
+      dailyCap: status.dailyCap ?? null,
+      dailyUsed: status.dailyUsed ?? null,
+      dailyRemaining: status.dailyRemaining ?? null,
+      dailyBlockReason: status.dailyBlockReason ?? null,
     };
   }
 

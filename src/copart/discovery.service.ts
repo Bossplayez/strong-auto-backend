@@ -296,7 +296,9 @@ export class DiscoveryService {
                   }
                 }
 
-                if (pageExhausted && mode === 'refresh') {
+                if (pageExhausted) {
+                  // Task 040: unified sweep — any complete lease-fenced exhausted sweep
+                  // may increment misses. Partial/failed/quota-blocked cycles never do.
                   await tx.discoveredLot.updateMany({
                     where: {
                       provider: params.platform,
