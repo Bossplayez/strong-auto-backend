@@ -22,6 +22,7 @@ model User {
   broadcastsCreated       Broadcast[]              @relation("BroadcastCreator")
   calculatorEstimates     CalculatorEstimate[]     @relation("EstimateUser")
   emailVerificationTokens EmailVerificationToken[]
+  auctionLotFavorites     AuctionLotFavorite[]     @relation("AuctionLotFavoriteUser")
   favorites               Favorite[]
   filesCreated            File[]                   @relation("FileCreator")
   importJobsCreated       ImportJob[]              @relation("ImportJobCreator")
@@ -507,6 +508,19 @@ model Favorite {
   @@map("favorites")
 }
 
+model AuctionLotFavorite {
+  userId           String         @map("user_id")
+  discoveredLotId  String         @map("discovered_lot_id")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  user             User           @relation("AuctionLotFavoriteUser", fields: [userId], references: [id], onDelete: Cascade)
+  discoveredLot    DiscoveredLot  @relation(fields: [discoveredLotId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, discoveredLotId])
+  @@index([userId])
+  @@index([discoveredLotId])
+  @@map("auction_lot_favorites")
+}
+
 model SavedCalculation {
   userId               String             @map("user_id")
   calculatorEstimateId String             @map("calculator_estimate_id")
@@ -862,6 +876,8 @@ model DiscoveredLot {
   @@index([nextRefreshAt])
   @@index([isBuyNow, auctionState])
   @@index([lifecycleState, freshnessState])
+  auctionLotFavorites  AuctionLotFavorite[]
+
   @@index([firstSeenAt], map: "discovered_lots_first_seen_idx")
   @@map("discovered_lots")
 }

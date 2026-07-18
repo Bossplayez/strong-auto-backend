@@ -38,6 +38,7 @@ describe('Task 033T Phase 15 — Automatic Scheduler', () => {
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       discoveryCheckpoint: {
         findUnique: jest.fn().mockResolvedValue(null),

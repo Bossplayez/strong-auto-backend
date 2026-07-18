@@ -20,7 +20,7 @@ describe('AuctionLotsController', () => {
       findOne: jest.fn(),
       getStats: jest.fn(),
     } as any;
-    controller = new AuctionLotsController(service);
+    controller = new AuctionLotsController(service, {} as any);
   });
 
   describe('route ordering — /stats must not be caught by /:provider/:externalLotId', () => {

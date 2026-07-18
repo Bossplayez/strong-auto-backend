@@ -67,6 +67,7 @@ function buildMocks(overrides: {
       findMany: jest.fn().mockResolvedValue([]),
       count: jest.fn().mockResolvedValue(totalDiscovered),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     discoveryCheckpoint: {
       findUnique: jest.fn().mockResolvedValue(

@@ -123,6 +123,9 @@ const iso = (value: Date | null | undefined) => value ? value.toISOString() : nu
 const nullable = (value: string | null | undefined) => value || null;
 
 export function eligibleLot(lot: Pick<DiscoveredLot, 'lifecycleState' | 'freshnessState' | 'availabilityConfirmed' | 'consecutiveMisses'>): boolean {
+  // Terminal lifecycles never appear in public catalog
+  if (['ENDED', 'SOLD', 'REMOVED'].includes(lot.lifecycleState)) return false;
+  if (lot.lifecycleState === 'NOT_READY') return false;
   return lot.availabilityConfirmed && lot.consecutiveMisses < 3 &&
     ['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState) && lot.freshnessState === 'FRESH';
 }

@@ -5,11 +5,13 @@
 // ─────────────────────────────────────────────────────────────
 
 import { Module } from '@nestjs/common';
-import { AuctionImportCompatibilityController, AuctionLotsController } from './auction-lots.controller';
+import { AuctionImportCompatibilityController, AuctionLotsController, AuctionLotFavoritesController } from './auction-lots.controller';
 import { AuctionLotsService } from './auction-lots.service';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  controllers: [AuctionLotsController, AuctionImportCompatibilityController],
+  imports: [PrismaModule],
+  controllers: [AuctionLotsController, AuctionImportCompatibilityController, AuctionLotFavoritesController],
   providers: [AuctionLotsService],
   exports: [AuctionLotsService],
 })

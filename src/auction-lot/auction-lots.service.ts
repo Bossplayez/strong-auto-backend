@@ -29,15 +29,39 @@ export class AuctionLotsService {
     const lot = await this.prisma.discoveredLot.findUnique({
       where: { provider_externalLotId: { provider, externalLotId: identity } },
     });
-    if (!lot || !eligibleLot(lot)) {
+    if (!lot) {
       throw new NotFoundException({ code: 'AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
     }
     return {
       ...auctionItem(lot), mediaUrls: lot.mediaUrls, odometerMi: lot.odometerMi,
       rawProviderState: lot.auctionState, rawProviderStatus: lot.state,
       availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt.toISOString() : null,
+      lastSoldPriceUsd: lot.lastSoldPriceUsd ? Number(lot.lastSoldPriceUsd) : null,
+      terminalAt: lot.terminalAt ? lot.terminalAt.toISOString() : null,
+      vin: lot.vin ?? null,
       contractVersion: CONTRACT_VERSION, asOf: new Date().toISOString(),
     };
+  }
+
+  async searchByVinOrLot(query: string) {
+    const q = query.trim();
+    if (!q || q.length > 128) return { contractVersion: CONTRACT_VERSION, items: [] as any[], total: 0, asOf: new Date().toISOString() };
+
+    const lots = await this.prisma.discoveredLot.findMany({
+      where: {
+        OR: [
+          { externalLotId: { equals: q, mode: 'insensitive' } },
+          { vin: { equals: q, mode: 'insensitive' } },
+          { slugVin: { equals: q, mode: 'insensitive' } },
+          { externalLotId: { contains: q, mode: 'insensitive' } },
+          { vin: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      take: 20,
+    });
+
+    const items = lots.map(lot => auctionItem(lot));
+    return { contractVersion: CONTRACT_VERSION, items, total: items.length, asOf: new Date().toISOString() };
   }
 
   async getStats() {

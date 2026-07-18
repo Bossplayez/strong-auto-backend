@@ -672,6 +672,29 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       this.lastDiscovery = { runAt: now, providers: discoveryResults };
     }
 
+    // ── Lifecycle reconciliation (Task 044) ──
+    // Transition active lots whose auction time has passed to ENDED
+    try {
+      const reconciledNow = new Date();
+      const result = await this.prisma.discoveredLot.updateMany({
+        where: {
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] as any },
+          auctionTime: { lt: reconciledNow },
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+        },
+        data: {
+          lifecycleState: 'ENDED' as any,
+          freshnessState: 'TERMINAL' as any,
+          terminalAt: reconciledNow,
+        },
+      });
+      if (result.count > 0) {
+        this.logger.log(`Lifecycle reconciliation: ${result.count} lots → ENDED`);
+      }
+    } catch (err) {
+      this.logger.error(`Lifecycle reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     // Update scheduler state — use resolved tick interval (not hot freshness interval)
     await this.prisma.schedulerState.update({
       where: { id: state.id },

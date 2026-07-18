@@ -266,6 +266,11 @@ export class DiscoveryService {
                     normalized.isBuyNow,
                     normalized.buyNowUsd,
                   );
+                  // Task 044: Provider-confirmed SOLD detection
+                  const isSold = (lifecycleState as any) === 'SOLD';
+                  const soldPriceUsd: number | null = isSold
+                    ? (normalized as any).lastSoldPriceUsd ?? null
+                    : null;
                   const freshnessState = computeFreshnessState(
                     observedAt,
                     null,
@@ -284,7 +289,7 @@ export class DiscoveryService {
                     },
                     select: { id: true },
                   });
-                  const data = {
+                  const data: Record<string, unknown> = {
                     ...normalized,
                     lifecycleState,
                     freshnessState,
@@ -293,6 +298,12 @@ export class DiscoveryService {
                     consecutiveMisses: 0,
                     availabilityConfirmed: true,
                   };
+                  // Task 044: SOLD fields
+                  if (isSold) {
+                    data.isBuyNow = false;
+                    data.terminalAt = observedAt;
+                    if (soldPriceUsd !== null) data.lastSoldPriceUsd = soldPriceUsd;
+                  }
 
                   if (existing) {
                     await tx.discoveredLot.update({ where: { id: existing.id }, data });
