@@ -225,11 +225,20 @@ export class AdminService {
 
   // ═══════════════ Vehicles ═══════════════
 
-  async listVehicles(page: number, pageSize: number) {
+  async listVehicles(
+    page: number,
+    pageSize: number,
+    filters?: { sourceRegion?: string; sourceType?: string; publicationStatus?: string },
+  ) {
     const skip = (page - 1) * pageSize;
+    const where: any = {};
+    if (filters?.sourceRegion) where.sourceRegion = filters.sourceRegion;
+    if (filters?.sourceType) where.sourceType = filters.sourceType;
+    if (filters?.publicationStatus) where.publicationStatus = filters.publicationStatus;
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.vehicle.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: pageSize,
@@ -242,17 +251,26 @@ export class AdminService {
           year: true,
           priceAmount: true,
           currency: true,
+          sourceType: true,
+          sourceRegion: true,
           publicationStatus: true,
           availabilityStatus: true,
+          vin: true,
+          odometerValue: true,
+          bodyType: true,
+          fuelType: true,
+          transmission: true,
+          locationCountry: true,
+          locationCity: true,
           createdAt: true,
+          updatedAt: true,
           media: {
-            where: { isPrimary: true },
-            take: 1,
-            select: { sourceUrl: true },
+            orderBy: { sortOrder: 'asc' },
+            select: { id: true, fileId: true, sourceUrl: true, isPrimary: true, sortOrder: true },
           },
         },
       }),
-      this.prisma.vehicle.count(),
+      this.prisma.vehicle.count({ where }),
     ]);
 
     return new PaginatedResponseDto(items, total, page, pageSize);
@@ -262,6 +280,69 @@ export class AdminService {
     const vehicle = await this.vehiclesService.create(data);
     await this.auditService.log(actorUserId, 'Vehicle', vehicle.id, 'CREATE');
     return vehicle;
+  }
+
+  async archiveVehicle(id: string, actorUserId: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) throw new NotFoundException(`Vehicle ${id} not found`);
+    const archived = await this.prisma.vehicle.update({
+      where: { id },
+      data: { publicationStatus: 'ARCHIVED', availabilityStatus: 'NOT_AVAILABLE' },
+    });
+    await this.auditService.log(actorUserId, 'Vehicle', id, 'ARCHIVE');
+    return archived;
+  }
+
+  async addVehicleMedia(vehicleId: string, fileId: string, isPrimary?: boolean) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+    if (!vehicle) throw new NotFoundException(`Vehicle ${vehicleId} not found`);
+
+    const file = await this.prisma.file.findUnique({ where: { id: fileId } });
+    if (!file) throw new NotFoundException(`File ${fileId} not found`);
+
+    const maxSort = await this.prisma.vehicleMedia.aggregate({
+      where: { vehicleId },
+      _max: { sortOrder: true },
+    });
+
+    const media = await this.prisma.vehicleMedia.create({
+      data: {
+        vehicleId,
+        fileId,
+        sourceUrl: null,
+        isPrimary: isPrimary ?? false,
+        sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+      },
+    });
+
+    // If primary, unset others
+    if (isPrimary) {
+      await this.prisma.vehicleMedia.updateMany({
+        where: { vehicleId, id: { not: media.id } },
+        data: { isPrimary: false },
+      });
+    }
+
+    return media;
+  }
+
+  async removeVehicleMedia(vehicleId: string, mediaId: string) {
+    await this.prisma.vehicleMedia.deleteMany({ where: { id: mediaId, vehicleId } });
+  }
+
+  async reorderVehicleMedia(vehicleId: string, mediaIds: string[]) {
+    await Promise.all(
+      mediaIds.map((mediaId, index) =>
+        this.prisma.vehicleMedia.updateMany({
+          where: { id: mediaId, vehicleId },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+    return this.prisma.vehicleMedia.findMany({
+      where: { vehicleId },
+      orderBy: { sortOrder: 'asc' },
+    });
   }
 
   async updateVehicle(id: string, data: any, actorUserId: string) {

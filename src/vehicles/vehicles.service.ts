@@ -58,9 +58,9 @@ export class VehiclesService {
         priceAmount: data.priceAmount,
         currency: data.currency ?? 'USD',
         sourceType: data.sourceType ?? 'INTERNAL',
-        sourceRegion: (data.sourceRegion as any) ?? 'USA',
-        publicationStatus: data.publicationStatus ?? 'PUBLISHED',
-        publishedAt: new Date(),
+        sourceRegion: (data.sourceRegion as any) ?? 'UKRAINE',
+        publicationStatus: data.publicationStatus ?? 'DRAFT',
+        publishedAt: data.publicationStatus === 'PUBLISHED' ? new Date() : null,
         availabilityStatus: 'AVAILABLE',
         vin: data.vin,
         odometerValue: data.odometerValue,
@@ -109,14 +109,23 @@ export class VehiclesService {
     const vehicle = await this.prisma.vehicle.update({
       where: { id },
       data: {
-        ...(data.title && { title: data.title }),
-        ...(data.priceAmount && { priceAmount: data.priceAmount }),
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.make !== undefined && { make: data.make }),
+        ...(data.model !== undefined && { model: data.model }),
+        ...(data.year !== undefined && { year: data.year }),
+        ...(data.priceAmount !== undefined && { priceAmount: data.priceAmount }),
+        ...(data.currency !== undefined && { currency: data.currency }),
+        ...(data.sourceRegion !== undefined && { sourceRegion: data.sourceRegion }),
+        ...(data.vin !== undefined && { vin: data.vin }),
         ...(data.odometerValue !== undefined && { odometerValue: data.odometerValue }),
-        ...(data.bodyType && { bodyType: data.bodyType }),
-        ...(data.fuelType && { fuelType: data.fuelType }),
-        ...(data.transmission && { transmission: data.transmission }),
-        ...(data.driveType && { driveType: data.driveType }),
+        ...(data.bodyType !== undefined && { bodyType: data.bodyType }),
+        ...(data.fuelType !== undefined && { fuelType: data.fuelType }),
+        ...(data.transmission !== undefined && { transmission: data.transmission }),
+        ...(data.driveType !== undefined && { driveType: data.driveType }),
         ...(data.damagePrimary !== undefined && { damagePrimary: data.damagePrimary }),
+        ...(data.locationCountry !== undefined && { locationCountry: data.locationCountry }),
+        ...(data.locationCity !== undefined && { locationCity: data.locationCity }),
+        ...(data.locationState !== undefined && { locationState: data.locationState }),
         ...(data.availabilityStatus && { availabilityStatus: data.availabilityStatus }),
         ...(data.isRecommended !== undefined && { isRecommended: data.isRecommended }),
         ...(data.seoTitle !== undefined && { seoTitle: data.seoTitle }),
@@ -146,6 +155,38 @@ export class VehiclesService {
       throw new ConflictException('Vehicle is already published');
     }
 
+    // Validate required fields
+    const missing: string[] = [];
+    if (!vehicle.title) missing.push('назва');
+    if (!vehicle.year) missing.push('рік');
+    if (!vehicle.priceAmount || vehicle.priceAmount.toString() === '0') missing.push('ціна');
+    if (!vehicle.locationCountry) missing.push('регіон');
+    if (!vehicle.locationCity) missing.push('місто');
+    if (vehicle.odometerValue === null || vehicle.odometerValue === undefined) missing.push('пробіг');
+    if (!vehicle.bodyType) missing.push('стан');
+    if (!vehicle.fuelType) missing.push('стан');
+    if (!vehicle.media || vehicle.media.length === 0) missing.push('фото');
+
+    if (missing.length > 0) {
+      throw new ConflictException(
+        `Не заповнені обов'язкові поля: ${missing.join(', ')}`,
+      );
+    }
+
+    // VIN format + duplicate check
+    if (vehicle.vin) {
+      const vin = vehicle.vin.trim().toUpperCase();
+      if (vin.length !== 17 || !/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
+        throw new ConflictException('VIN має некоректний формат (має бути 17 символів A-Z, 0-9, без I/O/Q)');
+      }
+      const duplicate = await this.prisma.vehicle.findFirst({
+        where: { vin: vin, id: { not: id }, sourceType: 'INTERNAL' },
+      });
+      if (duplicate) {
+        throw new ConflictException('Авто з таким VIN вже існує');
+      }
+    }
+
     return this.prisma.vehicle.update({
       where: { id },
       data: {
@@ -158,8 +199,8 @@ export class VehiclesService {
   async hide(id: string) {
     const vehicle = await this.findById(id);
 
-    if (vehicle.publicationStatus !== 'PUBLISHED') {
-      throw new ConflictException('Vehicle is not published');
+    if (vehicle.publicationStatus !== 'PUBLISHED' && vehicle.publicationStatus !== 'READY') {
+      throw new ConflictException('Only PUBLISHED or READY vehicles can be hidden');
     }
 
     return this.prisma.vehicle.update({

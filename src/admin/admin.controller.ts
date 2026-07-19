@@ -212,10 +212,15 @@ export class AdminController {
   // =====================
 
   @Get('vehicles')
-  @ApiOperation({ summary: 'List all vehicles (admin, all statuses)' })
+  @ApiOperation({ summary: 'List all vehicles (admin, all statuses, optional region filter)' })
   @ApiResponse({ status: 200, description: 'Paginated list of vehicles' })
-  async listVehicles(@Query() query: PaginationQueryDto): Promise<any> {
-    return this.adminService.listVehicles(query.page, query.pageSize);
+  async listVehicles(
+    @Query() query: PaginationQueryDto,
+    @Query('sourceRegion') sourceRegion?: string,
+    @Query('sourceType') sourceType?: string,
+    @Query('publicationStatus') publicationStatus?: string,
+  ): Promise<any> {
+    return this.adminService.listVehicles(query.page, query.pageSize, { sourceRegion, sourceType, publicationStatus });
   }
 
   @Post('vehicles')
@@ -274,6 +279,207 @@ export class AdminController {
     @CurrentUser('id') actorUserId: string,
   ): Promise<any> {
     return this.adminService.hideVehicle(id, actorUserId);
+  }
+
+  @Post('vehicles/:id/archive')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Archive a vehicle (admin)' })
+  @ApiResponse({ status: 200, description: 'Vehicle archived' })
+  @ApiResponse({ status: 404, description: 'Vehicle not found' })
+  async archiveVehicle(
+    @Param('id') id: string,
+    @CurrentUser('id') actorUserId: string,
+  ): Promise<any> {
+    return this.adminService.archiveVehicle(id, actorUserId);
+  }
+
+  @Post('vehicles/:id/media')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Add media to a vehicle (admin)' })
+  @ApiResponse({ status: 200, description: 'Media added' })
+  async addVehicleMedia(
+    @Param('id') id: string,
+    @Body() body: { fileId: string; isPrimary?: boolean },
+  ): Promise<any> {
+    return this.adminService.addVehicleMedia(id, body.fileId, body.isPrimary);
+  }
+
+  @Delete('vehicles/:id/media/:mediaId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove media from a vehicle (admin)' })
+  async removeVehicleMedia(
+    @Param('id') id: string,
+    @Param('mediaId') mediaId: string,
+  ): Promise<void> {
+    return this.adminService.removeVehicleMedia(id, mediaId);
+  }
+
+  @Patch('vehicles/:id/media/reorder')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reorder vehicle media (admin)' })
+  async reorderVehicleMedia(
+    @Param('id') id: string,
+    @Body() body: { mediaIds: string[] },
+  ): Promise<any> {
+    return this.adminService.reorderVehicleMedia(id, body.mediaIds);
+  }
+
+  // =====================
+  // Dashboard Summary (Task 045)
+  // =====================
+
+  @Get('dashboard-summary')
+  @ApiOperation({ summary: 'Operational dashboard counts (admin)' })
+  @ApiResponse({ status: 200, description: 'Aggregate counts for dashboard' })
+  async getDashboardSummary(): Promise<any> {
+    const [
+      discoveredTotal,
+      discoveredCopart,
+      discoveredIaai,
+      activePublicLots,
+      activeCopart,
+      activeIaai,
+      vehiclesUkraine,
+      vehiclesEurope,
+      vehiclesTotal,
+      vehiclesDraft,
+      vehiclesHidden,
+      vehiclesArchived,
+      vehiclesNoMedia,
+      vehiclesIncomplete,
+      schedulerRaw,
+    ] = await Promise.all([
+      this.prisma.discoveredLot.count(),
+      this.prisma.discoveredLot.count({ where: { provider: 'copart' } }),
+      this.prisma.discoveredLot.count({ where: { provider: 'iaai' } }),
+      // active public-eligible = lifecycle in UPCOMING/OPEN/LIVE + availabilityConfirmed + consecutiveMisses < 3 + freshnessState FRESH
+      this.prisma.discoveredLot.count({
+        where: {
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          availabilityConfirmed: true,
+          consecutiveMisses: { lt: 3 },
+          freshnessState: 'FRESH',
+        },
+      }),
+      this.prisma.discoveredLot.count({
+        where: {
+          provider: 'copart',
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          availabilityConfirmed: true,
+          consecutiveMisses: { lt: 3 },
+          freshnessState: 'FRESH',
+        },
+      }),
+      this.prisma.discoveredLot.count({
+        where: {
+          provider: 'iaai',
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          availabilityConfirmed: true,
+          consecutiveMisses: { lt: 3 },
+          freshnessState: 'FRESH',
+        },
+      }),
+      // Manual vehicles by region (INTERNAL source only)
+      this.prisma.vehicle.count({ where: { sourceType: 'INTERNAL', sourceRegion: 'UKRAINE' } }),
+      this.prisma.vehicle.count({ where: { sourceType: 'INTERNAL', sourceRegion: 'EUROPE' } }),
+      this.prisma.vehicle.count({ where: { sourceType: 'INTERNAL' } }),
+      this.prisma.vehicle.count({ where: { sourceType: 'INTERNAL', publicationStatus: 'DRAFT' } }),
+      this.prisma.vehicle.count({ where: { sourceType: 'INTERNAL', publicationStatus: 'HIDDEN' } }),
+      this.prisma.vehicle.count({ where: { sourceType: 'INTERNAL', publicationStatus: 'ARCHIVED' } }),
+      // Manual vehicles with no media
+      this.prisma.vehicle.count({
+        where: {
+          sourceType: 'INTERNAL',
+          media: { none: {} },
+        },
+      }),
+      // Manual PUBLISHED vehicles missing required fields for publication completeness
+      this.prisma.vehicle.count({
+        where: {
+          sourceType: 'INTERNAL',
+          publicationStatus: 'PUBLISHED',
+          OR: [
+            { title: { equals: '' } },
+            { year: { equals: null } },
+            { priceAmount: { equals: 0 } },
+            { odometerValue: { equals: null } },
+            { locationCountry: { equals: null } },
+            { locationCity: { equals: null } },
+            { fuelType: { equals: null } },
+            { bodyType: { equals: null } },
+          ],
+        },
+      }),
+      this.schedulerService.getStatus(),
+    ]);
+
+    // Build problem queue
+    const problems: Array<{ severity: 'critical' | 'warning' | 'info'; label: string; count: number; href: string }> = [];
+
+    // Scheduler health
+    if (schedulerRaw?.isPaused) {
+      problems.push({ severity: 'critical', label: 'Планувальник призупинено', count: 1, href: '/admin/auction' });
+    }
+
+    // Stale discovered lots (state DISCOVERED but no lifecycle progression)
+    const staleLots = await this.prisma.discoveredLot.count({
+      where: {
+        state: 'DISCOVERED',
+        lifecycleState: { in: ['NOT_READY'] },
+        lastSeenAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    });
+    if (staleLots > 0) {
+      problems.push({ severity: 'warning', label: 'Застарілі лоти (без оновлення >24год)', count: staleLots, href: '/admin/auction' });
+    }
+
+    // Manual drafts
+    if (vehiclesDraft > 0) {
+      problems.push({ severity: 'info', label: 'Чернетки ручних авто', count: vehiclesDraft, href: '/admin/vehicles' });
+    }
+
+    // Vehicles without photos
+    if (vehiclesNoMedia > 0) {
+      problems.push({ severity: 'warning', label: 'Ручні авто без фото', count: vehiclesNoMedia, href: '/admin/vehicles' });
+    }
+
+    // Incomplete published vehicles
+    if (vehiclesIncomplete > 0) {
+      problems.push({ severity: 'warning', label: 'Опубліковані авто з неповними даними', count: vehiclesIncomplete, href: '/admin/vehicles' });
+    }
+
+    // Hidden vehicles
+    if (vehiclesHidden > 0) {
+      problems.push({ severity: 'info', label: 'Приховані авто', count: vehiclesHidden, href: '/admin/vehicles' });
+    }
+
+    return {
+      auctions: {
+        totalDiscovered: discoveredTotal,
+        activePublic: activePublicLots,
+        copart: { discovered: discoveredCopart, active: activeCopart },
+        iaai: { discovered: discoveredIaai, active: activeIaai },
+      },
+      manualVehicles: {
+        ukraine: vehiclesUkraine,
+        europe: vehiclesEurope,
+        total: vehiclesTotal,
+        draft: vehiclesDraft,
+        hidden: vehiclesHidden,
+        archived: vehiclesArchived,
+        withoutPhotos: vehiclesNoMedia,
+        incomplete: vehiclesIncomplete,
+      },
+      scheduler: {
+        paused: Boolean(schedulerRaw?.isPaused),
+        nextRunAt: schedulerRaw?.nextRunAt ? new Date(schedulerRaw.nextRunAt).toISOString() : null,
+      },
+      problems: problems.sort((a, b) => {
+        const order = { critical: 0, warning: 1, info: 2 };
+        return order[a.severity] - order[b.severity];
+      }),
+      asOf: new Date().toISOString(),
+    };
   }
 
   // =====================
