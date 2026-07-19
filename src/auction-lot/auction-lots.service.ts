@@ -6,6 +6,7 @@ import {
   auctionItem, CONTRACT_VERSION, eligibleLot, filterItems, page,
   parseInventoryQuery, PROVIDERS, sortItems, validationError,
 } from './inventory-projection';
+import { evaluateCatalogQuality, publicCatalogWhere } from './catalog-quality';
 
 @Injectable()
 export class AuctionLotsService {
@@ -13,12 +14,58 @@ export class AuctionLotsService {
 
   async findAll(raw: Record<string, unknown>) {
     const query = parseInventoryQuery(raw, 'usa');
-    const lots = await this.prisma.discoveredLot.findMany();
-    const items = lots.filter(eligibleLot).map(auctionItem);
-    const newestAt = new Map(lots.map((lot) => [`auctionLot:${lot.provider}:${lot.externalLotId}`, lot.firstSeenAt]));
-    const filtered = sortItems(filterItems(items, query), query.sort, newestAt);
-    const offset = (query.page - 1) * query.pageSize;
-    return page(filtered.slice(offset, offset + query.pageSize), filtered.length, query.page, query.pageSize);
+
+    // Use Prisma-side filtering for performance (no unbounded findMany)
+    const where = publicCatalogWhere();
+    if (query.provider) where.provider = query.provider;
+    if (query.make) where.make = { equals: query.make, mode: 'insensitive' };
+    if (query.model) where.model = { contains: query.model, mode: 'insensitive' };
+    if (query.bodyType) where.bodyStyle = { equals: query.bodyType, mode: 'insensitive' };
+    if (query.fuelType) where.fuelType = { equals: query.fuelType, mode: 'insensitive' };
+    if (query.transmission) where.transmission = { equals: query.transmission, mode: 'insensitive' };
+    if (query.driveType) where.driveType = { equals: query.driveType, mode: 'insensitive' };
+    if (query.locationState) where.locationState = { equals: query.locationState, mode: 'insensitive' };
+    if (query.lifecycle) where.lifecycleState = query.lifecycle;
+    if (query.q) {
+      where.OR = [
+        { title: { contains: query.q, mode: 'insensitive' } },
+        { make: { contains: query.q, mode: 'insensitive' } },
+        { model: { contains: query.q, mode: 'insensitive' } },
+        { externalLotId: { contains: query.q, mode: 'insensitive' } },
+      ];
+    }
+    if (query.yearFrom ?? query.yearTo) {
+      where.year = { ...(where.year as object), ...(query.yearFrom && { gte: query.yearFrom }), ...(query.yearTo && { lte: query.yearTo }) };
+    }
+    if (query.buyNow !== undefined) where.isBuyNow = query.buyNow;
+
+    const orderBy: Prisma.DiscoveredLotOrderByWithRelationInput =
+      query.sort.startsWith('year') ? { year: query.sort.endsWith('_desc') ? 'desc' : 'asc' } :
+      query.sort.startsWith('price') ? { currentBidUsd: query.sort.endsWith('_desc') ? 'desc' : 'asc' } :
+      query.sort.startsWith('mileage') ? { odometerKm: query.sort.endsWith('_desc') ? 'desc' : 'asc' } :
+      query.sort.startsWith('auction') ? { auctionTime: query.sort.endsWith('_desc') ? 'desc' : 'asc' } :
+      { firstSeenAt: 'desc' };
+
+    const skip = (query.page - 1) * query.pageSize;
+
+    const [lots, total] = await this.prisma.$transaction([
+      this.prisma.discoveredLot.findMany({
+        where, orderBy, skip, take: query.pageSize,
+        select: {
+          id: true, provider: true, externalLotId: true, title: true, make: true, model: true, year: true,
+          bodyStyle: true, fuelType: true, transmission: true, driveType: true,
+          locationState: true, locationDisplay: true,
+          odometerKm: true, odometerMi: true,
+          buyNowUsd: true, currentBidUsd: true, isBuyNow: true,
+          mediaUrls: true, auctionTime: true, auctionTimezoneOffset: true,
+          lifecycleState: true, freshnessState: true, vehicleId: true, firstSeenAt: true,
+        },
+      }),
+      this.prisma.discoveredLot.count({ where }),
+    ]);
+
+    const items = lots.map((lot) => auctionItem(lot as any));
+    return page(items, total, query.page, query.pageSize);
   }
 
   async findOne(provider: string, externalLotId: string) {
@@ -32,13 +79,51 @@ export class AuctionLotsService {
     if (!lot) {
       throw new NotFoundException({ code: 'AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
     }
+
+    // Quality evaluation for public visibility
+    const quality = evaluateCatalogQuality(lot);
+    if (!quality.include) {
+      throw new NotFoundException({
+        code: 'AUCTION_LOT_NOT_AVAILABLE',
+        message: 'Цей лот недоступний у публічному каталозі.',
+      });
+    }
+
     return {
-      ...auctionItem(lot), mediaUrls: lot.mediaUrls, odometerMi: lot.odometerMi,
-      rawProviderState: lot.auctionState, rawProviderStatus: lot.state,
+      ...auctionItem(lot),
+      mediaUrls: lot.mediaUrls,
+      odometerMi: lot.odometerMi,
+      // Vehicle characteristics
+      engine: lot.engine ?? null,
+      exteriorColor: lot.exteriorColor ?? null,
+      airbags: lot.airbags ?? null,
+      restraintSystem: lot.restraintSystem ?? null,
+      // Condition
+      primaryDamage: lot.primaryDamage ?? null,
+      secondaryDamage: lot.secondaryDamage ?? null,
+      loss: lot.loss ?? null,
+      runCondition: lot.runCondition ?? null,
+      hasKey: lot.hasKey,
+      // Sale document
+      saleDocumentName: lot.saleDocumentName ?? null,
+      saleDocumentType: lot.saleDocumentType ?? null,
+      // Media capabilities
+      has360: lot.has360,
+      hasVideo: lot.hasVideo,
+      // Location detail (no seller PII, no facility internal IDs)
+      locationCity: lot.locationDisplay ?? null,
+      // Auction formatting
+      auctionFormatted: lot.auctionFormatted ?? null,
+      // Provider raw state (for debugging, not seller data)
+      rawProviderState: lot.auctionState,
+      rawProviderStatus: lot.state,
       availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt.toISOString() : null,
       lastSoldPriceUsd: lot.lastSoldPriceUsd ? Number(lot.lastSoldPriceUsd) : null,
       terminalAt: lot.terminalAt ? lot.terminalAt.toISOString() : null,
       vin: lot.vin ?? null,
+      // Quality outcome
+      qualityInclude: quality.include,
+      qualityReasonCode: quality.reasonCode,
       contractVersion: CONTRACT_VERSION, asOf: new Date().toISOString(),
     };
   }
@@ -97,16 +182,29 @@ export class AuctionLotsService {
     const lot = await this.prisma.discoveredLot.findUnique({ where: { provider_externalLotId: identity } });
     if (!lot) throw new NotFoundException({ code: 'ADMIN_AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
     const linked = await this.linkedVehicles(lot.vehicleId ? [lot.vehicleId] : []);
+    const quality = evaluateCatalogQuality(lot);
     return {
       contractVersion: CONTRACT_VERSION,
       item: {
         ...this.adminItem(lot, linked.get(lot.vehicleId ?? '')),
         vin: lot.vin ?? null, bodyType: lot.bodyStyle ?? null, fuelType: lot.fuelType ?? null,
         transmission: lot.transmission ?? null, driveType: lot.driveType ?? null,
-        damagePrimary: lot.primaryDamage ?? null, locationCountry: null,
-        locationCity: lot.locationDisplay ?? null, odometerMi: lot.odometerMi ?? null, mediaUrls: lot.mediaUrls,
+        damagePrimary: lot.primaryDamage ?? null, damageSecondary: lot.secondaryDamage ?? null,
+        loss: lot.loss ?? null, runCondition: lot.runCondition ?? null, hasKey: lot.hasKey,
+        engine: lot.engine ?? null, exteriorColor: lot.exteriorColor ?? null,
+        airbags: lot.airbags ?? null, restraintSystem: lot.restraintSystem ?? null,
+        saleDocumentName: lot.saleDocumentName ?? null, saleDocumentType: lot.saleDocumentType ?? null,
+        has360: lot.has360, hasVideo: lot.hasVideo,
+        locationCountry: null,
+        locationCity: lot.locationDisplay ?? null,
+        facilityName: lot.facilityOfficeName ?? null,
+        facilityZip: lot.facilityZip ?? null,
+        odometerMi: lot.odometerMi ?? null, mediaUrls: lot.mediaUrls,
         rawProviderState: lot.auctionState ?? null, rawProviderStatus: lot.state,
         lastObservedCycleId: null,
+        qualityInclude: quality.include,
+        qualityReasonCode: quality.reasonCode,
+        qualityReason: quality.reason,
       },
       asOf: new Date().toISOString(),
     };
@@ -142,6 +240,22 @@ export class AuctionLotsService {
       };
       const importedIds = new Set(lots.map((lot) => lot.vehicleId).filter((id): id is string => Boolean(id)));
       const imported = vehicles.filter((vehicle) => importedIds.has(vehicle.id));
+
+      // Coverage diagnostics: how many active lots have state/city
+      const activeLots = lots.filter((lot) => {
+        const ended = ['ENDED', 'SOLD', 'REMOVED'].includes(lot.lifecycleState) ||
+          ['SOLD', 'REMOVED', 'UNAVAILABLE'].includes(lot.state);
+        return !ended;
+      });
+      const coverage = (provider?: string) => {
+        const selected = provider ? activeLots.filter((lot) => lot.provider === provider) : activeLots;
+        return {
+          withState: selected.filter((lot) => lot.locationState).length,
+          withCity: selected.filter((lot) => lot.locationDisplay).length,
+          total: selected.length,
+        };
+      };
+
       return {
         contractVersion: CONTRACT_VERSION,
         ...partition(),
@@ -150,6 +264,7 @@ export class AuctionLotsService {
         publishedVehicles: imported.filter((vehicle) => vehicle.publicationStatus === 'PUBLISHED').length,
         otherImportedVehicles: imported.filter((vehicle) => !['DRAFT', 'PUBLISHED'].includes(vehicle.publicationStatus)).length,
         byProvider: { copart: partition('copart'), iaai: partition('iaai') },
+        coverage: { copart: coverage('copart'), iaai: coverage('iaai'), all: coverage() },
         asOf: asOf.toISOString(),
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

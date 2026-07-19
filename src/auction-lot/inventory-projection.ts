@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import type { DiscoveredLot, Vehicle } from '@prisma/client';
+import { evaluateCatalogQuality } from './catalog-quality';
 
 export const CONTRACT_VERSION = 'unified-auction-rc-v1' as const;
 export const PROVIDERS = ['copart', 'iaai'] as const;
@@ -122,12 +123,15 @@ export const positive = (value: unknown): number | null => {
 const iso = (value: Date | null | undefined) => value ? value.toISOString() : null;
 const nullable = (value: string | null | undefined) => value || null;
 
-export function eligibleLot(lot: Pick<DiscoveredLot, 'lifecycleState' | 'freshnessState' | 'availabilityConfirmed' | 'consecutiveMisses'>): boolean {
+export function eligibleLot(lot: Pick<DiscoveredLot, 'lifecycleState' | 'freshnessState' | 'availabilityConfirmed' | 'consecutiveMisses' | 'year' | 'bodyStyle' | 'title' | 'primaryDamage' | 'secondaryDamage' | 'loss' | 'saleDocumentName' | 'saleDocumentType' | 'make' | 'model'>): boolean {
   // Terminal lifecycles never appear in public catalog
   if (['ENDED', 'SOLD', 'REMOVED'].includes(lot.lifecycleState)) return false;
   if (lot.lifecycleState === 'NOT_READY') return false;
-  return lot.availabilityConfirmed && lot.consecutiveMisses < 3 &&
-    ['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState) && lot.freshnessState === 'FRESH';
+  if (!lot.availabilityConfirmed || lot.consecutiveMisses >= 3) return false;
+  if (!['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState)) return false;
+  if (lot.freshnessState !== 'FRESH') return false;
+  // Quality gate — deterministic, computed from provider fields
+  return evaluateCatalogQuality(lot).include;
 }
 
 export function timezoneOffset(minutes: number | null): string | null {
@@ -154,7 +158,8 @@ export function auctionItem(lot: DiscoveredLot) {
     key: `auctionLot:${lot.provider}:${lot.externalLotId}`, kind: 'auctionLot' as const, source: lot.provider as Provider,
     title: lot.title, make: nullable(lot.make), model: nullable(lot.model), year: lot.year,
     bodyType: nullable(lot.bodyStyle), fuelType: nullable(lot.fuelType), transmission: nullable(lot.transmission), driveType: nullable(lot.driveType),
-    locationState: nullable(lot.locationState), odometerKm: lot.odometerKm ?? (lot.odometerMi === null ? null : Math.round(lot.odometerMi * 1.609344)),
+    locationState: nullable(lot.locationState), locationCity: nullable(lot.locationDisplay),
+    odometerKm: lot.odometerKm ?? (lot.odometerMi === null ? null : Math.round(lot.odometerMi * 1.609344)),
     thumbnailUrl: lot.mediaUrls[0] ?? null, mediaCount: lot.mediaUrls.length,
     price: priceFact(lot), provider: lot.provider as Provider, externalLotId: lot.externalLotId, importedVehicleId: lot.vehicleId ?? null,
     lifecycle: lot.lifecycleState, freshness: lot.freshnessState === 'TERMINAL' ? 'DEFERRED' as const : lot.freshnessState,

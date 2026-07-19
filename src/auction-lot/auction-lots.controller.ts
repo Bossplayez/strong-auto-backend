@@ -82,6 +82,25 @@ export class AuctionLotsController {
     return this.auctionLotsService.getStats();
   }
 
+  @Get('admin/metrics')
+  @ApiOperation({ summary: 'Admin: auction lot metrics with coverage diagnostics' })
+  @ApiResponse({ status: 200, description: 'Detailed metrics including quality coverage' })
+  async adminMetrics() {
+    return this.auctionLotsService.adminMetrics();
+  }
+
+  @Get('admin/lot/:provider/:externalLotId')
+  @ApiOperation({ summary: 'Admin: full lot detail with quality outcome' })
+  @ApiParam({ name: 'provider', description: 'Provider (copart, iaai)' })
+  @ApiParam({ name: 'externalLotId', description: 'External lot number' })
+  @ApiResponse({ status: 200, description: 'Full lot detail with quality reason codes' })
+  async adminLotDetail(
+    @Param('provider') provider: string,
+    @Param('externalLotId') externalLotId: string,
+  ) {
+    return this.auctionLotsService.adminLotDetail(provider, externalLotId);
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Search auction lots by VIN or lot number' })
   @ApiResponse({ status: 200, description: 'Search results including terminal lots' })

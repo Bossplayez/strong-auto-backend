@@ -131,6 +131,10 @@ export function normalizeDiscoveredLot(
   const saleDoc = isRecord(raw.sale_document) ? raw.sale_document : {};
   const odometer = isRecord(raw.odometer) ? raw.odometer : {};
 
+  // IAAI alternative paths — some providers nest location under different keys
+  const yard = isRecord(raw.yard) ? raw.yard : {};
+  const branch = isRecord(raw.branch) ? raw.branch : {};
+
   // Map real auction timestamp from provider (not discovery time)
   // Provider field: auction.auction_at (ISO 8601 with timezone offset)
   // Also extract timezone offset from the same ISO string
@@ -172,7 +176,11 @@ export function normalizeDiscoveredLot(
     primaryDamage: condition.primary_damage ? String(condition.primary_damage) : null,
     secondaryDamage: condition.secondary_damage ? String(condition.secondary_damage) : null,
     loss: condition.loss ? String(condition.loss) : null,
-    runCondition: condition.run_condition ? String(condition.run_condition) : null,
+    runCondition: condition.run_condition
+      ? typeof condition.run_condition === 'object'
+        ? JSON.stringify(condition.run_condition)
+        : String(condition.run_condition)
+      : null,
     hasKey: toBool(condition.has_key),
     bodyStyle: specs.body_style ? String(specs.body_style) : null,
     engine: specs.engine ? (typeof specs.engine === 'object' ? JSON.stringify(specs.engine) : String(specs.engine)) : null,
@@ -182,12 +190,25 @@ export function normalizeDiscoveredLot(
     transmission: specs.transmission ? String(specs.transmission) : null,
     airbags: specs.airbags ? String(specs.airbags) : null,
     restraintSystem: specs.restraint_system ? String(specs.restraint_system) : null,
-    locationDisplay: location.display ? String(location.display) : null,
-    locationState: location.state ? String(location.state) : null,
+    locationDisplay: location.display ? String(location.display) :
+      (location.city ? String(location.city) : null) ??
+      (yard.name ? String(yard.name) : null) ??
+      (branch.name ? String(branch.name) : null),
+    locationState: location.state ? String(location.state) :
+      (location.state_abbreviation ? String(location.state_abbreviation) : null) ??
+      (facility.state ? String(facility.state) : null) ??
+      (yard.state ? String(yard.state) : null) ??
+      (branch.state ? String(branch.state) : null),
     facilityId: facility.id ? String(facility.id) : null,
-    facilityOfficeName: facility.office_name ? String(facility.office_name) : null,
-    facilityState: facility.state ? String(facility.state) : null,
-    facilityZip: facility.zip ? String(facility.zip) : null,
+    facilityOfficeName: facility.office_name ? String(facility.office_name) :
+      (yard.name ? String(yard.name) : null) ??
+      (branch.name ? String(branch.name) : null),
+    facilityState: facility.state ? String(facility.state) :
+      (yard.state ? String(yard.state) : null) ??
+      (branch.state ? String(branch.state) : null),
+    facilityZip: facility.zip ? String(facility.zip) :
+      (yard.zip ? String(yard.zip) : null) ??
+      (branch.zip ? String(branch.zip) : null),
     has360: toBool(media.has_360) ?? false,
     hasVideo: toBool(media.has_video) ?? false,
     thumbsCount: toNumber(media.thumbs_count) ?? 0,

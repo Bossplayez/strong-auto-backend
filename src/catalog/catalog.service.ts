@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { VehicleFilterDto } from './dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { auctionItem, eligibleLot, filterItems, page, parseInventoryQuery, sortItems, vehicleItem } from '../auction-lot/inventory-projection';
+import { publicCatalogWhere, MIN_CATALOG_YEAR } from '../auction-lot/catalog-quality';
 
 @Injectable()
 export class CatalogService {
@@ -100,6 +101,13 @@ export class CatalogService {
 
   async inventory(query: Record<string, unknown>) {
     const parsed = parseInventoryQuery(query);
+
+    // ── USA view: Prisma-side filtering + pagination ──
+    if (parsed.view === 'usa') {
+      return this.usaInventory(parsed);
+    }
+
+    // ── Mixed / curated view: legacy in-memory projection ──
     const [lots, vehicles] = await Promise.all([
       this.prisma.discoveredLot.findMany(),
       this.prisma.vehicle.findMany({ where: { publicationStatus: 'PUBLISHED' }, include: { media: { orderBy: { sortOrder: 'asc' }, select: { sourceUrl: true } } } }),
@@ -116,6 +124,13 @@ export class CatalogService {
 
   async inventoryFilterOptions(query: Record<string, unknown>) {
     const parsed = parseInventoryQuery(query, undefined, false);
+
+    // ── USA view: Prisma-side filtering ──
+    if (parsed.view === 'usa') {
+      return this.usaFilterOptions(parsed);
+    }
+
+    // ── Mixed / curated view ──
     const [lots, vehicles] = await Promise.all([
       this.prisma.discoveredLot.findMany(),
       this.prisma.vehicle.findMany({ where: { publicationStatus: 'PUBLISHED' }, include: { media: { orderBy: { sortOrder: 'asc' }, select: { sourceUrl: true } } } }),
@@ -241,6 +256,149 @@ export class CatalogService {
         min: aggregates._min.odometerValue ?? 0,
         max: aggregates._max.odometerValue ?? 0,
       },
+    };
+  }
+
+  // ── USA Auction Inventory (Prisma-side, no unbounded findMany) ──
+
+  /**
+   * Build a Prisma WHERE from parsed inventory filters for USA view.
+   */
+  private usaWhere(parsed: ReturnType<typeof parseInventoryQuery>): Prisma.DiscoveredLotWhereInput {
+    const where = publicCatalogWhere();
+    if (parsed.provider) where.provider = parsed.provider;
+    if (parsed.make) where.make = { equals: parsed.make, mode: 'insensitive' };
+    if (parsed.model) where.model = { contains: parsed.model, mode: 'insensitive' };
+    if (parsed.bodyType) where.bodyStyle = { equals: parsed.bodyType, mode: 'insensitive' };
+    if (parsed.fuelType) where.fuelType = { equals: parsed.fuelType, mode: 'insensitive' };
+    if (parsed.transmission) where.transmission = { equals: parsed.transmission, mode: 'insensitive' };
+    if (parsed.driveType) where.driveType = { equals: parsed.driveType, mode: 'insensitive' };
+    if (parsed.locationState) where.locationState = { equals: parsed.locationState, mode: 'insensitive' };
+    if (parsed.lifecycle) where.lifecycleState = parsed.lifecycle;
+    if (parsed.q) {
+      where.OR = [
+        { title: { contains: parsed.q, mode: 'insensitive' } },
+        { make: { contains: parsed.q, mode: 'insensitive' } },
+        { model: { contains: parsed.q, mode: 'insensitive' } },
+        { externalLotId: { contains: parsed.q, mode: 'insensitive' } },
+      ];
+    }
+    if (parsed.yearFrom ?? parsed.yearTo) {
+      where.year = { gte: parsed.yearFrom ?? MIN_CATALOG_YEAR, ...(parsed.yearTo && { lte: parsed.yearTo }) };
+    }
+    if (parsed.priceFrom ?? parsed.priceTo) {
+      where.OR = [
+        ...(parsed.priceFrom ? [{ buyNowUsd: { gte: parsed.priceFrom } }, { currentBidUsd: { gte: parsed.priceFrom } }] : []),
+        ...(parsed.priceTo ? [{ buyNowUsd: { lte: parsed.priceTo } }, { currentBidUsd: { lte: parsed.priceTo } }] : []),
+      ];
+    }
+    if (parsed.buyNow !== undefined) {
+      where.isBuyNow = parsed.buyNow;
+    }
+    return where;
+  }
+
+  /** Prisma orderBy from sort param. */
+  private usaOrderBy(sort: string): Prisma.DiscoveredLotOrderByWithRelationInput {
+    if (sort.startsWith('year')) return { year: sort.endsWith('_desc') ? 'desc' : 'asc' };
+    if (sort.startsWith('price')) return { currentBidUsd: sort.endsWith('_desc') ? 'desc' : 'asc' };
+    if (sort.startsWith('mileage')) return { odometerKm: sort.endsWith('_desc') ? 'desc' : 'asc' };
+    if (sort.startsWith('auction')) return { auctionTime: sort.endsWith('_desc') ? 'desc' : 'asc' };
+    return { firstSeenAt: 'desc' };
+  }
+
+  /** Narrow select for catalog list items. */
+  private usaSelect(): Prisma.DiscoveredLotSelect {
+    return {
+      id: true, provider: true, externalLotId: true, title: true, make: true, model: true, year: true,
+      bodyStyle: true, fuelType: true, transmission: true, driveType: true,
+      locationState: true, locationDisplay: true,
+      odometerKm: true, odometerMi: true,
+      buyNowUsd: true, currentBidUsd: true, isBuyNow: true,
+      mediaUrls: true, auctionTime: true, auctionTimezoneOffset: true,
+      lifecycleState: true, freshnessState: true,
+      vehicleId: true, firstSeenAt: true,
+    };
+  }
+
+  async usaInventory(parsed: ReturnType<typeof parseInventoryQuery>) {
+    const where = this.usaWhere(parsed);
+    const orderBy = this.usaOrderBy(parsed.sort);
+    const skip = (parsed.page - 1) * parsed.pageSize;
+    const take = parsed.pageSize;
+
+    const [lots, total] = await this.prisma.$transaction([
+      this.prisma.discoveredLot.findMany({ where, orderBy, skip, take, select: this.usaSelect() }),
+      this.prisma.discoveredLot.count({ where }),
+    ]);
+
+    const items = lots.map((lot) => auctionItem(lot as any));
+    return page(items, total, parsed.page, parsed.pageSize);
+  }
+
+  async usaFilterOptions(parsed: ReturnType<typeof parseInventoryQuery>) {
+    const where = publicCatalogWhere();
+    if (parsed.provider) where.provider = parsed.provider;
+
+    // Fetch only the fields we need for filter options — no auctionItem projection needed
+    const lots = await this.prisma.discoveredLot.findMany({
+      where,
+      select: {
+        make: true, model: true, bodyStyle: true, fuelType: true,
+        transmission: true, driveType: true, provider: true,
+        locationState: true, lifecycleState: true,
+        year: true, buyNowUsd: true, currentBidUsd: true, odometerKm: true,
+        isBuyNow: true,
+      },
+    });
+
+    // Compute filter option counts directly from raw lots
+    const countField = (field: keyof typeof lots[0]) => {
+      const counts = new Map<string, number>();
+      for (const lot of lots) {
+        const value = lot[field];
+        if (value !== null && value !== undefined && String(value)) {
+          counts.set(String(value), (counts.get(String(value)) ?? 0) + 1);
+        }
+      }
+      return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([value, count]) => ({ value, label: value, count }));
+    };
+
+    const options = {
+      makes: countField('make'),
+      models: countField('model'),
+      bodyTypes: countField('bodyStyle'),
+      fuelTypes: countField('fuelType'),
+      transmissions: countField('transmission'),
+      driveTypes: countField('driveType'),
+      sources: [...new Set(lots.map(l => l.provider))].sort().map(v => ({ value: v, label: v, count: lots.filter(l => l.provider === v).length })),
+      providers: countField('provider'),
+      locationStates: countField('locationState'),
+      lifecycles: countField('lifecycleState'),
+    };
+
+    // Compute ranges
+    const years = lots.map(l => l.year).filter((y): y is number => y !== null && y > 0);
+    const bids = lots.map(l => l.currentBidUsd ? Number(l.currentBidUsd) : null).filter((p): p is number => p !== null && p > 0);
+    const buyNows = lots.map(l => l.buyNowUsd ? Number(l.buyNowUsd) : null).filter((p): p is number => p !== null && p > 0);
+    const allPrices = [...bids, ...buyNows];
+    const mileages = lots.map(l => l.odometerKm).filter((m): m is number => m !== null && m > 0);
+
+    return {
+      contractVersion: 'unified-auction-rc-v1',
+      view: parsed.view as 'usa',
+      options,
+      ranges: {
+        year: years.length ? { min: Math.min(...years), max: Math.max(...years) } : null,
+        priceUsd: allPrices.length ? { min: Math.min(...allPrices), max: Math.max(...allPrices) } : null,
+        mileageKm: mileages.length ? { min: Math.min(...mileages), max: Math.max(...mileages) } : null,
+      },
+      applicability: {
+        provider: { enabled: true, reason: null },
+        lifecycle: { enabled: true, reason: null },
+        buyNow: { enabled: true, reason: null },
+      },
+      asOf: new Date().toISOString(),
     };
   }
 

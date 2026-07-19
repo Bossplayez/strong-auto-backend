@@ -15,6 +15,16 @@ describe('Admin/Public visibility consistency (Task 042)', () => {
     freshnessState: 'FRESH' as const,
     availabilityConfirmed: true,
     consecutiveMisses: 0,
+    year: 2020,
+    bodyStyle: 'SUV',
+    title: '2020 TOYOTA RAV4',
+    make: 'TOYOTA',
+    model: 'RAV4',
+    primaryDamage: 'FRONT END',
+    secondaryDamage: null,
+    loss: null,
+    saleDocumentName: null,
+    saleDocumentType: null,
   };
 
   it('V1. valid lot is eligible', () => {
