@@ -23,6 +23,7 @@ import { AuditModule } from './audit/audit.module';
 import { SettingsModule } from './settings/settings.module';
 import { HealthModule } from './health/health.module';
 import { AuctionLotsModule } from './auction-lot/auction-lots.module';
+import { HotOffersModule } from './hot-offers/hot-offers.module';
 import { validateEnv } from './config/env.validation';
 
 @Module({
@@ -75,6 +76,7 @@ import { validateEnv } from './config/env.validation';
     AuditModule,
     HealthModule,
     AuctionLotsModule,
+    HotOffersModule,
   ],
   controllers: [AppController],
   providers: [
