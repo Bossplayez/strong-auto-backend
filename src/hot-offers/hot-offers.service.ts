@@ -454,7 +454,7 @@ export class HotOffersService {
         labelEn: TIER_LABELS[tierKey].en,
         windowStart: this.windowStart(tierKey, now).toISOString(),
         windowEnd: this.windowEnd(tierKey, now).toISOString(),
-        items: items.slice(0, MAX_ITEMS),
+        items: enforceProviderCap(items).slice(0, MAX_ITEMS),
       };
     }
 
@@ -924,6 +924,35 @@ export class HotOffersService {
       ? new Date(now.getTime() + URGENT_WINDOW_HOURS * 60 * 60 * 1000)
       : new Date(now.getTime() + WEEK_WINDOW_HOURS * 60 * 60 * 1000);
   }
+}
+
+// ── Task 050: Provider cap enforcement for snapshot path ──
+// Ensures no provider occupies more than MAX_SAME_PROVIDER of MAX_ITEMS slots.
+// Applied as a post-processing step on the final item list, regardless of
+// whether items came from a fresh build or a cached snapshot.
+function enforceProviderCap(items: PublicHotOfferItem[]): PublicHotOfferItem[] {
+  if (items.length <= MAX_SAME_PROVIDER) return items;
+  const result: PublicHotOfferItem[] = [];
+  const counts = new Map<string, number>();
+  const deferred: PublicHotOfferItem[] = [];
+
+  for (const item of items) {
+    const p = (item.provider || '').toLowerCase();
+    if ((counts.get(p) ?? 0) >= MAX_SAME_PROVIDER) {
+      deferred.push(item);
+      continue;
+    }
+    result.push(item);
+    counts.set(p, (counts.get(p) ?? 0) + 1);
+  }
+
+  // If there are remaining slots, fill from deferred items
+  for (const item of deferred) {
+    if (result.length >= MAX_ITEMS) break;
+    result.push(item);
+  }
+
+  return result;
 }
 
 // ── Validation ─────────────────────────────────────────────────
