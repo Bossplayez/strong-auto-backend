@@ -392,17 +392,6 @@ export class HotOffersService {
 
     const snapshotFresh = snapshot && new Date(snapshot.validUntil).getTime() > now.getTime();
 
-    if (snapshot) {
-      console.debug('[HotOffers] Snapshot loaded:', {
-        gen: snapshot.generatedAt,
-        valid: snapshot.validUntil,
-        fresh: snapshotFresh,
-        now: now.toISOString(),
-      });
-    } else {
-      console.debug('[HotOffers] No snapshot in DB');
-    }
-
     // Build tiers (always needed for re-validation)
     const tiers = await this.buildTiers(policy, overrides, now);
 
@@ -437,12 +426,6 @@ export class HotOffersService {
             verified.push(publicItem);
             usedKeys.add(`${candidate.provider}:${candidate.externalLotId}`);
           } else {
-            console.debug('[HotOffers] Pruned from snapshot:', {
-              tier: tierKey,
-              lot: `${snapItem.provider}:${snapItem.externalLotId}`,
-              reason: !candidate ? 'not_in_candidates' : 'ineligible',
-              ...(candidate ? { lifecycle: candidate.lifecycle, auctionAt: candidate.auctionAt, qualityInclude: candidate.qualityInclude } : {}),
-            });
             needsSave = true; // a lot was removed → snapshot must be regenerated
           }
         }
