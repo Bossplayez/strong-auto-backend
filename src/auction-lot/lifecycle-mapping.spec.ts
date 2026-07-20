@@ -104,23 +104,24 @@ describe('computeFreshnessState', () => {
     )).toBe(AuctionFreshnessState.TERMINAL);
   });
 
-  it('returns STALE when past nextRefreshAt with 2+ misses', () => {
+  it('returns STALE when past nextRefreshAt (Task 050: no miss count needed)', () => {
     expect(computeFreshnessState(
-      recentSeen, pastRefresh, 2, true,
+      recentSeen, pastRefresh, 0, true,
       AuctionLifecycleState.OPEN, STALE_AFTER_MS.HOT, now,
     )).toBe(AuctionFreshnessState.STALE);
   });
 
-  it('returns STALE when exceeded stale window with 1+ miss', () => {
+  it('returns STALE when exceeded stale window (Task 050: stale by time alone)', () => {
     expect(computeFreshnessState(
-      oldSeen, futureRefresh, 1, true,
+      oldSeen, futureRefresh, 0, true,
       AuctionLifecycleState.OPEN, STALE_AFTER_MS.HOT, now,
     )).toBe(AuctionFreshnessState.STALE);
   });
 
   it('returns FRESH for recently seen lot with no misses', () => {
+    const veryRecent = new Date('2026-07-14T11:55:00Z'); // 5 min ago, within HOT 15min window
     expect(computeFreshnessState(
-      recentSeen, futureRefresh, 0, true,
+      veryRecent, futureRefresh, 0, true,
       AuctionLifecycleState.OPEN, STALE_AFTER_MS.HOT, now,
     )).toBe(AuctionFreshnessState.FRESH);
   });

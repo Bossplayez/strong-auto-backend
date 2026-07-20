@@ -89,6 +89,15 @@ export class AuctionLotsService {
       });
     }
 
+    // Task 050: Determine result-pending state
+    const now = new Date();
+    const isResultPending = !!(lot.auctionTime && lot.auctionTime <= now &&
+      !['SOLD', 'REMOVED'].includes(lot.lifecycleState));
+
+    // For past-auction lots: show "Аукціон завершився, результат уточнюється"
+    // Do not show active prices, countdown, or Buy Now for ended lots
+    const isActive = !isResultPending && ['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState);
+
     return {
       ...auctionItem(lot),
       mediaUrls: lot.mediaUrls,
@@ -118,6 +127,10 @@ export class AuctionLotsService {
       rawProviderState: lot.auctionState,
       rawProviderStatus: lot.state,
       availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt.toISOString() : null,
+      // Task 050: Expose the meaningful provider-observed timestamp.
+      // This is when the provider actually confirmed the lot data,
+      // NOT the server response generation time.
+      providerObservedAt: lot.lastSeenAt ? lot.lastSeenAt.toISOString() : null,
       lastSoldPriceUsd: lot.lastSoldPriceUsd ? Number(lot.lastSoldPriceUsd) : null,
       terminalAt: lot.terminalAt ? lot.terminalAt.toISOString() : null,
       vin: lot.vin ?? null,
@@ -125,6 +138,12 @@ export class AuctionLotsService {
       qualityInclude: quality.include,
       qualityReasonCode: quality.reasonCode,
       contractVersion: CONTRACT_VERSION, asOf: new Date().toISOString(),
+      // Task 050: result-pending state for past auction without confirmed provider result
+      resultPending: isResultPending,
+      // Task 050: whether this lot is still actively auctioning
+      isActive,
+      // Task 050: external auction URL for the lot
+      externalAuctionUrl: buildExternalAuctionUrl(lot.provider, lot.externalLotId),
     };
   }
 
@@ -132,6 +151,7 @@ export class AuctionLotsService {
     const q = query.trim();
     if (!q || q.length > 128) return { contractVersion: CONTRACT_VERSION, items: [] as any[], total: 0, asOf: new Date().toISOString() };
 
+    const now = new Date();
     const lots = await this.prisma.discoveredLot.findMany({
       where: {
         OR: [
@@ -145,7 +165,18 @@ export class AuctionLotsService {
       take: 20,
     });
 
-    const items = lots.map(lot => auctionItem(lot));
+    // Task 050: Mark whether each lot is still active or has ended.
+    // Do NOT hide ended lots from search (users may search for historical data),
+    // but include the lifecycle so the UI can render appropriately.
+    const items = lots.map(lot => {
+      const projected = auctionItem(lot);
+      const isEnded = lot.auctionTime && lot.auctionTime <= now &&
+        !['SOLD', 'REMOVED'].includes(lot.lifecycleState);
+      return {
+        ...projected,
+        resultPending: isEnded ?? false,
+      };
+    });
     return { contractVersion: CONTRACT_VERSION, items, total: items.length, asOf: new Date().toISOString() };
   }
 
@@ -448,4 +479,19 @@ function sortAdminItems(items: any[], sort: string) {
     if (a > b) return direction;
     return left.key.localeCompare(right.key);
   });
+}
+
+// ── Task 050: External auction URL builder ────────────────────
+/**
+ * Build a deterministic external auction URL from provider + externalLotId.
+ * Does NOT use invented title slugs.
+ */
+function buildExternalAuctionUrl(provider: string, externalLotId: string): string | null {
+  if (provider === 'copart') {
+    return `https://www.copart.com/lot/${externalLotId}`;
+  }
+  if (provider === 'iaai') {
+    return `https://www.iaai.com/VehicleDetail/${externalLotId}`;
+  }
+  return null;
 }

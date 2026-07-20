@@ -194,6 +194,8 @@ const MAX_ITEMS = 6;
 const MAX_PINS = 2;
 const MAX_SAME_MAKE = 2;
 const MAX_SAME_MAKE_MODEL = 1;
+// Task 050: No provider may occupy more than 3 of 6 cards
+const MAX_SAME_PROVIDER = 3;
 
 const DEFAULT_POLICY: HotOfferPolicy = {
   minYear: MIN_CATALOG_YEAR,
@@ -745,6 +747,14 @@ export class HotOffersService {
     }
 
     // Then: fill with automatic selection respecting diversity
+    const providerCount = new Map<string, number>();
+
+    // Count providers from pins first
+    for (const item of result) {
+      const p = item.provider.toLowerCase();
+      providerCount.set(p, (providerCount.get(p) ?? 0) + 1);
+    }
+
     for (const candidate of sorted) {
       if (result.length >= MAX_ITEMS) break;
       const key = `${candidate.provider}:${candidate.externalLotId}`;
@@ -752,15 +762,19 @@ export class HotOffersService {
 
       const mk = candidate.make.toLowerCase();
       const mm = `${candidate.make.toLowerCase()}:${candidate.model.toLowerCase()}`;
+      const pv = candidate.provider.toLowerCase();
 
       // Diversity: max 2 same make, 1 same make+model (pins are exempt from counting)
       if ((makeCount.get(mk) ?? 0) >= MAX_SAME_MAKE) continue;
       if ((makeModelCount.get(mm) ?? 0) >= MAX_SAME_MAKE_MODEL) continue;
+      // Task 050: Provider cap — no provider may occupy more than 3 of 6
+      if ((providerCount.get(pv) ?? 0) >= MAX_SAME_PROVIDER) continue;
 
       result.push(candidate);
       usedKeys.add(key);
       makeCount.set(mk, (makeCount.get(mk) ?? 0) + 1);
       makeModelCount.set(mm, (makeModelCount.get(mm) ?? 0) + 1);
+      providerCount.set(pv, (providerCount.get(pv) ?? 0) + 1);
     }
 
     return { candidates: result, allCandidates };

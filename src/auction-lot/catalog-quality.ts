@@ -270,6 +270,11 @@ export function publicCatalogWhere(
     availabilityConfirmed: true,
     consecutiveMisses: { lt: 3 },
 
+    // Task 050: A past auctionAt must never remain publicly active.
+    // Even if lifecycleState hasn't been reconciled by the scheduler yet,
+    // the catalog must not show lots whose auction time has passed.
+    auctionTime: { gte: new Date() },
+
     // Quality: year
     year: { gte: MIN_CATALOG_YEAR },
 

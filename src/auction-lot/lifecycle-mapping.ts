@@ -48,13 +48,11 @@ export function normalizeLifecycleState(
   if (s === 'live' || s.includes('live')) return AuctionLifecycleState.LIVE;
 
   // Active states (open/on/bidding)
-  // If auction date is in the past → ENDED (unless Buy Now active)
+  // Task 050: A past auctionAt must never remain publicly active.
+  // Even with Buy Now, past auction = ENDED. Only provider-confirmed
+  // terminal fields may produce SOLD / final price.
   if (s === 'open' || s === 'on' || s.includes('open') || s.includes('bidding')) {
     if (auctionDate && auctionDate <= now) {
-      // Past auction date — check Buy Now
-      if (isBuyNow && buyNowUsd != null && buyNowUsd > 0) {
-        return AuctionLifecycleState.OPEN; // Buy Now keeps it available
-      }
       return AuctionLifecycleState.ENDED;
     }
     return AuctionLifecycleState.OPEN;
@@ -64,10 +62,8 @@ export function normalizeLifecycleState(
   if (auctionDate && auctionDate > now) return AuctionLifecycleState.UPCOMING;
 
   // If we have a past date but no terminal state, treat as ended
+  // Task 050: No Buy Now rescue — past auction = ENDED
   if (auctionDate && auctionDate <= now) {
-    if (isBuyNow && buyNowUsd != null && buyNowUsd > 0) {
-      return AuctionLifecycleState.OPEN;
-    }
     return AuctionLifecycleState.ENDED;
   }
 
@@ -101,14 +97,17 @@ export function computeFreshnessState(
     return AuctionFreshnessState.TERMINAL;
   }
 
-  // Past nextRefreshAt with misses → stale
-  if (nextRefreshAt && nextRefreshAt < now && consecutiveMisses >= 2) {
+  // Task 050: A stale time alone must make the lot stale.
+  // Do NOT require consecutive misses before STALE.
+
+  // Past nextRefreshAt → stale
+  if (nextRefreshAt && nextRefreshAt < now) {
     return AuctionFreshnessState.STALE;
   }
 
-  // Exceeded stale window
+  // Exceeded stale window — stale by time alone, no miss count needed
   const ageMs = now.getTime() - lastSeenAt.getTime();
-  if (ageMs > staleAfterMs && consecutiveMisses >= 1) {
+  if (ageMs > staleAfterMs) {
     return AuctionFreshnessState.STALE;
   }
 

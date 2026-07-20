@@ -41,6 +41,9 @@ export enum LeadType {
   VEHICLE_INQUIRY = 'VEHICLE_INQUIRY',
   GENERAL_INQUIRY = 'GENERAL_INQUIRY',
   CALLBACK_REQUEST = 'CALLBACK_REQUEST',
+  // Task 050: Auction assistance requests
+  BID_ASSISTANCE = 'BID_ASSISTANCE',
+  BUY_NOW_ASSISTANCE = 'BUY_NOW_ASSISTANCE',
 }
 
 export enum LeadStatus {

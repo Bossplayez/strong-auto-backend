@@ -327,18 +327,42 @@ export class CatalogService {
     const skip = (parsed.page - 1) * parsed.pageSize;
     const take = parsed.pageSize;
 
+    // Task 050: When no provider filter is active, fetch extra rows and
+    // deterministically interleave so no more than 3 consecutive cards
+    // from one provider appear. We fetch 3× pageSize to have enough
+    // material for interleaving, then trim to pageSize.
+    const interleaving = !parsed.provider;
+    const fetchTake = interleaving ? Math.min(take * 3, 60) : take;
+
     const [lots, total] = await this.prisma.$transaction([
-      this.prisma.discoveredLot.findMany({ where, orderBy, skip, take, select: this.usaSelect() }),
+      this.prisma.discoveredLot.findMany({ where, orderBy, skip: interleaving ? 0 : skip, take: fetchTake, select: this.usaSelect() }),
       this.prisma.discoveredLot.count({ where }),
     ]);
 
-    const items = lots.map((lot) => auctionItem(lot as any));
+    let items = lots.map((lot) => auctionItem(lot as any));
+
+    if (interleaving) {
+      // Deterministic provider-aware interleaving
+      items = interleaveProviders(items, skip, take);
+    }
+
     return page(items, total, parsed.page, parsed.pageSize);
   }
 
   async usaFilterOptions(parsed: ReturnType<typeof parseInventoryQuery>) {
     const where = publicCatalogWhere();
     if (parsed.provider) where.provider = parsed.provider;
+    // Task 050: Apply make/model/bodyType etc. to filter-options query
+    // so that filter-options?view=usa&make=AUDI returns only AUDI models.
+    if (parsed.make) where.make = { equals: parsed.make, mode: 'insensitive' };
+    if (parsed.model) where.model = { contains: parsed.model, mode: 'insensitive' };
+    if (parsed.bodyType) where.bodyStyle = { equals: parsed.bodyType, mode: 'insensitive' };
+    if (parsed.fuelType) where.fuelType = { equals: parsed.fuelType, mode: 'insensitive' };
+    if (parsed.transmission) where.transmission = { equals: parsed.transmission, mode: 'insensitive' };
+    if (parsed.driveType) where.driveType = { equals: parsed.driveType, mode: 'insensitive' };
+    if (parsed.locationState) where.locationState = { equals: parsed.locationState, mode: 'insensitive' };
+    if (parsed.lifecycle) where.lifecycleState = parsed.lifecycle;
+    if (parsed.buyNow !== undefined) where.isBuyNow = parsed.buyNow;
 
     // Fetch only the fields we need for filter options — no auctionItem projection needed
     const lots = await this.prisma.discoveredLot.findMany({
@@ -526,4 +550,82 @@ export class CatalogService {
 
     return sortMap[sort] ?? { publishedAt: 'desc' };
   }
+}
+
+// ── Task 050: Provider-aware interleaving ──────────────────────
+// When both providers have eligible lots, never show more than 3
+// consecutive cards from one provider. Preserves sort quality
+// within each provider. Does not fabricate cards or force 50/50.
+function interleaveProviders<T extends { provider: string }>(
+  items: T[],
+  skip: number,
+  take: number,
+): T[] {
+  if (items.length <= take) return items;
+
+  // Split by provider, preserving original sort order within each
+  const groups: Record<string, T[]> = {};
+  for (const item of items) {
+    const p = item.provider ?? 'unknown';
+    if (!groups[p]) groups[p] = [];
+    groups[p].push(item);
+  }
+
+  const providers = Object.keys(groups);
+  if (providers.length <= 1) {
+    // Only one provider — return paginated slice honestly
+    return items.slice(skip, skip + take);
+  }
+
+  // Interleave with max 3 consecutive from same provider
+  const result: T[] = [];
+  const indices: Record<string, number> = {};
+  for (const p of providers) indices[p] = 0;
+
+  let lastProvider = '';
+  let consecutive = 0;
+  const maxConsecutive = 3;
+
+  while (result.length < items.length) {
+    // Pick next provider: prefer the one with most remaining items,
+    // but skip if it would exceed maxConsecutive
+    let bestProvider: string | null = null;
+    let bestCount = -1;
+
+    for (const p of providers) {
+      const remaining = groups[p].length - indices[p];
+      if (remaining <= 0) continue;
+      if (p === lastProvider && consecutive >= maxConsecutive) continue;
+      if (remaining > bestCount) {
+        bestCount = remaining;
+        bestProvider = p;
+      }
+    }
+
+    // If blocked by consecutive limit, switch to the other provider
+    if (!bestProvider) {
+      for (const p of providers) {
+        const remaining = groups[p].length - indices[p];
+        if (remaining > 0 && p !== lastProvider) {
+          bestProvider = p;
+          break;
+        }
+      }
+    }
+
+    if (!bestProvider) break;
+
+    result.push(groups[bestProvider][indices[bestProvider]]);
+    indices[bestProvider]++;
+
+    if (bestProvider === lastProvider) {
+      consecutive++;
+    } else {
+      consecutive = 1;
+      lastProvider = bestProvider;
+    }
+  }
+
+  // Return the page slice from the interleaved result
+  return result.slice(skip, skip + take);
 }
