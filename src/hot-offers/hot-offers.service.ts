@@ -932,24 +932,23 @@ export class HotOffersService {
 // whether items came from a fresh build or a cached snapshot.
 function enforceProviderCap(items: PublicHotOfferItem[]): PublicHotOfferItem[] {
   if (items.length <= MAX_SAME_PROVIDER) return items;
+
+  // Count how many items each provider has
+  const providers = new Set(items.map(i => (i.provider || '').toLowerCase()));
+
+  // If only one provider is present, no cap needed (be honest)
+  if (providers.size <= 1) return items;
+
+  // Both providers present — enforce cap
   const result: PublicHotOfferItem[] = [];
   const counts = new Map<string, number>();
-  const deferred: PublicHotOfferItem[] = [];
 
   for (const item of items) {
+    if (result.length >= MAX_ITEMS) break;
     const p = (item.provider || '').toLowerCase();
-    if ((counts.get(p) ?? 0) >= MAX_SAME_PROVIDER) {
-      deferred.push(item);
-      continue;
-    }
+    if ((counts.get(p) ?? 0) >= MAX_SAME_PROVIDER) continue;
     result.push(item);
     counts.set(p, (counts.get(p) ?? 0) + 1);
-  }
-
-  // If there are remaining slots, fill from deferred items
-  for (const item of deferred) {
-    if (result.length >= MAX_ITEMS) break;
-    result.push(item);
   }
 
   return result;
