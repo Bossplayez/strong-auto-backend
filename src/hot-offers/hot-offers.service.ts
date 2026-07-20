@@ -392,29 +392,40 @@ export class HotOffersService {
 
     const snapshotFresh = snapshot && new Date(snapshot.validUntil).getTime() > now.getTime();
 
-    // Build tiers
+    // Build tiers (always needed for re-validation)
     const tiers = await this.buildTiers(policy, overrides, now);
 
-    // Use snapshot order if fresh, but re-validate each lot
-    const result = { generatedAt: snapshot?.generatedAt ?? now.toISOString(), validUntil: new Date(now.getTime() + SNAPSHOT_TTL_MS).toISOString(), tiers: {} as any };
+    // Determine the authoritative timestamp pair for this response.
+    // When snapshot is fresh, reuse its timestamps as-is (do NOT extend).
+    // When stale/missing, generate a new pair: generatedAt=now, validUntil=now+30min.
+    const generatedAt = snapshotFresh ? snapshot!.generatedAt : now.toISOString();
+    const validUntil = snapshotFresh
+      ? snapshot!.validUntil
+      : new Date(now.getTime() + SNAPSHOT_TTL_MS).toISOString();
+
+    const result: PublicHotOffersResponse = { generatedAt, validUntil, tiers: {} as any };
+
+    let needsSave = !snapshotFresh; // only persist when creating a new snapshot
 
     for (const tierKey of ['urgent', 'this-week'] as HotOfferTier[]) {
       const built = tiers[tierKey];
-      let items = built.items;
+      let items: PublicHotOfferItem[];
 
       if (snapshotFresh) {
-        // Re-verify each item from snapshot, remove stale
+        // Re-verify each item from snapshot, remove ineligible
         const snapshotOrder = snapshot!.tiers[tierKey].items;
         const verified: PublicHotOfferItem[] = [];
         const usedKeys = new Set<string>();
 
-        // First: pins from snapshot in order
+        // First: pinned items from snapshot in order
         for (const snapItem of snapshotOrder) {
           const candidate = built.allCandidates.find(c => c.provider === snapItem.provider && c.externalLotId === snapItem.externalLotId);
           if (candidate && this.stillEligible(candidate, tierKey, now)) {
             const publicItem = this.toPublicItem(candidate, snapItem.manualPin);
             verified.push(publicItem);
             usedKeys.add(`${candidate.provider}:${candidate.externalLotId}`);
+          } else {
+            needsSave = true; // a lot was removed → snapshot must be regenerated
           }
         }
 
@@ -429,6 +440,9 @@ export class HotOffersService {
         }
 
         items = verified;
+      } else {
+        // Fresh build — use ranked items directly
+        items = built.items as PublicHotOfferItem[];
       }
 
       result.tiers[tierKey] = {
@@ -441,20 +455,33 @@ export class HotOffersService {
       };
     }
 
-    // Save new snapshot
-    const newSnapshot: HotOfferSnapshot = {
-      generatedAt: now.toISOString(),
-      validUntil: new Date(now.getTime() + SNAPSHOT_TTL_MS).toISOString(),
-      tiers: {
-        urgent: { tier: 'urgent', labelUk: TIER_LABELS.urgent.uk, labelEn: TIER_LABELS.urgent.en, windowStart: this.windowStart('urgent', now).toISOString(), windowEnd: this.windowEnd('urgent', now).toISOString(), items: result.tiers.urgent.items.map((item, i) => ({ provider: item.provider, externalLotId: item.externalLotId, manualPin: item.manualPin, order: i + 1 })) },
-        'this-week': { tier: 'this-week', labelUk: TIER_LABELS['this-week'].uk, labelEn: TIER_LABELS['this-week'].en, windowStart: this.windowStart('this-week', now).toISOString(), windowEnd: this.windowEnd('this-week', now).toISOString(), items: result.tiers['this-week'].items.map((item, i) => ({ provider: item.provider, externalLotId: item.externalLotId, manualPin: item.manualPin, order: i + 1 })) },
-      },
-    };
-    await this.prisma.siteSetting.upsert({
-      where: { key: SNAPSHOT_KEY },
-      create: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
-      update: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
-    }).catch(() => {}); // best-effort
+    // Only persist when creating a new snapshot or when lots were pruned.
+    // Do NOT extend validUntil on every read.
+    if (needsSave) {
+      const newSnapshot: HotOfferSnapshot = {
+        generatedAt: now.toISOString(),
+        validUntil: new Date(now.getTime() + SNAPSHOT_TTL_MS).toISOString(),
+        tiers: {
+          urgent: { tier: 'urgent', labelUk: TIER_LABELS.urgent.uk, labelEn: TIER_LABELS.urgent.en, windowStart: this.windowStart('urgent', now).toISOString(), windowEnd: this.windowEnd('urgent', now).toISOString(), items: result.tiers.urgent.items.map((item, i) => ({ provider: item.provider, externalLotId: item.externalLotId, manualPin: item.manualPin, order: i + 1 })) },
+          'this-week': { tier: 'this-week', labelUk: TIER_LABELS['this-week'].uk, labelEn: TIER_LABELS['this-week'].en, windowStart: this.windowStart('this-week', now).toISOString(), windowEnd: this.windowEnd('this-week', now).toISOString(), items: result.tiers['this-week'].items.map((item, i) => ({ provider: item.provider, externalLotId: item.externalLotId, manualPin: item.manualPin, order: i + 1 })) },
+        },
+      };
+      // When a lot was pruned but the snapshot was still within TTL,
+      // we regenerate with fresh timestamps so generatedAt/validUntil match.
+      if (!snapshotFresh) {
+        result.generatedAt = newSnapshot.generatedAt;
+        result.validUntil = newSnapshot.validUntil;
+      } else {
+        // Snapshot was fresh but lots changed: use new timestamps
+        result.generatedAt = newSnapshot.generatedAt;
+        result.validUntil = newSnapshot.validUntil;
+      }
+      await this.prisma.siteSetting.upsert({
+        where: { key: SNAPSHOT_KEY },
+        create: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
+        update: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
+      }).catch(() => {}); // best-effort
+    }
 
     return result;
   }

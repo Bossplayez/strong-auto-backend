@@ -180,4 +180,130 @@ describe('HotOffersService — Policy Validation', () => {
       }, 'urgent', new Date())).toBe(false);
     });
   });
+
+  describe('Snapshot TTL contract (Task 048A)', () => {
+    it('validUntil - generatedAt === exactly 30 minutes', async () => {
+      // Mock: no existing snapshot, no candidates → empty tiers
+      prismaMock.siteSetting.findUnique.mockResolvedValue(null);
+      prismaMock.discoveredLot.findMany.mockResolvedValue([]);
+
+      const result = await service.getPublicHotOffers();
+
+      const gen = new Date(result.generatedAt).getTime();
+      const valid = new Date(result.validUntil).getTime();
+      const diffMin = (valid - gen) / (60 * 1000);
+
+      expect(diffMin).toBeCloseTo(30, 1);
+    });
+
+    it('does NOT extend validUntil on read when snapshot is fresh', async () => {
+      const t0 = '2026-07-20T10:00:00.000Z';
+      const t0Plus30 = '2026-07-20T10:30:00.000Z';
+
+      // Simulate a snapshot that was generated at 10:00 and expires at 10:30
+      const mockSnapshot = {
+        generatedAt: t0,
+        validUntil: t0Plus30,
+        tiers: {
+          urgent: { tier: 'urgent', labelUk: 'Термінові', labelEn: 'Urgent', windowStart: t0, windowEnd: t0Plus30, items: [] },
+          'this-week': { tier: 'this-week', labelUk: 'Тиждень', labelEn: 'Week', windowStart: t0, windowEnd: t0Plus30, items: [] },
+        },
+      };
+
+      // First call returns existing snapshot (fresh)
+      prismaMock.siteSetting.findUnique.mockResolvedValue({ valueJson: mockSnapshot });
+      prismaMock.discoveredLot.findMany.mockResolvedValue([]);
+
+      // Mock Date.now to be t0 + 5 minutes (snapshot still fresh)
+      const realDate = Date;
+      const fakeNow = new Date('2026-07-20T10:05:00.000Z');
+      const originalNow = realDate.now;
+      realDate.now = () => fakeNow.getTime();
+      jest.useFakeTimers({ now: fakeNow });
+
+      try {
+        const result = await service.getPublicHotOffers();
+
+        // Should return the SAME generatedAt and validUntil from snapshot
+        expect(result.generatedAt).toBe(t0);
+        expect(result.validUntil).toBe(t0Plus30);
+
+        // Should NOT have written a new snapshot (no upsert needed)
+        expect(prismaMock.siteSetting.upsert).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+        realDate.now = originalNow;
+      }
+    });
+
+    it('creates new snapshot after TTL expiry', async () => {
+      const t0 = '2026-07-20T10:00:00.000Z';
+      const t0Plus30 = '2026-07-20T10:30:00.000Z';
+
+      const mockSnapshot = {
+        generatedAt: t0,
+        validUntil: t0Plus30,
+        tiers: {
+          urgent: { tier: 'urgent', labelUk: 'Термінові', labelEn: 'Urgent', windowStart: t0, windowEnd: t0Plus30, items: [] },
+          'this-week': { tier: 'this-week', labelUk: 'Тиждень', labelEn: 'Week', windowStart: t0, windowEnd: t0Plus30, items: [] },
+        },
+      };
+
+      prismaMock.siteSetting.findUnique.mockResolvedValue({ valueJson: mockSnapshot });
+      prismaMock.discoveredLot.findMany.mockResolvedValue([]);
+
+      // Mock Date to be t0 + 31 minutes (snapshot expired)
+      const realDate = Date;
+      const fakeNow = new Date('2026-07-20T10:31:00.000Z');
+      const originalNow = realDate.now;
+      realDate.now = () => fakeNow.getTime();
+      jest.useFakeTimers({ now: fakeNow });
+
+      try {
+        const result = await service.getPublicHotOffers();
+
+        // Should have NEW timestamps (not the old ones)
+        expect(result.generatedAt).not.toBe(t0);
+        expect(result.validUntil).not.toBe(t0Plus30);
+
+        // New diff should be 30 min
+        const gen = new Date(result.generatedAt).getTime();
+        const valid = new Date(result.validUntil).getTime();
+        const diffMin = (valid - gen) / (60 * 1000);
+        expect(diffMin).toBeCloseTo(30, 1);
+
+        // Should have saved a new snapshot
+        expect(prismaMock.siteSetting.upsert).toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+        realDate.now = originalNow;
+      }
+    });
+
+    it('policy invalidation creates new timestamps on next read', async () => {
+      // After savePolicy deletes snapshot, next read should create fresh one
+      prismaMock.siteSetting.findUnique
+        .mockResolvedValueOnce({ valueJson: { minYear: 2010, weights: { year: 25, mileage: 20, price: 25, time: 20, buyNow: 10 } } }) // getPolicy in savePolicy
+        .mockResolvedValue(null); // snapshot gone after invalidation
+      prismaMock.discoveredLot.findMany.mockResolvedValue([]);
+
+      await service.savePolicy({
+        minYear: 2012,
+        maxMileageKm: null,
+        maxKnownPriceUsd: null,
+        extraDamageExclusions: [],
+        weights: { year: 30, mileage: 20, price: 20, time: 20, buyNow: 10 },
+      }, 'user1');
+
+      // Verify snapshot was deleted
+      expect(prismaMock.siteSetting.deleteMany).toHaveBeenCalledWith({ where: { key: 'hot_offers_snapshot_v1' } });
+
+      // Next public read should create new snapshot
+      const result = await service.getPublicHotOffers();
+      const gen = new Date(result.generatedAt).getTime();
+      const valid = new Date(result.validUntil).getTime();
+      const diffMin = (valid - gen) / (60 * 1000);
+      expect(diffMin).toBeCloseTo(30, 1);
+    });
+  });
 });
