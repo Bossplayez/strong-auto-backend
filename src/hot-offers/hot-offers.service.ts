@@ -392,6 +392,17 @@ export class HotOffersService {
 
     const snapshotFresh = snapshot && new Date(snapshot.validUntil).getTime() > now.getTime();
 
+    if (snapshot) {
+      console.debug('[HotOffers] Snapshot loaded:', {
+        gen: snapshot.generatedAt,
+        valid: snapshot.validUntil,
+        fresh: snapshotFresh,
+        now: now.toISOString(),
+      });
+    } else {
+      console.debug('[HotOffers] No snapshot in DB');
+    }
+
     // Build tiers (always needed for re-validation)
     const tiers = await this.buildTiers(policy, overrides, now);
 
@@ -466,21 +477,18 @@ export class HotOffersService {
           'this-week': { tier: 'this-week', labelUk: TIER_LABELS['this-week'].uk, labelEn: TIER_LABELS['this-week'].en, windowStart: this.windowStart('this-week', now).toISOString(), windowEnd: this.windowEnd('this-week', now).toISOString(), items: result.tiers['this-week'].items.map((item, i) => ({ provider: item.provider, externalLotId: item.externalLotId, manualPin: item.manualPin, order: i + 1 })) },
         },
       };
-      // When a lot was pruned but the snapshot was still within TTL,
-      // we regenerate with fresh timestamps so generatedAt/validUntil match.
-      if (!snapshotFresh) {
-        result.generatedAt = newSnapshot.generatedAt;
-        result.validUntil = newSnapshot.validUntil;
-      } else {
-        // Snapshot was fresh but lots changed: use new timestamps
-        result.generatedAt = newSnapshot.generatedAt;
-        result.validUntil = newSnapshot.validUntil;
+      result.generatedAt = newSnapshot.generatedAt;
+      result.validUntil = newSnapshot.validUntil;
+      try {
+        await this.prisma.siteSetting.upsert({
+          where: { key: SNAPSHOT_KEY },
+          create: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
+          update: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
+        });
+      } catch (e) {
+        // best-effort — log but don't fail the request
+        console.error('[HotOffers] Failed to save snapshot:', e);
       }
-      await this.prisma.siteSetting.upsert({
-        where: { key: SNAPSHOT_KEY },
-        create: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
-        update: { key: SNAPSHOT_KEY, valueJson: newSnapshot as any },
-      }).catch(() => {}); // best-effort
     }
 
     return result;
