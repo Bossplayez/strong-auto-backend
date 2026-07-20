@@ -839,7 +839,10 @@ export class AdminController {
       cadenceMs: { discovery: Number(status.coldIntervalMs ?? 0), refresh: Number(status.hotIntervalMs ?? 0) },
       lastRunAt: status.lastRunAt ? new Date(status.lastRunAt).toISOString() : null,
       nextRunAt: status.nextRunAt ? new Date(status.nextRunAt).toISOString() : null,
-      lastResult: null, asOf: new Date().toISOString(),
+      lastResult: status.lastResult ?? null,
+      lastSuccessfulPageAt: status.lastSuccessfulPageAt,
+      recoveryMode: status.recoveryMode,
+      asOf: new Date().toISOString(),
       // Task 040: daily cap diagnostics from shared ledger
       dailyCap: status.dailyCap ?? null,
       dailyUsed: status.dailyUsed ?? null,

@@ -78,6 +78,19 @@ export interface SchedulerStatus {
   tierWarmStale: number;
   tierColdStale: number;
   oldestObservationAge: string | null;
+  // Task 051: Recovery state
+  recoveryMode: 'NORMAL' | 'INVENTORY_RECOVERY' | 'EMPTY_UPSTREAM';
+  lastResult: Array<{
+    provider: string;
+    pagesCompleted: number;
+    lotsDiscovered: number;
+    newLots: number;
+    lotsUpdated: number;
+    skipped: number;
+    terminalReason: string | null;
+    errors: string[];
+  }> | null;
+  lastSuccessfulPageAt: string | null;
 }
 
 export interface QuotaAllocation {
@@ -118,6 +131,9 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       errors: string[];
     }>;
   } | null = null;
+
+  // Task 051: Inventory recovery state
+  private recoveryMode: 'NORMAL' | 'INVENTORY_RECOVERY' | 'EMPTY_UPSTREAM' = 'NORMAL';
 
   // Tier weights for daily envelope allocation
   private static readonly TIER_WEIGHTS = {
@@ -393,11 +409,13 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
     const tierBudgets = this.calculateTierBudgets(dailyEnvelope);
 
     const [pendingHot, pendingWarm, pendingCold, totalDiscovered, selectedToday, deferredToday, completedToday, failedToday] = await Promise.all([
+      // Task 051: pendingHot/Warm/Cold must filter by lifecycleState to match tier diagnostics
       this.prisma.discoveredLot.count({
         where: {
           freshnessTier: 'HOT',
           nextRefreshAt: { lte: now },
           state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
         },
       }),
       this.prisma.discoveredLot.count({
@@ -405,6 +423,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
           freshnessTier: 'WARM',
           nextRefreshAt: { lte: now },
           state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
         },
       }),
       this.prisma.discoveredLot.count({
@@ -412,6 +431,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
           freshnessTier: 'COLD',
           nextRefreshAt: { lte: now },
           state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
         },
       }),
       this.prisma.discoveredLot.count({
@@ -560,6 +580,10 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       tierWarmStale,
       tierColdStale,
       oldestObservationAge,
+      // Task 051: Recovery state and real lastResult
+      recoveryMode: this.recoveryMode,
+      lastResult: d ? d.providers : null,
+      lastSuccessfulPageAt: await this.getLastSuccessfulPageAt(),
     } as SchedulerStatus;
   }
 
@@ -637,6 +661,55 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       return { processed: 0, deferred: 0, requestsUsed: 0, errors: [] };
     }
 
+    // ── Task 051: Inventory recovery detection ──
+    // When zero active lots exist but historical lots do, enter recovery mode.
+    // This prioritizes discovery (seeking future lots) and resets exhausted
+    // checkpoints faster so the scheduler can find new inventory.
+    const activeCount = await this.prisma.discoveredLot.count({
+      where: {
+        state: { in: ['DISCOVERED', 'IMPORTED'] },
+        lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+      },
+    });
+    const historicalCount = await this.prisma.discoveredLot.count({
+      where: { state: { in: ['DISCOVERED', 'IMPORTED'] } },
+    });
+
+    if (activeCount === 0 && historicalCount > 0) {
+      if (this.recoveryMode !== 'INVENTORY_RECOVERY') {
+        this.logger.warn(
+          `INVENTORY_RECOVERY: 0 active lots, ${historicalCount} historical — entering recovery mode`,
+        );
+      }
+      this.recoveryMode = 'INVENTORY_RECOVERY';
+
+      // Reset exhausted discovery checkpoints so the next tick can immediately
+      // restart discovery cycles seeking future lots from page 1.
+      const staleCheckpoints = await this.prisma.discoveryCheckpoint.findMany({
+        where: {
+          exhaustedAt: { not: null },
+          provider: { in: ['copart', 'iaai'] },
+        },
+      });
+      for (const cp of staleCheckpoints) {
+        await this.prisma.discoveryCheckpoint.update({
+          where: { id: cp.id },
+          data: {
+            exhaustedAt: null,
+            lastCursor: null,
+            lastSuccessfulCursor: null,
+            nextDueAt: null,
+            cycleStartedAt: now,
+            lastError: null,
+          },
+        });
+        this.logger.log(`INVENTORY_RECOVERY: reset checkpoint for ${cp.provider}`);
+      }
+    } else if (activeCount > 0 && this.recoveryMode === 'INVENTORY_RECOVERY') {
+      this.logger.log(`INVENTORY_RECOVERY: ${activeCount} active lots found — exiting recovery`);
+      this.recoveryMode = 'NORMAL';
+    }
+
     // ── Determine provider rotation order (Task 042: true round-robin) ──
     const slot = Math.floor(elapsedUtcDayMs / tickIntervalMs);
     const first: ProviderId = slot % 2 === 0 ? 'copart' : 'iaai';
@@ -711,6 +784,21 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
 
     if (discoveryResults.length > 0) {
       this.lastDiscovery = { runAt: now, providers: discoveryResults };
+
+      // Task 051: Detect EMPTY_UPSTREAM — all providers returned exhausted
+      // with zero new lots after a full discovery cycle in recovery mode.
+      if (this.recoveryMode === 'INVENTORY_RECOVERY') {
+        const anyNewLots = discoveryResults.some(r => r.newLots > 0 || r.lotsUpdated > 0);
+        const allExhaustedOrError = discoveryResults.every(r =>
+          r.terminalReason === 'exhausted' ||
+          r.terminalReason === 'provider_error' ||
+          r.terminalReason === 'configuration_error'
+        );
+        if (!anyNewLots && allExhaustedOrError && activeCount === 0) {
+          this.recoveryMode = 'EMPTY_UPSTREAM';
+          this.logger.warn(`EMPTY_UPSTREAM: providers returned no future lots`);
+        }
+      }
     }
 
     // ── Task 050B: Freshness reconciliation ──
@@ -725,23 +813,6 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       const hotAuctionEnd = new Date(reconNow.getTime() + 12 * 60 * 60 * 1000);
       const warmAuctionEnd = new Date(reconNow.getTime() + 48 * 60 * 60 * 1000);
 
-      // 1. Classify tiers and mark stale for HOT lots
-      const hotStaleResult = await this.prisma.discoveredLot.updateMany({
-        where: {
-          state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          auctionTime: { gte: reconNow, lte: hotAuctionEnd },
-        },
-        data: {
-          freshnessTier: 'HOT',
-          nextRefreshAt: new Date(reconNow.getTime() + 15 * 60 * 1000),
-          freshnessState: 'STALE',
-        },
-      });
-      // But only mark stale if observation is old
-      // Actually, we need to set tier AND freshness separately
-
-      // Re-do: set tier for all active lots, then mark stale where appropriate
       // Step 1: Set tier = HOT for auction ≤12h
       await this.prisma.discoveredLot.updateMany({
         where: {
@@ -858,6 +929,26 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
         },
         data: { freshnessState: 'FRESH' },
       });
+
+      // Task 051: Clear ghost tier assignments on terminal lots.
+      // ENDED/SOLD/REMOVED lots must never appear in tier totals or pendingRefresh.
+      const terminalCleared = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['ENDED', 'SOLD', 'REMOVED'] },
+          OR: [
+            { freshnessTier: { not: 'COLD' } },
+            { nextRefreshAt: { not: null } },
+          ],
+        },
+        data: {
+          freshnessTier: 'COLD',
+          nextRefreshAt: null,
+        },
+      });
+      if (terminalCleared.count > 0) {
+        this.logger.log(`Freshness reconciliation: cleared tier on ${terminalCleared.count} terminal lots`);
+      }
 
       const totalStale = (hotMarkedStale.count + warmMarkedStale.count + coldMarkedStale.count);
       const totalFresh = (hotMarkedFresh.count + warmMarkedFresh.count + coldMarkedFresh.count);
@@ -1075,5 +1166,15 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
         nextRefreshAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
+  }
+
+  /** Task 051: Get the most recent successful provider page timestamp. */
+  private async getLastSuccessfulPageAt(): Promise<string | null> {
+    const latest = await this.prisma.discoveryCheckpoint.findFirst({
+      where: { lastCompletedAt: { not: null } },
+      orderBy: { lastCompletedAt: 'desc' },
+      select: { lastCompletedAt: true, provider: true },
+    });
+    return latest?.lastCompletedAt ? latest.lastCompletedAt.toISOString() : null;
   }
 }

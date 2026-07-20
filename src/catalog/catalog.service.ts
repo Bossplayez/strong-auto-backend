@@ -350,7 +350,13 @@ export class CatalogService {
       const iaaiItems = providerResults[1].map((lot) => auctionItem(lot as any));
       const items = interleaveProviders(copartItems, iaaiItems, skip, take);
 
-      return page(items, total, parsed.page, parsed.pageSize);
+      // Task 051: Detect inventory recovery for unfiltered USA catalog
+      const result = page(items, total, parsed.page, parsed.pageSize);
+      if (total === 0 && !parsed.make && !parsed.model && !parsed.bodyType) {
+        const catalogState = await this.detectCatalogState();
+        return { ...result, catalogState };
+      }
+      return { ...result, catalogState: 'NORMAL' };
     }
 
     const [lots, total] = await this.prisma.$transaction([
@@ -359,7 +365,25 @@ export class CatalogService {
     ]);
 
     const items = lots.map((lot) => auctionItem(lot as any));
-    return page(items, total, parsed.page, parsed.pageSize);
+    const result = page(items, total, parsed.page, parsed.pageSize);
+    return { ...result, catalogState: 'NORMAL' };
+  }
+
+  /** Task 051: Detect whether catalog is in inventory recovery mode. */
+  private async detectCatalogState(): Promise<'NORMAL' | 'INVENTORY_RECOVERY'> {
+    const [activeCount, historicalCount] = await Promise.all([
+      this.prisma.discoveredLot.count({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+        },
+      }),
+      this.prisma.discoveredLot.count({
+        where: { state: { in: ['DISCOVERED', 'IMPORTED'] } },
+      }),
+    ]);
+    if (activeCount === 0 && historicalCount > 0) return 'INVENTORY_RECOVERY';
+    return 'NORMAL';
   }
 
   async usaFilterOptions(parsed: ReturnType<typeof parseInventoryQuery>) {
