@@ -641,25 +641,37 @@ export class HotOffersService {
     const urgentEnd = new Date(now.getTime() + URGENT_WINDOW_HOURS * 60 * 60 * 1000);
     const weekEnd = new Date(now.getTime() + WEEK_WINDOW_HOURS * 60 * 60 * 1000);
 
-    // Query urgent tier candidates
-    const urgentLots = await this.prisma.discoveredLot.findMany({
-      where: publicCatalogWhere({
-        auctionTime: { gte: now, lte: urgentEnd },
-      }),
-      select: CANDIDATE_SELECT,
-      take: 200,
-      orderBy: { auctionTime: 'asc' },
-    });
+    // Task 050: Fetch candidates from each provider separately
+    // to ensure both providers are represented in the pool.
+    const fetchUrgent = async (provider: 'copart' | 'iaai') =>
+      this.prisma.discoveredLot.findMany({
+        where: publicCatalogWhere({
+          auctionTime: { gte: now, lte: urgentEnd },
+          provider,
+        }),
+        select: CANDIDATE_SELECT,
+        take: 100,
+        orderBy: { auctionTime: 'asc' },
+      });
 
-    // Query this-week tier candidates
-    const weekLots = await this.prisma.discoveredLot.findMany({
-      where: publicCatalogWhere({
-        auctionTime: { gt: urgentEnd, lte: weekEnd },
-      }),
-      select: CANDIDATE_SELECT,
-      take: 200,
-      orderBy: { auctionTime: 'asc' },
-    });
+    const fetchWeek = async (provider: 'copart' | 'iaai') =>
+      this.prisma.discoveredLot.findMany({
+        where: publicCatalogWhere({
+          auctionTime: { gt: urgentEnd, lte: weekEnd },
+          provider,
+        }),
+        select: CANDIDATE_SELECT,
+        take: 100,
+        orderBy: { auctionTime: 'asc' },
+      });
+
+    const [urgentCopart, urgentIaai, weekCopart, weekIaai] = await Promise.all([
+      fetchUrgent('copart'), fetchUrgent('iaai'),
+      fetchWeek('copart'), fetchWeek('iaai'),
+    ]);
+
+    const urgentLots = [...urgentCopart, ...urgentIaai];
+    const weekLots = [...weekCopart, ...weekIaai];
 
     const excluded = new Set(overrides.filter(o => o.action === 'exclude').map(o => `${o.provider}:${o.externalLotId}`));
     const urgentPins = overrides.filter(o => o.tier === 'urgent' && o.action === 'pin').sort((a, b) => (a.position ?? 99) - (b.position ?? 99));
