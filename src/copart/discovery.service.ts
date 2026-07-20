@@ -305,6 +305,14 @@ export class DiscoveryService {
                     if (soldPriceUsd !== null) data.lastSoldPriceUsd = soldPriceUsd;
                   }
 
+                  // Task 050B: Explicitly clear Buy Now when provider says it's gone.
+                  // Provider payload with isBuyNow=false, null, or buyNowUsd=null/non-positive
+                  // must atomically clear both fields.
+                  if (!normalized.isBuyNow || !(normalized.buyNowUsd && normalized.buyNowUsd > 0)) {
+                    data.isBuyNow = false;
+                    data.buyNowUsd = null;
+                  }
+
                   if (existing) {
                     await tx.discoveredLot.update({ where: { id: existing.id }, data });
                     updated++;

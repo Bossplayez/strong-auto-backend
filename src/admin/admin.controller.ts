@@ -845,6 +845,13 @@ export class AdminController {
       dailyUsed: status.dailyUsed ?? null,
       dailyRemaining: status.dailyRemaining ?? null,
       dailyBlockReason: status.dailyBlockReason ?? null,
+      // Task 050B: Tier diagnostics
+      tiers: {
+        HOT: { total: status.tierHot, stale: status.tierHotStale, pendingRefresh: status.pendingHot },
+        WARM: { total: status.tierWarm, stale: status.tierWarmStale, pendingRefresh: status.pendingWarm },
+        COLD: { total: status.tierCold, stale: status.tierColdStale, pendingRefresh: status.pendingCold },
+      },
+      oldestObservationAge: status.oldestObservationAge,
     };
   }
 

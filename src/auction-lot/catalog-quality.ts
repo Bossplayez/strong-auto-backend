@@ -271,9 +271,12 @@ export function publicCatalogWhere(
     consecutiveMisses: { lt: 3 },
 
     // Task 050: A past auctionAt must never remain publicly active.
-    // Even if lifecycleState hasn't been reconciled by the scheduler yet,
-    // the catalog must not show lots whose auction time has passed.
     auctionTime: { gte: new Date() },
+
+    // Task 050B: Provider observation must be within COLD TTL (12h).
+    // A lot whose provider data is older than 12h is stale regardless of tier.
+    // This is a read-time safety net complementing the scheduler's reconciliation.
+    lastProviderUpdateAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
 
     // Quality: year
     year: { gte: MIN_CATALOG_YEAR },

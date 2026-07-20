@@ -16,10 +16,12 @@
 
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscoveryService } from './discovery.service';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
 import { RequestBudgetService } from './request-budget.service';
+import { STALE_AFTER_MS } from '../auction-lot/lifecycle-mapping';
 
 export interface SchedulerStatus {
   isPaused: boolean;
@@ -68,6 +70,14 @@ export interface SchedulerStatus {
   routineAllocatedToday: number;
   manualAllocatedToday: number;
   dailyBlockReason: string | null;
+  // Task 050B: Tier diagnostics
+  tierHot: number;
+  tierWarm: number;
+  tierCold: number;
+  tierHotStale: number;
+  tierWarmStale: number;
+  tierColdStale: number;
+  oldestObservationAge: string | null;
 }
 
 export interface QuotaAllocation {
@@ -431,6 +441,29 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       }),
     ]);
 
+    // Task 050B: Tier diagnostics
+    const activeWhere: Prisma.DiscoveredLotWhereInput = {
+      state: { in: ['DISCOVERED', 'IMPORTED'] },
+      lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+    };
+    const [tierHot, tierWarm, tierCold, tierHotStale, tierWarmStale, tierColdStale, oldestObs] = await Promise.all([
+      this.prisma.discoveredLot.count({ where: { ...activeWhere, freshnessTier: 'HOT' } }),
+      this.prisma.discoveredLot.count({ where: { ...activeWhere, freshnessTier: 'WARM' } }),
+      this.prisma.discoveredLot.count({ where: { ...activeWhere, freshnessTier: 'COLD' } }),
+      this.prisma.discoveredLot.count({ where: { ...activeWhere, freshnessTier: 'HOT', freshnessState: 'STALE' } }),
+      this.prisma.discoveredLot.count({ where: { ...activeWhere, freshnessTier: 'WARM', freshnessState: 'STALE' } }),
+      this.prisma.discoveredLot.count({ where: { ...activeWhere, freshnessTier: 'COLD', freshnessState: 'STALE' } }),
+      // Oldest provider observation among active lots
+      this.prisma.discoveredLot.findFirst({
+        where: activeWhere,
+        select: { lastProviderUpdateAt: true },
+        orderBy: { lastProviderUpdateAt: 'asc' },
+      }),
+    ]);
+    const oldestObservationAge = oldestObs?.lastProviderUpdateAt
+      ? `${Math.round((now.getTime() - oldestObs.lastProviderUpdateAt.getTime()) / (60 * 60 * 1000))}h`
+      : null;
+
     // Projected month-end usage = current usage + (dailyEnvelope × remainingDays)
     const projectedMonthEndUsage = (budget.allocated ?? 0) + (dailyEnvelope * remainingDays);
 
@@ -519,7 +552,15 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       discoveryTerminalReason: d
         ? d.providers.find(p => p.terminalReason)?.terminalReason ?? null
         : null,
-    };
+      // Task 050B: Tier diagnostics
+      tierHot,
+      tierWarm,
+      tierCold,
+      tierHotStale,
+      tierWarmStale,
+      tierColdStale,
+      oldestObservationAge,
+    } as SchedulerStatus;
   }
 
   /** Pause scheduler. */
@@ -670,6 +711,164 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
 
     if (discoveryResults.length > 0) {
       this.lastDiscovery = { runAt: now, providers: discoveryResults };
+    }
+
+    // ── Task 050B: Freshness reconciliation ──
+    // Recompute freshnessState based on tier-specific TTL.
+    // This is the core fix: a lot with old provider observation
+    // must become STALE even with zero consecutive misses.
+    try {
+      const reconNow = new Date();
+      const hotCutoff = new Date(reconNow.getTime() - STALE_AFTER_MS.HOT);
+      const warmCutoff = new Date(reconNow.getTime() - STALE_AFTER_MS.WARM);
+      const coldCutoff = new Date(reconNow.getTime() - STALE_AFTER_MS.COLD);
+      const hotAuctionEnd = new Date(reconNow.getTime() + 12 * 60 * 60 * 1000);
+      const warmAuctionEnd = new Date(reconNow.getTime() + 48 * 60 * 60 * 1000);
+
+      // 1. Classify tiers and mark stale for HOT lots
+      const hotStaleResult = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          auctionTime: { gte: reconNow, lte: hotAuctionEnd },
+        },
+        data: {
+          freshnessTier: 'HOT',
+          nextRefreshAt: new Date(reconNow.getTime() + 15 * 60 * 1000),
+          freshnessState: 'STALE',
+        },
+      });
+      // But only mark stale if observation is old
+      // Actually, we need to set tier AND freshness separately
+
+      // Re-do: set tier for all active lots, then mark stale where appropriate
+      // Step 1: Set tier = HOT for auction ≤12h
+      await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          auctionTime: { gte: reconNow, lte: hotAuctionEnd },
+        },
+        data: {
+          freshnessTier: 'HOT',
+          nextRefreshAt: new Date(reconNow.getTime() + 15 * 60 * 1000),
+        },
+      });
+
+      // Step 2: Set tier = WARM for auction 12-48h
+      await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          auctionTime: { gt: hotAuctionEnd, lte: warmAuctionEnd },
+        },
+        data: {
+          freshnessTier: 'WARM',
+          nextRefreshAt: new Date(reconNow.getTime() + 2 * 60 * 60 * 1000),
+        },
+      });
+
+      // Step 3: Set tier = COLD for all other active lots
+      await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          OR: [
+            { auctionTime: { gt: warmAuctionEnd } },
+            { auctionTime: null },
+          ],
+        },
+        data: {
+          freshnessTier: 'COLD',
+          nextRefreshAt: new Date(reconNow.getTime() + 12 * 60 * 60 * 1000),
+        },
+      });
+
+      // Step 4: Mark STALE where observation exceeds tier TTL
+      // HOT lots stale after 15 min
+      const hotMarkedStale = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          freshnessTier: 'HOT',
+          OR: [
+            { lastProviderUpdateAt: { lt: hotCutoff } },
+            { lastProviderUpdateAt: null, lastSeenAt: { lt: hotCutoff } },
+          ],
+        },
+        data: { freshnessState: 'STALE' },
+      });
+
+      // WARM lots stale after 2h
+      const warmMarkedStale = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          freshnessTier: 'WARM',
+          OR: [
+            { lastProviderUpdateAt: { lt: warmCutoff } },
+            { lastProviderUpdateAt: null, lastSeenAt: { lt: warmCutoff } },
+          ],
+        },
+        data: { freshnessState: 'STALE' },
+      });
+
+      // COLD lots stale after 12h
+      const coldMarkedStale = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          freshnessTier: 'COLD',
+          OR: [
+            { lastProviderUpdateAt: { lt: coldCutoff } },
+            { lastProviderUpdateAt: null, lastSeenAt: { lt: coldCutoff } },
+          ],
+        },
+        data: { freshnessState: 'STALE' },
+      });
+
+      // Mark FRESH where observation is within tier TTL (re-promote)
+      const hotMarkedFresh = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          freshnessTier: 'HOT',
+          lastProviderUpdateAt: { gte: hotCutoff },
+          freshnessState: { not: 'FRESH' },
+        },
+        data: { freshnessState: 'FRESH' },
+      });
+      const warmMarkedFresh = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          freshnessTier: 'WARM',
+          lastProviderUpdateAt: { gte: warmCutoff },
+          freshnessState: { not: 'FRESH' },
+        },
+        data: { freshnessState: 'FRESH' },
+      });
+      const coldMarkedFresh = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          freshnessTier: 'COLD',
+          lastProviderUpdateAt: { gte: coldCutoff },
+          freshnessState: { not: 'FRESH' },
+        },
+        data: { freshnessState: 'FRESH' },
+      });
+
+      const totalStale = (hotMarkedStale.count + warmMarkedStale.count + coldMarkedStale.count);
+      const totalFresh = (hotMarkedFresh.count + warmMarkedFresh.count + coldMarkedFresh.count);
+      if (totalStale > 0 || totalFresh > 0) {
+        this.logger.log(
+          `Freshness reconciliation: STALE=${totalStale} (HOT=${hotMarkedStale.count}, WARM=${warmMarkedStale.count}, COLD=${coldMarkedStale.count}), ` +
+          `re-promoted FRESH=${totalFresh}`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`Freshness reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // ── Lifecycle reconciliation (Task 044) ──

@@ -7,6 +7,7 @@ import {
   parseInventoryQuery, PROVIDERS, sortItems, validationError,
 } from './inventory-projection';
 import { evaluateCatalogQuality, publicCatalogWhere } from './catalog-quality';
+import { STALE_AFTER_MS } from './lifecycle-mapping';
 
 @Injectable()
 export class AuctionLotsService {
@@ -94,9 +95,26 @@ export class AuctionLotsService {
     const isResultPending = !!(lot.auctionTime && lot.auctionTime <= now &&
       !['SOLD', 'REMOVED'].includes(lot.lifecycleState));
 
+    // Task 050B: Compute read-time freshness.
+    // Determine tier by auction proximity, then check observation age.
+    const observationTime = lot.lastProviderUpdateAt ?? lot.lastSeenAt;
+    const observationAgeMs = now.getTime() - observationTime.getTime();
+    const hoursUntilAuction = lot.auctionTime
+      ? (lot.auctionTime.getTime() - now.getTime()) / (60 * 60 * 1000)
+      : Infinity;
+    const tier = hoursUntilAuction <= 12 ? 'HOT' : hoursUntilAuction <= 48 ? 'WARM' : 'COLD';
+    const tierTtlMs = tier === 'HOT'
+      ? STALE_AFTER_MS.HOT
+      : tier === 'WARM'
+        ? STALE_AFTER_MS.WARM
+        : STALE_AFTER_MS.COLD;
+    const isStaleByObservation = observationAgeMs > tierTtlMs;
+
     // For past-auction lots: show "Аукціон завершився, результат уточнюється"
     // Do not show active prices, countdown, or Buy Now for ended lots
-    const isActive = !isResultPending && ['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState);
+    // Task 050B: Also hide active data when provider observation is stale
+    const isActive = !isResultPending && !isStaleByObservation &&
+      ['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState);
 
     return {
       ...auctionItem(lot),
@@ -128,9 +146,11 @@ export class AuctionLotsService {
       rawProviderStatus: lot.state,
       availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt.toISOString() : null,
       // Task 050: Expose the meaningful provider-observed timestamp.
-      // This is when the provider actually confirmed the lot data,
-      // NOT the server response generation time.
-      providerObservedAt: lot.lastSeenAt ? lot.lastSeenAt.toISOString() : null,
+      providerObservedAt: observationTime.toISOString(),
+      // Task 050B: Expose computed staleness flag for UI
+      isStale: isStaleByObservation,
+      // Task 050B: Tier used for staleness computation
+      freshnessTier: tier,
       lastSoldPriceUsd: lot.lastSoldPriceUsd ? Number(lot.lastSoldPriceUsd) : null,
       terminalAt: lot.terminalAt ? lot.terminalAt.toISOString() : null,
       vin: lot.vin ?? null,
