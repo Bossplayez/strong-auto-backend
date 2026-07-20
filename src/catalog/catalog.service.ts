@@ -327,25 +327,38 @@ export class CatalogService {
     const skip = (parsed.page - 1) * parsed.pageSize;
     const take = parsed.pageSize;
 
-    // Task 050: When no provider filter is active, fetch extra rows and
-    // deterministically interleave so no more than 3 consecutive cards
-    // from one provider appear. We fetch 3× pageSize to have enough
-    // material for interleaving, then trim to pageSize.
+    // Task 050: When no provider filter is active, interleave providers.
+    // Fetch separately from each provider to guarantee both are represented.
     const interleaving = !parsed.provider;
-    const fetchTake = interleaving ? Math.min(take * 3, 60) : take;
+
+    if (interleaving) {
+      // Fetch from each provider independently
+      const providers: ('copart' | 'iaai')[] = ['copart', 'iaai'];
+      const perProviderTake = Math.min(take * 2, 40); // enough for interleaving
+      const providerResults = await Promise.all(
+        providers.map(p => {
+          const pw: Prisma.DiscoveredLotWhereInput = { ...where, provider: p };
+          return this.prisma.discoveredLot.findMany({
+            where: pw, orderBy, take: perProviderTake, select: this.usaSelect(),
+          });
+        })
+      );
+      const total = await this.prisma.discoveredLot.count({ where });
+
+      // Map to items and interleave
+      const copartItems = providerResults[0].map((lot) => auctionItem(lot as any));
+      const iaaiItems = providerResults[1].map((lot) => auctionItem(lot as any));
+      const items = interleaveProviders(copartItems, iaaiItems, skip, take);
+
+      return page(items, total, parsed.page, parsed.pageSize);
+    }
 
     const [lots, total] = await this.prisma.$transaction([
-      this.prisma.discoveredLot.findMany({ where, orderBy, skip: interleaving ? 0 : skip, take: fetchTake, select: this.usaSelect() }),
+      this.prisma.discoveredLot.findMany({ where, orderBy, skip, take, select: this.usaSelect() }),
       this.prisma.discoveredLot.count({ where }),
     ]);
 
-    let items = lots.map((lot) => auctionItem(lot as any));
-
-    if (interleaving) {
-      // Deterministic provider-aware interleaving
-      items = interleaveProviders(items, skip, take);
-    }
-
+    const items = lots.map((lot) => auctionItem(lot as any));
     return page(items, total, parsed.page, parsed.pageSize);
   }
 
@@ -556,73 +569,41 @@ export class CatalogService {
 // When both providers have eligible lots, never show more than 3
 // consecutive cards from one provider. Preserves sort quality
 // within each provider. Does not fabricate cards or force 50/50.
-function interleaveProviders<T extends { provider: string }>(
-  items: T[],
+function interleaveProviders<T>(
+  copartItems: T[],
+  iaaiItems: T[],
   skip: number,
   take: number,
 ): T[] {
-  if (items.length <= take) return items;
-
-  // Split by provider, preserving original sort order within each
-  const groups: Record<string, T[]> = {};
-  for (const item of items) {
-    const p = item.provider ?? 'unknown';
-    if (!groups[p]) groups[p] = [];
-    groups[p].push(item);
-  }
-
-  const providers = Object.keys(groups);
-  if (providers.length <= 1) {
-    // Only one provider — return paginated slice honestly
-    return items.slice(skip, skip + take);
-  }
-
-  // Interleave with max 3 consecutive from same provider
+  // Merge with max 3 consecutive from same provider
   const result: T[] = [];
-  const indices: Record<string, number> = {};
-  for (const p of providers) indices[p] = 0;
-
-  let lastProvider = '';
+  let ci = 0; // copart index
+  let ii = 0; // iaai index
+  let lastProvider: 'copart' | 'iaai' | '' = '';
   let consecutive = 0;
   const maxConsecutive = 3;
 
-  while (result.length < items.length) {
-    // Pick next provider: prefer the one with most remaining items,
-    // but skip if it would exceed maxConsecutive
-    let bestProvider: string | null = null;
-    let bestCount = -1;
+  while ((ci < copartItems.length || ii < iaaiItems.length)) {
+    // Prefer the provider with more remaining items, but respect maxConsecutive
+    const copartRemaining = copartItems.length - ci;
+    const iaaiRemaining = iaaiItems.length - ii;
 
-    for (const p of providers) {
-      const remaining = groups[p].length - indices[p];
-      if (remaining <= 0) continue;
-      if (p === lastProvider && consecutive >= maxConsecutive) continue;
-      if (remaining > bestCount) {
-        bestCount = remaining;
-        bestProvider = p;
-      }
-    }
+    let pickCopart: boolean;
 
-    // If blocked by consecutive limit, switch to the other provider
-    if (!bestProvider) {
-      for (const p of providers) {
-        const remaining = groups[p].length - indices[p];
-        if (remaining > 0 && p !== lastProvider) {
-          bestProvider = p;
-          break;
-        }
-      }
-    }
+    if (copartRemaining === 0) pickCopart = false;
+    else if (iaaiRemaining === 0) pickCopart = true;
+    else if (lastProvider === 'copart' && consecutive >= maxConsecutive) pickCopart = false;
+    else if (lastProvider === 'iaai' && consecutive >= maxConsecutive) pickCopart = true;
+    else pickCopart = copartRemaining >= iaaiRemaining; // prefer larger pool
 
-    if (!bestProvider) break;
-
-    result.push(groups[bestProvider][indices[bestProvider]]);
-    indices[bestProvider]++;
-
-    if (bestProvider === lastProvider) {
-      consecutive++;
+    if (pickCopart) {
+      result.push(copartItems[ci++]);
+      if (lastProvider === 'copart') consecutive++;
+      else { consecutive = 1; lastProvider = 'copart'; }
     } else {
-      consecutive = 1;
-      lastProvider = bestProvider;
+      result.push(iaaiItems[ii++]);
+      if (lastProvider === 'iaai') consecutive++;
+      else { consecutive = 1; lastProvider = 'iaai'; }
     }
   }
 

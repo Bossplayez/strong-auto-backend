@@ -2,7 +2,7 @@ import { CatalogService } from './catalog.service';
 
 describe('CatalogService unified inventory identity projection', () => {
   const prisma = {
-    discoveredLot: { findMany: jest.fn() },
+    discoveredLot: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(1) },
     vehicle: { findMany: jest.fn() },
   };
   const service = new CatalogService(prisma as never);
@@ -23,8 +23,13 @@ describe('CatalogService unified inventory identity projection', () => {
   });
 
   it('keeps the current auction projection in view=usa', async () => {
-    prisma.discoveredLot.findMany.mockResolvedValue([lot({ vehicleId: 'vehicle-1' })]);
-    prisma.vehicle.findMany.mockResolvedValue([vehicle()]);
+    // Mock returns lots filtered by provider for interleave
+    prisma.discoveredLot.findMany.mockImplementation((args?: any) => {
+      const provider = args?.where?.provider;
+      const allLots = [lot({ vehicleId: 'vehicle-1', provider: 'copart' })];
+      return Promise.resolve(allLots.filter(l => !provider || l.provider === provider));
+    });
+    prisma.discoveredLot.count.mockResolvedValue(1);
 
     const result = await service.inventory({ view: 'usa' });
 
