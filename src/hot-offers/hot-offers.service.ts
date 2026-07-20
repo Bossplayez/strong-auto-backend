@@ -431,11 +431,18 @@ export class HotOffersService {
         // First: pinned items from snapshot in order
         for (const snapItem of snapshotOrder) {
           const candidate = built.allCandidates.find(c => c.provider === snapItem.provider && c.externalLotId === snapItem.externalLotId);
-          if (candidate && this.stillEligible(candidate, tierKey, now)) {
+          const eligible = candidate ? this.stillEligible(candidate, tierKey, now) : false;
+          if (candidate && eligible) {
             const publicItem = this.toPublicItem(candidate, snapItem.manualPin);
             verified.push(publicItem);
             usedKeys.add(`${candidate.provider}:${candidate.externalLotId}`);
           } else {
+            console.debug('[HotOffers] Pruned from snapshot:', {
+              tier: tierKey,
+              lot: `${snapItem.provider}:${snapItem.externalLotId}`,
+              reason: !candidate ? 'not_in_candidates' : 'ineligible',
+              ...(candidate ? { lifecycle: candidate.lifecycle, auctionAt: candidate.auctionAt, qualityInclude: candidate.qualityInclude } : {}),
+            });
             needsSave = true; // a lot was removed → snapshot must be regenerated
           }
         }
