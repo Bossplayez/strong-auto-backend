@@ -730,7 +730,8 @@ export class HotOffersService {
         return true;
       })
       .filter(lot => lot.make && lot.model) // Must have real make and model
-      .map(lot => this.scoreLot(lot, policy, now, tier));
+      .map(lot => this.scoreLot(lot, policy, now, tier))
+      .filter(c => c.qualityInclude); // Exclude lots that fail quality evaluation
 
     // Sort by score
     const sorted = [...filtered].sort((a, b) => b.score - a.score);
