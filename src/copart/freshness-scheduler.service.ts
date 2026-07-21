@@ -21,7 +21,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DiscoveryService } from './discovery.service';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
 import { RequestBudgetService } from './request-budget.service';
-import { STALE_AFTER_MS } from '../auction-lot/lifecycle-mapping';
+// Task 056: STALE_AFTER_MS no longer controls public visibility.
+// Scheduler tier intervals remain for refresh priority only.
 
 export interface SchedulerStatus {
   isPaused: boolean;
@@ -801,19 +802,23 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       }
     }
 
-    // ── Task 050B: Freshness reconciliation ──
-    // Recompute freshnessState based on tier-specific TTL.
-    // This is the core fix: a lot with old provider observation
-    // must become STALE even with zero consecutive misses.
+    // ── Task 056: Canonical freshness reconciliation ──
+    //
+    // Scheduler tier intervals (HOT=15min, WARM=2h, COLD=12h) control
+    // REFRESH PRIORITY only. They do NOT control public visibility.
+    //
+    // Public visibility uses a 48h canonical observation window:
+    //   listingObservedAt → lastProviderUpdateAt → availabilityConfirmedAt(lastSeenAt)
+    //
+    // A missed 15-minute refresh must NEVER hide a valid future lot.
+    //
     try {
       const reconNow = new Date();
-      const hotCutoff = new Date(reconNow.getTime() - STALE_AFTER_MS.HOT);
-      const warmCutoff = new Date(reconNow.getTime() - STALE_AFTER_MS.WARM);
-      const coldCutoff = new Date(reconNow.getTime() - STALE_AFTER_MS.COLD);
       const hotAuctionEnd = new Date(reconNow.getTime() + 12 * 60 * 60 * 1000);
       const warmAuctionEnd = new Date(reconNow.getTime() + 48 * 60 * 60 * 1000);
+      const freshCutoff = new Date(reconNow.getTime() - 48 * 60 * 60 * 1000); // 48h
 
-      // Step 1: Set tier = HOT for auction ≤12h
+      // Step 1: Assign tier by auction proximity (refresh priority only)
       await this.prisma.discoveredLot.updateMany({
         where: {
           state: { in: ['DISCOVERED', 'IMPORTED'] },
@@ -825,8 +830,6 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
           nextRefreshAt: new Date(reconNow.getTime() + 15 * 60 * 1000),
         },
       });
-
-      // Step 2: Set tier = WARM for auction 12-48h
       await this.prisma.discoveredLot.updateMany({
         where: {
           state: { in: ['DISCOVERED', 'IMPORTED'] },
@@ -838,16 +841,11 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
           nextRefreshAt: new Date(reconNow.getTime() + 2 * 60 * 60 * 1000),
         },
       });
-
-      // Step 3: Set tier = COLD for all other active lots
       await this.prisma.discoveredLot.updateMany({
         where: {
           state: { in: ['DISCOVERED', 'IMPORTED'] },
           lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          OR: [
-            { auctionTime: { gt: warmAuctionEnd } },
-            { auctionTime: null },
-          ],
+          OR: [{ auctionTime: { gt: warmAuctionEnd } }, { auctionTime: null }],
         },
         data: {
           freshnessTier: 'COLD',
@@ -855,134 +853,82 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
         },
       });
 
-      // Step 4: Mark STALE where observation exceeds tier TTL
-      // HOT lots stale after 15 min
-      const hotMarkedStale = await this.prisma.discoveredLot.updateMany({
+      // Step 2: Set freshnessState using 48h canonical window (NOT tier TTL).
+      // FRESH when canonical observation is within 48h.
+      const markedFresh = await this.prisma.discoveredLot.updateMany({
         where: {
           state: { in: ['DISCOVERED', 'IMPORTED'] },
           lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          freshnessTier: 'HOT',
           OR: [
-            { lastProviderUpdateAt: { lt: hotCutoff } },
-            { lastProviderUpdateAt: null, lastSeenAt: { lt: hotCutoff } },
+            { listingObservedAt: { gte: freshCutoff } },
+            { listingObservedAt: null, lastProviderUpdateAt: { gte: freshCutoff } },
+            { listingObservedAt: null, lastProviderUpdateAt: null, availabilityConfirmed: true, lastSeenAt: { gte: freshCutoff } },
           ],
-        },
-        data: { freshnessState: 'STALE' },
-      });
-
-      // WARM lots stale after 2h
-      const warmMarkedStale = await this.prisma.discoveredLot.updateMany({
-        where: {
-          state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          freshnessTier: 'WARM',
-          OR: [
-            { lastProviderUpdateAt: { lt: warmCutoff } },
-            { lastProviderUpdateAt: null, lastSeenAt: { lt: warmCutoff } },
-          ],
-        },
-        data: { freshnessState: 'STALE' },
-      });
-
-      // COLD lots stale after 12h
-      const coldMarkedStale = await this.prisma.discoveredLot.updateMany({
-        where: {
-          state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          freshnessTier: 'COLD',
-          OR: [
-            { lastProviderUpdateAt: { lt: coldCutoff } },
-            { lastProviderUpdateAt: null, lastSeenAt: { lt: coldCutoff } },
-          ],
-        },
-        data: { freshnessState: 'STALE' },
-      });
-
-      // Mark FRESH where observation is within tier TTL (re-promote)
-      const hotMarkedFresh = await this.prisma.discoveredLot.updateMany({
-        where: {
-          state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          freshnessTier: 'HOT',
-          lastProviderUpdateAt: { gte: hotCutoff },
-          freshnessState: { not: 'FRESH' },
-        },
-        data: { freshnessState: 'FRESH' },
-      });
-      const warmMarkedFresh = await this.prisma.discoveredLot.updateMany({
-        where: {
-          state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          freshnessTier: 'WARM',
-          lastProviderUpdateAt: { gte: warmCutoff },
-          freshnessState: { not: 'FRESH' },
-        },
-        data: { freshnessState: 'FRESH' },
-      });
-      const coldMarkedFresh = await this.prisma.discoveredLot.updateMany({
-        where: {
-          state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          freshnessTier: 'COLD',
-          lastProviderUpdateAt: { gte: coldCutoff },
           freshnessState: { not: 'FRESH' },
         },
         data: { freshnessState: 'FRESH' },
       });
 
-      // Task 051: Clear ghost tier assignments on terminal lots.
-      // ENDED/SOLD/REMOVED lots must never appear in tier totals or pendingRefresh.
+      // STALE only when ALL canonical timestamps are older than 48h (or absent)
+      const markedStale = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          AND: [
+            { OR: [{ listingObservedAt: null }, { listingObservedAt: { lt: freshCutoff } }] },
+            { OR: [{ lastProviderUpdateAt: null }, { lastProviderUpdateAt: { lt: freshCutoff } }] },
+            { OR: [{ availabilityConfirmed: false }, { lastSeenAt: { lt: freshCutoff } }] },
+          ],
+          freshnessState: { not: 'STALE' },
+        },
+        data: { freshnessState: 'STALE' },
+      });
+
+      // Clear ghost tier on terminal lots
       const terminalCleared = await this.prisma.discoveredLot.updateMany({
         where: {
           state: { in: ['DISCOVERED', 'IMPORTED'] },
           lifecycleState: { in: ['ENDED', 'SOLD', 'REMOVED'] },
-          OR: [
-            { freshnessTier: { not: 'COLD' } },
-            { nextRefreshAt: { not: null } },
-          ],
+          OR: [{ freshnessTier: { not: 'COLD' } }, { nextRefreshAt: { not: null } }],
         },
-        data: {
-          freshnessTier: 'COLD',
-          nextRefreshAt: null,
-        },
+        data: { freshnessTier: 'COLD', nextRefreshAt: null },
       });
-      if (terminalCleared.count > 0) {
-        this.logger.log(`Freshness reconciliation: cleared tier on ${terminalCleared.count} terminal lots`);
-      }
 
-      const totalStale = (hotMarkedStale.count + warmMarkedStale.count + coldMarkedStale.count);
-      const totalFresh = (hotMarkedFresh.count + warmMarkedFresh.count + coldMarkedFresh.count);
-      if (totalStale > 0 || totalFresh > 0) {
+      if (markedFresh.count > 0 || markedStale.count > 0 || terminalCleared.count > 0) {
         this.logger.log(
-          `Freshness reconciliation: STALE=${totalStale} (HOT=${hotMarkedStale.count}, WARM=${warmMarkedStale.count}, COLD=${coldMarkedStale.count}), ` +
-          `re-promoted FRESH=${totalFresh}`,
+          `Canonical reconciliation: FRESH=${markedFresh.count}, STALE=${markedStale.count} (48h window), terminal cleared=${terminalCleared.count}`,
         );
       }
     } catch (err) {
-      this.logger.error(`Freshness reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(`Canonical freshness reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // ── Lifecycle reconciliation (Task 044) ──
-    // Transition active lots whose auction time has passed to ENDED
+    // ── Task 056: Lifecycle safety ──
+    // Past auction time with no explicit provider result → RESULT_PENDING.
+    // Do NOT terminalize as ENDED/SOLD based on time alone.
     try {
       const reconciledNow = new Date();
-      const result = await this.prisma.discoveredLot.updateMany({
+
+      // Set providerResultState = RESULT_PENDING for past-auction lots
+      // that have no explicit terminal result and are still active lifecycle.
+      // This does NOT change lifecycleState — it stays UPCOMING/OPEN/LIVE
+      // until an explicit provider result arrives.
+      const pendingResult = await this.prisma.discoveredLot.updateMany({
         where: {
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] as any },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
           auctionTime: { lt: reconciledNow },
           state: { in: ['DISCOVERED', 'IMPORTED'] },
+          providerResultState: 'UNKNOWN',
         },
         data: {
-          lifecycleState: 'ENDED' as any,
-          freshnessState: 'TERMINAL' as any,
-          terminalAt: reconciledNow,
+          providerResultState: 'RESULT_PENDING',
         },
       });
-      if (result.count > 0) {
-        this.logger.log(`Lifecycle reconciliation: ${result.count} lots → ENDED`);
+      if (pendingResult.count > 0) {
+        this.logger.log(`Lifecycle safety: ${pendingResult.count} past-auction lots → RESULT_PENDING (not terminalized)`);
       }
     } catch (err) {
-      this.logger.error(`Lifecycle reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(`Lifecycle safety reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // Update scheduler state — use resolved tick interval (not hot freshness interval)

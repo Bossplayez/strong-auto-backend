@@ -61,7 +61,7 @@ const COMMERCIAL_TERMS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
   { pattern: /\bcement\s*mixer\b/i, label: 'Cement mixer' },
   { pattern: /\bbackhoe\b/i, label: 'Backhoe' },
   { pattern: /\bharvester\b/i, label: 'Harvester' },
-  { pattern: /\btractor\b(?!.*\btrailer\b)/i, label: 'Tractor' }, // "tractor" but not "tractor trailer"
+  { pattern: /\btractor\b(?!.*\btrailer\b)/i, label: 'Tractor' },
   { pattern: /\btrailer\b/i, label: 'Trailer' },
   { pattern: /\bmotorcycle\b/i, label: 'Motorcycle' },
   { pattern: /\batv\b/i, label: 'ATV' },
@@ -102,75 +102,34 @@ const CATASTROPHIC_TERMS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
 // ── Evaluator ──────────────────────────────────────────────────
 
 export function evaluateCatalogQuality(lot: QualitySubject): QualityOutcome {
-  // 1. Year check
   if (lot.year === null || lot.year < MIN_CATALOG_YEAR) {
-    return {
-      include: false,
-      reasonCode: 'YEAR_TOO_OLD',
-      reason: `Рік випуску менший за ${MIN_CATALOG_YEAR} або невідомий`,
-    };
+    return { include: false, reasonCode: 'YEAR_TOO_OLD', reason: `Рік випуску менший за ${MIN_CATALOG_YEAR} або невідомий` };
   }
-
-  // 2. Commercial vehicle check — body style + title + make + model
-  const vehicleText = [lot.title, lot.bodyStyle, lot.make, lot.model]
-    .filter(Boolean)
-    .join(' ');
-
+  const vehicleText = [lot.title, lot.bodyStyle, lot.make, lot.model].filter(Boolean).join(' ');
   for (const term of COMMERCIAL_TERMS) {
     if (term.pattern.test(vehicleText)) {
-      return {
-        include: false,
-        reasonCode: 'COMMERCIAL_VEHICLE',
-        reason: `Комерційний/спеціальний транспорт (${term.label})`,
-      };
+      return { include: false, reasonCode: 'COMMERCIAL_VEHICLE', reason: `Комерційний/спеціальний транспорт (${term.label})` };
     }
   }
-
-  // 3. Non-repairable document check — sale doc + title + body
-  const docText = [lot.saleDocumentName, lot.saleDocumentType, lot.title, lot.bodyStyle]
-    .filter(Boolean)
-    .join(' ');
-
+  const docText = [lot.saleDocumentName, lot.saleDocumentType, lot.title, lot.bodyStyle].filter(Boolean).join(' ');
   for (const term of NON_REPAIRABLE_TERMS) {
     if (term.pattern.test(docText)) {
-      return {
-        include: false,
-        reasonCode: 'NON_REPAIRABLE',
-        reason: `Неремонтопридатний (${term.label})`,
-      };
+      return { include: false, reasonCode: 'NON_REPAIRABLE', reason: `Неремонтопридатний (${term.label})` };
     }
   }
-
-  // 4. Catastrophic damage — primary, secondary damage + loss
-  const damageText = [lot.primaryDamage, lot.secondaryDamage, lot.loss]
-    .filter(Boolean)
-    .join(' ');
-
+  const damageText = [lot.primaryDamage, lot.secondaryDamage, lot.loss].filter(Boolean).join(' ');
   for (const term of CATASTROPHIC_TERMS) {
     if (term.pattern.test(damageText)) {
-      return {
-        include: false,
-        reasonCode: 'CATASTROPHIC_DAMAGE',
-        reason: `Катострофічне пошкодження (${term.label})`,
-      };
+      return { include: false, reasonCode: 'CATASTROPHIC_DAMAGE', reason: `Катострофічне пошкодження (${term.label})` };
     }
   }
-
   return { include: true, reasonCode: null, reason: null };
 }
 
 // ── Prisma WHERE helper ─────────────────────────────────────────
-//
-// Returns a Prisma `where` fragment that pushes the same exclusion logic
-// to the database so that `count()` and `findMany({ skip, take })` match
-// the function exactly.  We use `contains` with `mode: 'insensitive'`
-// for substring matching (PostgreSQL ILIKE under the hood).
-//
-// IMPORTANT: keep these patterns in sync with the regex lists above.
 
 import type { Prisma } from '@prisma/client';
 
-/** Terms that must NOT appear (case-insensitive substring) in vehicle text fields. */
 const DB_COMMERCIAL_TERMS = [
   'box truck', 'cargo truck', 'cargo van', 'tractor trailer', 'semi',
   'school bus', 'city bus', 'transit bus', 'coach bus', 'shuttle bus',
@@ -180,13 +139,11 @@ const DB_COMMERCIAL_TERMS = [
   'motorcycle', 'atv', 'utv', 'quad', 'dirt bike', 'scooter', 'moped',
   'snowmobile', 'golf cart',
 ];
-
 const DB_NON_REPAIRABLE_TERMS = [
   'non-repairable', 'non repairable', 'nonrepairable',
   'junk', 'certificate of destruction', 'parts only',
   'dismantled', 'stripped', 'export only', 'salvage only',
 ];
-
 const DB_CATASTROPHIC_TERMS = [
   'fire', 'burn', 'burned', 'burnt',
   'biohazard', 'bio hazard',
@@ -194,97 +151,74 @@ const DB_CATASTROPHIC_TERMS = [
   'rollover', 'rolled over',
 ];
 
-/** Fields to check for commercial terms. */
-const COMMERCIAL_FIELDS: Array<keyof Prisma.DiscoveredLotWhereInput> = [
-  'bodyStyle', 'title',
-];
-
-/** Fields to check for non-repairable terms. */
-const DOC_FIELDS: Array<keyof Prisma.DiscoveredLotWhereInput> = [
-  'saleDocumentName', 'saleDocumentType', 'title',
-];
-
-/**
- * IMPORTANT: Only use fields that are guaranteed non-null for the majority of rows.
- * primaryDamage is always populated by the normalizer, while secondaryDamage
- * and loss are frequently NULL. SQL three-valued logic means
- * NOT(field ILIKE '%term%') evaluates to NULL (not TRUE) when field is NULL,
- * which would exclude valid rows from results.
- *
- * The function-form evaluateCatalogQuality still checks ALL fields including
- * secondaryDamage and loss. The DB WHERE is a conservative subset that only
- * uses reliably-populated fields.
- */
-const DAMAGE_FIELDS_DB: Array<keyof Prisma.DiscoveredLotWhereInput> = [
-  'primaryDamage',
-];
-
-/**
- * Build a Prisma `where` that excludes lots failing the quality check.
- * Combine with eligibility filters via `AND`.
- *
- * IMPORTANT: SQL three-valued logic — NOT(field ILIKE '%term%') on NULL
- * evaluates to NULL (falsy). We avoid this by only checking fields that
- * are guaranteed non-null per the normalizer: `title` and `primaryDamage`.
- * The function-form evaluateCatalogQuality still checks ALL fields including
- * nullable ones (bodyStyle, saleDocumentName, etc.) for in-memory filtering.
- */
 export function qualityExclusionWhere(): Prisma.DiscoveredLotWhereInput {
-  // Commercial: title is always non-null
-  const commercialExclusions = DB_COMMERCIAL_TERMS.map((term) => ({
-    title: { contains: term, mode: 'insensitive' as const },
-  }));
-
-  // Non-repairable: title is always non-null
-  const nonRepairableExclusions = DB_NON_REPAIRABLE_TERMS.map((term) => ({
-    title: { contains: term, mode: 'insensitive' as const },
-  }));
-
-  // Catastrophic: primaryDamage is always non-null
-  const catastrophicExclusions = DB_CATASTROPHIC_TERMS.map((term) => ({
-    primaryDamage: { contains: term, mode: 'insensitive' as const },
-  }));
-
-  return {
-    NOT: {
-      OR: [
-        ...commercialExclusions,
-        ...nonRepairableExclusions,
-        ...catastrophicExclusions,
-      ],
-    },
-  };
+  const commercialExclusions = DB_COMMERCIAL_TERMS.map((term) => ({ title: { contains: term, mode: 'insensitive' as const } }));
+  const nonRepairableExclusions = DB_NON_REPAIRABLE_TERMS.map((term) => ({ title: { contains: term, mode: 'insensitive' as const } }));
+  const catastrophicExclusions = DB_CATASTROPHIC_TERMS.map((term) => ({ primaryDamage: { contains: term, mode: 'insensitive' as const } }));
+  return { NOT: { OR: [...commercialExclusions, ...nonRepairableExclusions, ...catastrophicExclusions] } };
 }
 
+// ── Task 056: Canonical public visibility predicate ─────────────
+//
+// Public visibility no longer depends on the scheduler's freshnessState.
+// Instead we use canonical observation timestamps with a 48h window.
+//
+// The scheduler's HOT/WARM/COLD tiers control REFRESH PRIORITY only.
+// A missed 15-minute refresh must NEVER hide a valid future lot.
+//
+export const LISTING_FRESH_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * Full public-catalog WHERE: eligibility + quality.
- * Use this for `findMany` and `count` in USA catalog queries.
+ * Full public-catalog WHERE: canonical visibility + quality.
+ *
+ * Visibility rules:
+ * - lifecycle active (UPCOMING/OPEN/LIVE)
+ * - availability confirmed
+ * - not UNAVAILABLE
+ * - consecutiveMisses < 3
+ * - canonical observation within 48h (listingObservedAt → lastProviderUpdateAt → availabilityConfirmedAt→lastSeenAt)
+ * - auction time from now through +7 days
+ * - no explicit terminal provider result
+ * - quality exclusions
+ *
+ * NOTE: freshnessState is NOT used. The scheduler may mark STALE for
+ * refresh-priority purposes — this does NOT affect public visibility.
  */
 export function publicCatalogWhere(
   extra?: Prisma.DiscoveredLotWhereInput,
 ): Prisma.DiscoveredLotWhereInput {
+  const now = Date.now();
+  const freshCutoff = new Date(now - LISTING_FRESH_WINDOW_MS);
+  const horizonEnd = new Date(now + SEVEN_DAYS_MS);
+
   return {
-    // Eligibility (same as `eligibleLot()` but in SQL)
-    lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-    freshnessState: 'FRESH',
-    availabilityConfirmed: true,
-    consecutiveMisses: { lt: 3 },
-
-    // Task 050: A past auctionAt must never remain publicly active.
-    auctionTime: { gte: new Date() },
-
-    // Task 050B: Provider observation must be within COLD TTL (12h).
-    // A lot whose provider data is older than 12h is stale regardless of tier.
-    // This is a read-time safety net complementing the scheduler's reconciliation.
-    lastProviderUpdateAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
-
-    // Quality: year
-    year: { gte: MIN_CATALOG_YEAR },
-
-    // Quality: text-based exclusions
-    ...qualityExclusionWhere(),
-
-    // Caller overrides/extensions
-    ...(extra ?? {}),
+    AND: [
+      // Lifecycle active
+      { lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] } },
+      // Availability confirmed
+      { availabilityConfirmed: true },
+      // Not unavailable
+      { state: { not: 'UNAVAILABLE' } },
+      // Consecutive misses
+      { consecutiveMisses: { lt: 3 } },
+      // Auction time: now through +7 days
+      { auctionTime: { gte: new Date(now), lte: horizonEnd } },
+      // No explicit terminal provider result
+      { providerResultState: { notIn: ['SOLD', 'UNSOLD', 'REMOVED'] } },
+      // Canonical observation within 48h:
+      // listingObservedAt if present, else lastProviderUpdateAt, else lastSeenAt (when availabilityConfirmed)
+      {
+        OR: [
+          { listingObservedAt: { gte: freshCutoff } },
+          { listingObservedAt: null, lastProviderUpdateAt: { gte: freshCutoff } },
+          { listingObservedAt: null, lastProviderUpdateAt: null, lastSeenAt: { gte: freshCutoff } },
+        ],
+      },
+      // Quality exclusions
+      qualityExclusionWhere(),
+      // Caller overrides
+      ...(extra ? [extra] : []),
+    ],
   };
 }
