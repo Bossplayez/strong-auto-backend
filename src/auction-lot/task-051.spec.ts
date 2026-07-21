@@ -4,7 +4,7 @@
  * 2. Terminal lots are excluded from all tier totals and pending refresh
  * 3. Unsuccessful discovery attempt records visible result/error, cannot update lastSuccessfulPageAt
  */
-import { publicCatalogWhere } from './catalog-quality';
+import { publicCatalogWhere } from './public-eligibility';
 import { normalizeLifecycleState, STALE_AFTER_MS } from './lifecycle-mapping';
 import { AuctionLifecycleState, AuctionFreshnessState } from './types';
 
@@ -29,10 +29,12 @@ describe('Task 051: Recovery mode triggers on zero active inventory', () => {
 
   it('catalog API adds catalogState when unfiltered and empty', () => {
     // The publicCatalogWhere() filters must exclude all ended lots
-    const where = publicCatalogWhere();
-    expect(where.lifecycleState).toEqual({ in: ['UPCOMING', 'OPEN', 'LIVE'] });
-    expect(where.auctionTime).toEqual({ gte: expect.any(Date) });
-    expect(where.lastProviderUpdateAt).toBeDefined();
+    const now = new Date('2026-07-21T12:00:00.000Z');
+    const where = publicCatalogWhere(undefined, now);
+    const rules = where.AND as Array<Record<string, unknown>>;
+    expect(rules).toContainEqual({ auctionTime: { gte: now, lt: new Date('2026-07-28T12:00:00.000Z') } });
+    expect(JSON.stringify(where)).not.toContain('lifecycleState');
+    expect(JSON.stringify(where)).not.toContain('freshnessState');
   });
 });
 
@@ -40,11 +42,11 @@ describe('Task 051: Terminal lots excluded from tier totals', () => {
   // The fix: pendingHot/Warm/Cold queries now include lifecycleState filter
   // And reconcileFreshness clears freshnessTier on terminal lots
 
-  it('ENDED lots are classified as terminal, not active', () => {
+  it('a past timestamp without provider result remains non-terminal provider state', () => {
     const pastAuction = new Date('2026-07-15T12:00:00Z');
     const now = new Date('2026-07-20T12:00:00Z');
     const state = normalizeLifecycleState('open', pastAuction, now, false, null);
-    expect(state).toBe(AuctionLifecycleState.ENDED);
+    expect(state).toBe(AuctionLifecycleState.OPEN);
   });
 
   it('SOLD lots are terminal', () => {

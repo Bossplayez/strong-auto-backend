@@ -26,8 +26,9 @@ import {
 import { RequestBudgetService, type FailureKind } from './request-budget.service';
 import type { ProviderId } from './provider-lease.service';
 import { normalizeDiscoveredLot, sanitizeLotForResponse } from './lot-normalizer';
-import { normalizeLifecycleState, computeFreshnessState, STALE_AFTER_MS } from '../auction-lot/lifecycle-mapping';
+import { normalizeLifecycleState, providerResultStateFromRaw, computeFreshnessState, STALE_AFTER_MS } from '../auction-lot/lifecycle-mapping';
 import { AuctionLifecycleState } from '../auction-lot/types';
+import { normalizeAuctionTimestamp } from '../auction-lot/time-normalization';
 
 export interface SearchParams {
   platform: 'copart' | 'iaai';
@@ -243,12 +244,18 @@ export class AuctionSearchService {
 
       const lotId = String(raw.lot_number);
       const normalized = normalizeDiscoveredLot(raw, params.platform);
+      const { providerAuctionTimestampRaw: _rawTimestamp, hasPricingData, buyNowExplicitlyAbsent, ...prismaNormalized } = normalized;
 
       // Compute lifecycle and freshness at write time (same as discovery.service.ts)
       const observedAt = new Date();
+      const timeResult = normalizeAuctionTimestamp(
+        normalized.providerAuctionTimestampRaw,
+        normalized.facilityState,
+      );
+      const auctionTime = timeResult.auctionAtUtc;
       const lifecycleState = normalizeLifecycleState(
         normalized.auctionState,
-        normalized.auctionTime ?? normalized.ad,
+        auctionTime ?? normalized.ad,
         observedAt,
         normalized.isBuyNow,
         normalized.buyNowUsd,
@@ -262,6 +269,19 @@ export class AuctionSearchService {
         STALE_AFTER_MS.COLD,
         observedAt,
       );
+      const providerResultState = providerResultStateFromRaw(
+        normalized.auctionState,
+        auctionTime ?? normalized.ad,
+        observedAt,
+      );
+      const isTerminalResult = ['SOLD', 'UNSOLD', 'REMOVED'].includes(providerResultState);
+      const priceAndBuyNowData = {
+        ...(hasPricingData ? { priceObservedAt: observedAt } : {}),
+        ...((isTerminalResult || !normalized.isBuyNow || !(normalized.buyNowUsd && normalized.buyNowUsd > 0) || buyNowExplicitlyAbsent)
+          ? { isBuyNow: false, buyNowUsd: null }
+          : {}),
+        ...(isTerminalResult ? { terminalAt: observedAt } : {}),
+      };
 
       // Idempotent upsert with computed lifecycle/freshness
       await this.prisma.discoveredLot.upsert({
@@ -274,20 +294,32 @@ export class AuctionSearchService {
         create: {
           provider: params.platform,
           externalLotId: lotId,
-          ...normalized,
+          ...prismaNormalized,
+          providerAuctionTimestampRaw: timeResult.raw,
+          auctionTimestampEvidence: timeResult.evidence,
+          auctionTime,
           lifecycleState,
+          providerResultState,
           freshnessState,
           lastSeenAt: observedAt,
           lastProviderUpdateAt: observedAt,
+          listingObservedAt: observedAt,
+          ...priceAndBuyNowData,
           consecutiveMisses: 0,
           availabilityConfirmed: true,
         },
         update: {
-          ...normalized,
+          ...prismaNormalized,
+          providerAuctionTimestampRaw: timeResult.raw,
+          auctionTimestampEvidence: timeResult.evidence,
+          auctionTime,
           lifecycleState,
+          providerResultState,
           freshnessState,
           lastSeenAt: observedAt,
           lastProviderUpdateAt: observedAt,
+          listingObservedAt: observedAt,
+          ...priceAndBuyNowData,
           consecutiveMisses: 0,
           availabilityConfirmed: true,
         },

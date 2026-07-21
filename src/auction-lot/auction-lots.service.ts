@@ -3,13 +3,20 @@ import { Prisma } from '@prisma/client';
 import type { DiscoveredLot, Vehicle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  auctionItem, CONTRACT_VERSION, eligibleLot, filterItems, page,
+  auctionItem, CONTRACT_VERSION, filterItems, page,
   parseInventoryQuery, PROVIDERS, sortItems, validationError,
 } from './inventory-projection';
-import { evaluateCatalogQuality, publicCatalogWhere } from './catalog-quality';
+import { evaluateCatalogQuality } from './catalog-quality';
+import {
+  deriveAuctionLifecycle,
+  evaluateAuctionTruth,
+  freshAuctionPriceWhere,
+  hasFreshAuctionPrice,
+  publicCatalogWhere,
+  publicLifecycleWhere,
+} from './public-eligibility';
 import {
   computeProjectionV2, deriveCatalogScheduleState,
-  deriveListingFreshness, derivePriceFreshness,
   type CatalogScheduleState, type ListingFreshnessV2, type PriceFreshnessV2,
 } from './projection-v2';
 import { resolveListingObservedAt } from './observation-resolver';
@@ -38,9 +45,10 @@ export class AuctionLotsService {
 
   async findAll(raw: Record<string, unknown>) {
     const query = parseInventoryQuery(raw, 'usa');
+    const now = new Date();
 
     // Use Prisma-side filtering for performance (no unbounded findMany)
-    const where = publicCatalogWhere();
+    const where = publicCatalogWhere(undefined, now);
     if (query.provider) where.provider = query.provider;
     if (query.make) where.make = { equals: query.make, mode: 'insensitive' };
     if (query.model) where.model = { contains: query.model, mode: 'insensitive' };
@@ -49,7 +57,8 @@ export class AuctionLotsService {
     if (query.transmission) where.transmission = { equals: query.transmission, mode: 'insensitive' };
     if (query.driveType) where.driveType = { equals: query.driveType, mode: 'insensitive' };
     if (query.locationState) where.locationState = { equals: query.locationState, mode: 'insensitive' };
-    if (query.lifecycle) where.lifecycleState = query.lifecycle;
+    const lifecycleWhere = publicLifecycleWhere(query.lifecycle);
+    if (lifecycleWhere) (where.AND as Prisma.DiscoveredLotWhereInput[]).push(lifecycleWhere);
     if (query.q) {
       where.OR = [
         { title: { contains: query.q, mode: 'insensitive' } },
@@ -61,7 +70,18 @@ export class AuctionLotsService {
     if (query.yearFrom ?? query.yearTo) {
       where.year = { ...(where.year as object), ...(query.yearFrom && { gte: query.yearFrom }), ...(query.yearTo && { lte: query.yearTo }) };
     }
-    if (query.buyNow !== undefined) where.isBuyNow = query.buyNow;
+    if (query.priceFrom ?? query.priceTo) {
+      (where.AND as Prisma.DiscoveredLotWhereInput[]).push(freshAuctionPriceWhere(now), {
+        OR: [
+          { buyNowUsd: { ...(query.priceFrom !== undefined ? { gte: query.priceFrom } : {}), ...(query.priceTo !== undefined ? { lte: query.priceTo } : {}) } },
+          { currentBidUsd: { ...(query.priceFrom !== undefined ? { gte: query.priceFrom } : {}), ...(query.priceTo !== undefined ? { lte: query.priceTo } : {}) } },
+        ],
+      });
+    }
+    if (query.buyNow !== undefined) {
+      where.isBuyNow = query.buyNow;
+      (where.AND as Prisma.DiscoveredLotWhereInput[]).push(freshAuctionPriceWhere(now));
+    }
 
     const orderBy: Prisma.DiscoveredLotOrderByWithRelationInput =
       query.sort.startsWith('year') ? { year: query.sort.endsWith('_desc') ? 'desc' : 'asc' } :
@@ -81,6 +101,8 @@ export class AuctionLotsService {
           locationState: true, locationDisplay: true,
           odometerKm: true, odometerMi: true,
           buyNowUsd: true, currentBidUsd: true, isBuyNow: true,
+          providerResultState: true, listingObservedAt: true, priceObservedAt: true, lastProviderUpdateAt: true,
+          availabilityConfirmed: true, consecutiveMisses: true, state: true, lastSeenAt: true, auctionState: true,
           mediaUrls: true, auctionTime: true, auctionTimezoneOffset: true,
           lifecycleState: true, freshnessState: true, vehicleId: true, firstSeenAt: true,
         },
@@ -88,7 +110,7 @@ export class AuctionLotsService {
       this.prisma.discoveredLot.count({ where }),
     ]);
 
-    const items = lots.map((lot) => auctionItem(lot as any));
+    const items = lots.map((lot) => this.publicAuctionItem(lot, now));
     return page(items, total, query.page, query.pageSize);
   }
 
@@ -104,19 +126,18 @@ export class AuctionLotsService {
       throw new NotFoundException({ code: 'AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
     }
 
+    const now = new Date();
+    const truth = evaluateAuctionTruth(lot, now);
+
     // Quality evaluation for public visibility
     const quality = evaluateCatalogQuality(lot);
-    if (!quality.include) {
+    const historicalExactLookup = truth.reasonCode === 'TERMINAL_RESULT' || truth.reasonCode === 'RESULT_PENDING';
+    if (!quality.include && !historicalExactLookup) {
       throw new NotFoundException({
         code: 'AUCTION_LOT_NOT_AVAILABLE',
         message: 'Цей лот недоступний у публічному каталозі.',
       });
     }
-
-    // Task 050: Determine result-pending state
-    const now = new Date();
-    const isResultPending = !!(lot.auctionTime && lot.auctionTime <= now &&
-      !['SOLD', 'REMOVED'].includes(lot.lifecycleState));
 
     // Task 054: Use shared observation resolver for canonical timestamp.
     // Fallback: listingObservedAt → lastProviderUpdateAt → availabilityConfirmedAt.
@@ -128,24 +149,42 @@ export class AuctionLotsService {
       currentBidUsd: lot.currentBidUsd,
       buyNowUsd: lot.buyNowUsd,
     });
-    const observationTime = resolvedObs ?? lot.lastSeenAt;
-    const observationAgeMs = now.getTime() - observationTime.getTime();
+    const observationTime = resolvedObs;
     const hoursUntilAuction = lot.auctionTime
       ? (lot.auctionTime.getTime() - now.getTime()) / (60 * 60 * 1000)
       : Infinity;
     const tier = hoursUntilAuction <= 12 ? 'HOT' : hoursUntilAuction <= 48 ? 'WARM' : 'COLD';
-    // Task 054: Use V2 listing freshness (48h window) instead of aggressive tier TTL
-    const LISTING_FRESH_WINDOW_MS = 48 * 60 * 60 * 1000;
-    const isStaleByObservation = observationAgeMs > LISTING_FRESH_WINDOW_MS;
+    const projection = computeProjectionV2({
+      auctionTime: lot.auctionTime,
+      providerResultState: lot.providerResultState,
+      listingObservedAt: lot.listingObservedAt,
+      priceObservedAt: lot.priceObservedAt,
+      lastProviderUpdateAt: lot.lastProviderUpdateAt,
+      availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt : null,
+      currentBidUsd: lot.currentBidUsd,
+      buyNowUsd: lot.buyNowUsd,
+    }, now);
+    const isPriceStale = projection.priceFreshness === 'MISSING_OR_STALE';
+    const showPriceAndCta = truth.publicVisible && !isPriceStale;
 
     // For past-auction lots: show "Аукціон завершився, результат уточнюється"
     // Do not show active prices, countdown, or Buy Now for ended lots
     // Task 050B: Also hide active data when provider observation is stale
-    const isActive = !isResultPending && !isStaleByObservation &&
-      ['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState);
+    const isActive = truth.publicVisible;
+    const item = auctionItem(lot);
 
     return {
-      ...auctionItem(lot),
+      ...item,
+      lifecycle: deriveAuctionLifecycle(lot, now),
+      freshness: truth.publicVisible ? 'FRESH' : item.freshness,
+      price: showPriceAndCta ? item.price : {
+        currency: 'USD' as const,
+        primaryUsd: null,
+        basis: null,
+        currentBidUsd: null,
+        buyNowUsd: null,
+        buyNowAvailable: false,
+      },
       mediaUrls: lot.mediaUrls,
       odometerMi: lot.odometerMi,
       // Vehicle characteristics
@@ -174,9 +213,10 @@ export class AuctionLotsService {
       rawProviderStatus: lot.state,
       availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt.toISOString() : null,
       // Task 050: Expose the meaningful provider-observed timestamp.
-      providerObservedAt: observationTime.toISOString(),
+      providerObservedAt: observationTime?.toISOString() ?? null,
       // Task 050B: Expose computed staleness flag for UI
-      isStale: isStaleByObservation,
+      isStale: truth.reasonCode === 'LISTING_STALE',
+      isPriceStale,
       // Task 050B: Tier used for staleness computation
       freshnessTier: tier,
       lastSoldPriceUsd: lot.lastSoldPriceUsd ? Number(lot.lastSoldPriceUsd) : null,
@@ -187,7 +227,8 @@ export class AuctionLotsService {
       qualityReasonCode: quality.reasonCode,
       contractVersion: CONTRACT_VERSION, asOf: new Date().toISOString(),
       // Task 050: result-pending state for past auction without confirmed provider result
-      resultPending: isResultPending,
+      resultPending: truth.reasonCode === 'RESULT_PENDING',
+      terminal: truth.reasonCode === 'TERMINAL_RESULT',
       // Task 050: whether this lot is still actively auctioning
       isActive,
       // Task 050: external auction URL for the lot
@@ -216,27 +257,32 @@ export class AuctionLotsService {
     // Task 050: Mark whether each lot is still active or has ended.
     // Do NOT hide ended lots from search (users may search for historical data),
     // but include the lifecycle so the UI can render appropriately.
-    const items = lots.map(lot => {
-      const projected = auctionItem(lot);
-      const isEnded = lot.auctionTime && lot.auctionTime <= now &&
-        !['SOLD', 'REMOVED'].includes(lot.lifecycleState);
-      return {
+    const items = lots.flatMap(lot => {
+      const projected = this.publicAuctionItem(lot, now);
+      const truth = evaluateAuctionTruth(lot, now);
+      const historicalExactLookup = truth.reasonCode === 'TERMINAL_RESULT' || truth.reasonCode === 'RESULT_PENDING';
+      if (!historicalExactLookup && (!truth.publicVisible || !evaluateCatalogQuality(lot).include)) return [];
+      return [{
         ...projected,
-        resultPending: isEnded ?? false,
-      };
+        lifecycle: deriveAuctionLifecycle(lot, now),
+        resultPending: truth.reasonCode === 'RESULT_PENDING',
+        terminal: truth.reasonCode === 'TERMINAL_RESULT',
+        isActive: truth.publicVisible,
+      }];
     });
     return { contractVersion: CONTRACT_VERSION, items, total: items.length, asOf: new Date().toISOString() };
   }
 
   async getStats() {
-    const lots = (await this.prisma.discoveredLot.findMany()).filter(eligibleLot);
+    const now = new Date();
+    const lots = await this.prisma.discoveredLot.findMany({ where: publicCatalogWhere(undefined, now) });
     const partition = (provider?: string) => {
       const selected = provider ? lots.filter((lot) => lot.provider === provider) : lots;
       return {
         current: selected.length,
-        live: selected.filter((lot) => lot.lifecycleState === 'LIVE').length,
-        buyNow: selected.filter((lot) => lot.isBuyNow && Number(lot.buyNowUsd) > 0).length,
-        upcoming: selected.filter((lot) => lot.lifecycleState === 'UPCOMING').length,
+        live: selected.filter((lot) => deriveAuctionLifecycle(lot, now) === 'LIVE').length,
+        buyNow: selected.filter((lot) => lot.isBuyNow && Number(lot.buyNowUsd) > 0 && hasFreshAuctionPrice(lot, now)).length,
+        upcoming: selected.filter((lot) => deriveAuctionLifecycle(lot, now) === 'UPCOMING').length,
       };
     };
     return {
@@ -246,11 +292,80 @@ export class AuctionLotsService {
     };
   }
 
+  /**
+   * Public list projection: listing visibility and price truth are separate.
+   * A listing can remain browseable while its auction price is safely redacted.
+   */
+  private publicAuctionItem(lot: {
+    auctionTime: Date | null;
+    providerResultState: string;
+    listingObservedAt?: Date | null;
+    priceObservedAt?: Date | null;
+    lastProviderUpdateAt?: Date | null;
+    lastSeenAt?: Date | null;
+    availabilityConfirmed?: boolean;
+    consecutiveMisses?: number;
+    state?: string;
+    auctionState?: string | null;
+    currentBidUsd: Prisma.Decimal | null;
+    buyNowUsd: Prisma.Decimal | null;
+    [key: string]: unknown;
+  }, now: Date) {
+    const item = auctionItem(lot as any);
+    const truth = evaluateAuctionTruth({
+      auctionTime: lot.auctionTime,
+      providerResultState: lot.providerResultState,
+      listingObservedAt: lot.listingObservedAt ?? null,
+      lastProviderUpdateAt: lot.lastProviderUpdateAt ?? null,
+      availabilityConfirmed: lot.availabilityConfirmed ?? true,
+      lastSeenAt: lot.lastSeenAt ?? null,
+      state: lot.state ?? 'DISCOVERED',
+      consecutiveMisses: lot.consecutiveMisses ?? 0,
+    }, now);
+    const projection = computeProjectionV2({
+      auctionTime: lot.auctionTime,
+      providerResultState: lot.providerResultState,
+      listingObservedAt: lot.listingObservedAt ?? null,
+      priceObservedAt: lot.priceObservedAt ?? null,
+      lastProviderUpdateAt: lot.lastProviderUpdateAt ?? null,
+      availabilityConfirmedAt: lot.availabilityConfirmed && lot.lastSeenAt ? lot.lastSeenAt : null,
+      currentBidUsd: lot.currentBidUsd,
+      buyNowUsd: lot.buyNowUsd,
+    }, now);
+    const lifecycle = deriveAuctionLifecycle({
+      auctionTime: lot.auctionTime,
+      providerResultState: lot.providerResultState,
+      listingObservedAt: lot.listingObservedAt ?? null,
+      lastProviderUpdateAt: lot.lastProviderUpdateAt ?? null,
+      availabilityConfirmed: lot.availabilityConfirmed ?? true,
+      lastSeenAt: lot.lastSeenAt ?? null,
+      state: lot.state ?? 'DISCOVERED',
+      consecutiveMisses: lot.consecutiveMisses ?? 0,
+      auctionState: lot.auctionState ?? null,
+      lifecycleState: item.lifecycle,
+    }, now);
+    if (truth.publicVisible && projection.priceFreshness === 'FRESH') return { ...item, lifecycle, freshness: 'FRESH' as const };
+    return {
+      ...item,
+      lifecycle,
+      freshness: 'FRESH' as const,
+      price: {
+        currency: 'USD' as const,
+        primaryUsd: null,
+        basis: null,
+        currentBidUsd: null,
+        buyNowUsd: null,
+        buyNowAvailable: false,
+      },
+    };
+  }
+
   async listAdminLots(raw: Record<string, unknown>) {
     const query = parseAdminLotQuery(raw);
     const lots = await this.prisma.discoveredLot.findMany();
     const linked = await this.linkedVehicles(lots.map((lot) => lot.vehicleId).filter((id): id is string => Boolean(id)));
-    const items = lots.map((lot) => this.adminItem(lot, linked.get(lot.vehicleId ?? ''))).filter((item) => matchesAdminItem(item, query));
+    const asOf = new Date();
+    const items = lots.map((lot) => this.adminItem(lot, linked.get(lot.vehicleId ?? ''), asOf)).filter((item) => matchesAdminItem(item, query));
     const sorted = sortAdminItems(items, query.sort);
     const offset = (query.page - 1) * query.pageSize;
     return page(sorted.slice(offset, offset + query.pageSize), sorted.length, query.page, query.pageSize);
@@ -262,10 +377,11 @@ export class AuctionLotsService {
     if (!lot) throw new NotFoundException({ code: 'ADMIN_AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
     const linked = await this.linkedVehicles(lot.vehicleId ? [lot.vehicleId] : []);
     const quality = evaluateCatalogQuality(lot);
+    const asOf = new Date();
     return {
       contractVersion: CONTRACT_VERSION,
       item: {
-        ...this.adminItem(lot, linked.get(lot.vehicleId ?? '')),
+        ...this.adminItem(lot, linked.get(lot.vehicleId ?? ''), asOf),
         vin: lot.vin ?? null, bodyType: lot.bodyStyle ?? null, fuelType: lot.fuelType ?? null,
         transmission: lot.transmission ?? null, driveType: lot.driveType ?? null,
         damagePrimary: lot.primaryDamage ?? null, damageSecondary: lot.secondaryDamage ?? null,
@@ -285,7 +401,7 @@ export class AuctionLotsService {
         qualityReasonCode: quality.reasonCode,
         qualityReason: quality.reason,
       },
-      asOf: new Date().toISOString(),
+      asOf: asOf.toISOString(),
     };
   }
 
@@ -297,11 +413,11 @@ export class AuctionLotsService {
         tx.vehicle.findMany({ select: { id: true, publicationStatus: true } }),
       ]);
       const classify = (lot: (typeof lots)[number]) => {
-        const ended = ['ENDED', 'SOLD', 'REMOVED'].includes(lot.lifecycleState) ||
-          ['SOLD', 'REMOVED', 'UNAVAILABLE'].includes(lot.state);
+        const truth = evaluateAuctionTruth(lot, asOf);
+        const ended = ['SOLD', 'UNSOLD', 'REMOVED'].includes(lot.providerResultState);
         if (ended) return 'ended' as const;
-        if (eligibleLot(lot)) return 'current' as const;
-        if (['STALE', 'DEFERRED'].includes(lot.freshnessState) || !lot.availabilityConfirmed || lot.consecutiveMisses > 0) {
+        if (truth.publicVisible && evaluateCatalogQuality(lot).include) return 'current' as const;
+        if (truth.reasonCode === 'LISTING_STALE' || truth.reasonCode === 'UNAVAILABLE') {
           return 'stale' as const;
         }
         return 'unclassified' as const;
@@ -321,11 +437,7 @@ export class AuctionLotsService {
       const imported = vehicles.filter((vehicle) => importedIds.has(vehicle.id));
 
       // Coverage diagnostics: how many active lots have state/city
-      const activeLots = lots.filter((lot) => {
-        const ended = ['ENDED', 'SOLD', 'REMOVED'].includes(lot.lifecycleState) ||
-          ['SOLD', 'REMOVED', 'UNAVAILABLE'].includes(lot.state);
-        return !ended;
-      });
+      const activeLots = lots.filter((lot) => evaluateAuctionTruth(lot, asOf).publicVisible && evaluateCatalogQuality(lot).include);
       const coverage = (provider?: string) => {
         const selected = provider ? activeLots.filter((lot) => lot.provider === provider) : activeLots;
         return {
@@ -489,8 +601,9 @@ export class AuctionLotsService {
     return new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
   }
 
-  private adminItem(lot: DiscoveredLot, vehicle?: LinkedVehicle) {
+  private adminItem(lot: DiscoveredLot, vehicle?: LinkedVehicle, now = new Date()) {
     const projected = auctionItem(lot);
+    const truth = evaluateAuctionTruth(lot, now);
     // Task 053: Compute V2 projection for admin diagnostics
     const v2 = computeProjectionV2({
       auctionTime: lot.auctionTime,
@@ -501,15 +614,15 @@ export class AuctionLotsService {
       availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt : null,
       buyNowUsd: lot.buyNowUsd,
       currentBidUsd: lot.currentBidUsd,
-    });
+    }, now);
     return {
       key: projected.key,
       provider: lot.provider,
       externalLotId: lot.externalLotId,
       state: lot.state,
       tier: lot.freshnessTier,
-      lifecycle: projected.lifecycle,
-      freshness: projected.freshness,
+      lifecycle: deriveAuctionLifecycle(lot, now),
+      freshness: truth.publicVisible ? 'FRESH' : projected.freshness,
       title: projected.title,
       make: projected.make,
       model: projected.model,
@@ -539,6 +652,8 @@ export class AuctionLotsService {
       providerAuctionTimestampRaw: lot.providerAuctionTimestampRaw,
       listingObservedAt: lot.listingObservedAt?.toISOString() ?? null,
       priceObservedAt: lot.priceObservedAt?.toISOString() ?? null,
+      publicVisible: truth.publicVisible,
+      truthReasonCode: truth.reasonCode,
     };
   }
 

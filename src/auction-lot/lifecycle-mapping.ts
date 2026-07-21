@@ -13,9 +13,9 @@ import { AuctionLifecycleState, AuctionFreshnessState } from './types';
  * This function is the ONLY place where this mapping happens.
  *
  * Priority rules:
- * 1. Terminal provider states (sold, removed, ended/closed) → terminal lifecycle
+ * 1. Explicit sold/removed provider results map to terminal lifecycle
  * 2. Explicit live provider evidence → LIVE
- * 3. If auction date is in the PAST → ENDED (unless Buy Now is active)
+ * 3. Elapsed time alone remains non-terminal; result policy marks it pending
  * 4. If auction date is in the FUTURE → UPCOMING
  * 5. If no date and active state (open/on/bidding) → OPEN
  * 6. Otherwise → NOT_READY
@@ -30,45 +30,50 @@ export function normalizeLifecycleState(
   if (!providerRawState) {
     // No state string — rely on auction date
     if (!auctionDate) return AuctionLifecycleState.NOT_READY;
-    return auctionDate > now
-      ? AuctionLifecycleState.UPCOMING
-      : AuctionLifecycleState.ENDED;
+    return auctionDate > now ? AuctionLifecycleState.UPCOMING : AuctionLifecycleState.OPEN;
   }
 
   const s = providerRawState.toLowerCase().trim();
 
   // Terminal states
+  if (s.includes('unsold')) return AuctionLifecycleState.ENDED;
   if (s === 'sold' || s.includes('sold')) return AuctionLifecycleState.SOLD;
   if (s === 'removed' || s === 'cancelled' || s === 'canceled' || s.includes('withdrawn'))
     return AuctionLifecycleState.REMOVED;
   if (s === 'ended' || s.includes('ended') || s.includes('closed'))
-    return AuctionLifecycleState.ENDED;
+    return AuctionLifecycleState.OPEN;
 
   // Explicit live evidence → LIVE (regardless of date)
   if (s === 'live' || s.includes('live')) return AuctionLifecycleState.LIVE;
 
   // Active states (open/on/bidding)
-  // Task 050: A past auctionAt must never remain publicly active.
-  // Even with Buy Now, past auction = ENDED. Only provider-confirmed
-  // terminal fields may produce SOLD / final price.
+  // Public visibility is decided separately by evaluateAuctionTruth, which
+  // marks elapsed auctions RESULT_PENDING until the provider confirms a result.
   if (s === 'open' || s === 'on' || s.includes('open') || s.includes('bidding')) {
-    if (auctionDate && auctionDate <= now) {
-      return AuctionLifecycleState.ENDED;
-    }
     return AuctionLifecycleState.OPEN;
   }
 
   // Upcoming — has future auction date
   if (auctionDate && auctionDate > now) return AuctionLifecycleState.UPCOMING;
 
-  // If we have a past date but no terminal state, treat as ended
+  // A past date alone is not evidence of a terminal provider result.
   // Task 050: No Buy Now rescue — past auction = ENDED
-  if (auctionDate && auctionDate <= now) {
-    return AuctionLifecycleState.ENDED;
-  }
+  if (auctionDate && auctionDate <= now) return AuctionLifecycleState.OPEN;
 
   // No date, unknown state
   return AuctionLifecycleState.NOT_READY;
+}
+
+export function providerResultStateFromRaw(
+  providerRawState: string | null | undefined,
+  auctionDate: Date | null | undefined,
+  now: Date = new Date(),
+): 'UNKNOWN' | 'RESULT_PENDING' | 'SOLD' | 'UNSOLD' | 'REMOVED' {
+  const state = providerRawState?.toLowerCase().trim() ?? '';
+  if (state.includes('unsold')) return 'UNSOLD';
+  if (state.includes('sold')) return 'SOLD';
+  if (state === 'removed' || state === 'cancelled' || state === 'canceled' || state.includes('withdrawn')) return 'REMOVED';
+  return auctionDate && auctionDate < now ? 'RESULT_PENDING' : 'UNKNOWN';
 }
 
 /**
@@ -132,6 +137,7 @@ export const STALE_AFTER_MS = {
  * - availabilityConfirmed = true
  * - consecutiveMisses < 3
  */
+/** @deprecated Public endpoints use evaluateAuctionTruth/publicCatalogWhere. */
 export function isPublicEligible(
   freshnessState: AuctionFreshnessState,
   lifecycleState: AuctionLifecycleState,

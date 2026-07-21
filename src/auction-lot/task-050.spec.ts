@@ -1,18 +1,19 @@
 /**
  * Task 050 Focused Tests
  */
+import { Prisma } from '@prisma/client';
 import { normalizeLifecycleState, computeFreshnessState } from './lifecycle-mapping';
 import { AuctionLifecycleState, AuctionFreshnessState } from './types';
-import { publicCatalogWhere } from './catalog-quality';
+import { publicCatalogWhere } from './public-eligibility';
 import { priceFact } from './inventory-projection';
 
 describe('Task 050: Stale lifecycle gate', () => {
   const now = new Date('2026-07-20T12:00:00Z');
 
-  it('past auctionAt is ENDED regardless of Buy Now', () => {
+  it('past auctionAt without an explicit provider result remains non-terminal', () => {
     const pastDate = new Date('2026-07-19T12:00:00Z');
     expect(normalizeLifecycleState('open', pastDate, now, true, 5000))
-      .toBe(AuctionLifecycleState.ENDED);
+      .toBe(AuctionLifecycleState.OPEN);
   });
 
   it('future auctionAt with active state is OPEN', () => {
@@ -30,18 +31,18 @@ describe('Task 050: Stale lifecycle gate', () => {
     )).toBe(AuctionFreshnessState.STALE);
   });
 
-  it('publicCatalogWhere excludes past auctionAt', () => {
-    const where = publicCatalogWhere();
-    expect(where.auctionTime).toBeDefined();
-    expect((where.auctionTime as any).gte).toBeDefined();
+  it('publicCatalogWhere uses a bounded auction window', () => {
+    const where = publicCatalogWhere(undefined, now);
+    expect(JSON.stringify(where)).toContain('auctionTime');
+    expect(JSON.stringify(where)).toContain('gte');
   });
 });
 
 describe('Task 050: Price basis selection', () => {
   it('uses buyNow as primary when available', () => {
     const result = priceFact({
-      buyNowUsd: 5000,
-      currentBidUsd: 3000,
+      buyNowUsd: new Prisma.Decimal(5000),
+      currentBidUsd: new Prisma.Decimal(3000),
       isBuyNow: true,
     });
     expect(result.primaryUsd).toBe(5000);
@@ -52,7 +53,7 @@ describe('Task 050: Price basis selection', () => {
   it('uses currentBid when buyNow absent', () => {
     const result = priceFact({
       buyNowUsd: null,
-      currentBidUsd: 3000,
+      currentBidUsd: new Prisma.Decimal(3000),
       isBuyNow: false,
     });
     expect(result.primaryUsd).toBe(3000);
@@ -62,8 +63,8 @@ describe('Task 050: Price basis selection', () => {
 
   it('clears buyNow when isBuyNow is false', () => {
     const result = priceFact({
-      buyNowUsd: 5000,
-      currentBidUsd: 3000,
+      buyNowUsd: new Prisma.Decimal(5000),
+      currentBidUsd: new Prisma.Decimal(3000),
       isBuyNow: false,
     });
     expect(result.buyNowAvailable).toBe(false);

@@ -1,5 +1,4 @@
 // Task 053: Auction Truth Contract V2 — focused tests
-import { describe, it, expect } from 'vitest';
 import { normalizeAuctionTimestamp } from './time-normalization';
 import {
   computeProjectionV2,

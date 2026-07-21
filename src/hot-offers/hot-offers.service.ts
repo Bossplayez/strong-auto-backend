@@ -14,7 +14,8 @@
 
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { publicCatalogWhere, evaluateCatalogQuality, MIN_CATALOG_YEAR } from '../auction-lot/catalog-quality';
+import { evaluateCatalogQuality, MIN_CATALOG_YEAR } from '../auction-lot/catalog-quality';
+import { deriveAuctionLifecycle, evaluateAuctionTruth, hasFreshAuctionPrice, publicCatalogWhere } from '../auction-lot/public-eligibility';
 import type { DiscoveredLot } from '@prisma/client';
 
 /** Minimal lot shape for hot-offers scoring/ranking. */
@@ -37,12 +38,19 @@ interface HotOfferCandidateLot {
   buyNowUsd: any;
   isBuyNow: boolean;
   auctionTime: Date | null;
+  auctionState: string | null;
   auctionTimezoneOffset: number | null;
   mediaUrls: string[];
   lifecycleState: string;
   freshnessState: string;
   availabilityConfirmed: boolean;
   consecutiveMisses: number;
+  providerResultState: string;
+  listingObservedAt: Date | null;
+  lastProviderUpdateAt: Date | null;
+  priceObservedAt: Date | null;
+  lastSeenAt: Date;
+  state: string;
   primaryDamage: string | null;
   secondaryDamage: string | null;
   loss: string | null;
@@ -118,6 +126,14 @@ export interface HotOfferCandidate {
   manualPin: boolean;
   qualityInclude: boolean;
   qualityReason: string | null;
+  providerResultState: string;
+  listingObservedAt: Date | null;
+  lastProviderUpdateAt: Date | null;
+  priceObservedAt: Date | null;
+  lastSeenAt: Date;
+  availabilityConfirmed: boolean;
+  consecutiveMisses: number;
+  state: string;
 }
 
 export interface AdminHotOffersResponse {
@@ -266,11 +282,18 @@ const CANDIDATE_SELECT = {
   isBuyNow: true,
   auctionTime: true,
   auctionTimezoneOffset: true,
+  auctionState: true,
   mediaUrls: true,
   lifecycleState: true,
   freshnessState: true,
   availabilityConfirmed: true,
   consecutiveMisses: true,
+  providerResultState: true,
+  listingObservedAt: true,
+  lastProviderUpdateAt: true,
+  priceObservedAt: true,
+  lastSeenAt: true,
+  state: true,
   primaryDamage: true,
   secondaryDamage: true,
   loss: true,
@@ -556,7 +579,7 @@ export class HotOffersService {
             ...(makes.size > 0 ? [{ make: { in: [...makes].map(m => m.charAt(0).toUpperCase() + m.slice(1)) } }] : []),
             ...(bodyTypes.size > 0 ? [{ bodyStyle: { in: [...bodyTypes].map(b => b.charAt(0).toUpperCase() + b.slice(1)) } }] : []),
           ],
-        }),
+        }, now),
       },
       select: CANDIDATE_SELECT,
       take: 100,
@@ -567,6 +590,7 @@ export class HotOffersService {
       .filter(lot => !excluded.has(`${lot.provider}:${lot.externalLotId}`))
       .filter(lot => isPassengerVehicle(lot))
       .filter(lot => hasRealPrice(lot))
+      .filter(lot => hasFreshAuctionPrice(lot, now))
       .filter(lot => {
         const q = evaluateCatalogQuality(lot);
         if (!q.include) return false;
@@ -616,11 +640,11 @@ export class HotOffersService {
       throw new BadRequestException({ code: 'QUALITY_FAILED', message: `Лот не проходить перевірку якості: ${q.reason}` });
     }
     // Must be active lifecycle
-    if (!['UPCOMING', 'OPEN', 'LIVE'].includes(lot.lifecycleState)) {
+    if (!evaluateAuctionTruth(lot, now).publicVisible) {
       throw new BadRequestException({ code: 'TERMINAL_LOT', message: 'Лот завершено або видалено' });
     }
     // Must have price
-    if (!hasRealPrice(lot)) {
+    if (!hasRealPrice(lot) || !hasFreshAuctionPrice(lot, now)) {
       throw new BadRequestException({ code: 'NO_PRICE', message: 'У лота немає реальної ціни' });
     }
     // Must be passenger vehicle
@@ -648,7 +672,7 @@ export class HotOffersService {
         where: publicCatalogWhere({
           auctionTime: { gte: now, lte: urgentEnd },
           provider,
-        }),
+        }, now),
         select: CANDIDATE_SELECT,
         take: 100,
         orderBy: { auctionTime: 'asc' },
@@ -659,7 +683,7 @@ export class HotOffersService {
         where: publicCatalogWhere({
           auctionTime: { gt: urgentEnd, lte: weekEnd },
           provider,
-        }),
+        }, now),
         select: CANDIDATE_SELECT,
         take: 100,
         orderBy: { auctionTime: 'asc' },
@@ -705,6 +729,7 @@ export class HotOffersService {
       .filter(lot => !excluded.has(`${lot.provider}:${lot.externalLotId}`))
       .filter(isPassengerVehicle)
       .filter(hasRealPrice)
+      .filter(lot => hasFreshAuctionPrice(lot, now))
       .filter(lot => {
         // Policy extra damage exclusions (can only narrow, not loosen)
         if (policy.extraDamageExclusions.length === 0) return true;
@@ -728,7 +753,8 @@ export class HotOffersService {
       })
       .filter(lot => lot.make && lot.model) // Must have real make and model
       .map(lot => this.scoreLot(lot, policy, now, tier))
-      .filter(c => c.qualityInclude); // Exclude lots that fail quality evaluation
+      .filter(c => c.qualityInclude)
+      .filter(c => this.stillEligible(c, tier, now));
 
     // Sort by score
     const sorted = [...filtered].sort((a, b) => b.score - a.score);
@@ -849,18 +875,41 @@ export class HotOffersService {
       buyNowUsd: Number.isFinite(buyNow) && buyNow > 0 ? buyNow : null,
       buyNowAvailable: lot.isBuyNow && hasBuyNow,
       auctionAt: lot.auctionTime?.toISOString() ?? null,
-      lifecycle: lot.lifecycleState,
+      lifecycle: deriveAuctionLifecycle(lot, now),
       score: Math.round(score * 1000) / 1000,
       reasonCodes,
       manualPin: false,
       qualityInclude: evaluateCatalogQuality(lot).include,
       qualityReason: evaluateCatalogQuality(lot).reason,
+      providerResultState: lot.providerResultState,
+      listingObservedAt: lot.listingObservedAt,
+      lastProviderUpdateAt: lot.lastProviderUpdateAt,
+      priceObservedAt: lot.priceObservedAt,
+      lastSeenAt: lot.lastSeenAt,
+      availabilityConfirmed: lot.availabilityConfirmed,
+      consecutiveMisses: lot.consecutiveMisses,
+      state: lot.state,
     };
   }
 
   private stillEligible(candidate: HotOfferCandidate, tier: HotOfferTier, now: Date): boolean {
-    // Check lifecycle
-    if (['ENDED', 'SOLD', 'REMOVED', 'NOT_READY'].includes(candidate.lifecycle)) return false;
+    if (!evaluateAuctionTruth({
+      auctionTime: candidate.auctionAt ? new Date(candidate.auctionAt) : null,
+      providerResultState: candidate.providerResultState,
+      listingObservedAt: candidate.listingObservedAt,
+      lastProviderUpdateAt: candidate.lastProviderUpdateAt,
+      availabilityConfirmed: candidate.availabilityConfirmed,
+      lastSeenAt: candidate.lastSeenAt,
+      state: candidate.state,
+      consecutiveMisses: candidate.consecutiveMisses,
+    }, now).publicVisible) return false;
+    if (!hasFreshAuctionPrice({
+      auctionTime: candidate.auctionAt ? new Date(candidate.auctionAt) : null,
+      priceObservedAt: candidate.priceObservedAt,
+      lastProviderUpdateAt: candidate.lastProviderUpdateAt,
+      currentBidUsd: candidate.currentBidUsd,
+      buyNowUsd: candidate.buyNowUsd,
+    }, now)) return false;
     // Check auction time still in tier window
     if (!candidate.auctionAt) return false;
     const msUntil = new Date(candidate.auctionAt).getTime() - now.getTime();

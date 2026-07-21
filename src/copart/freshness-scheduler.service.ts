@@ -818,6 +818,19 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       const warmAuctionEnd = new Date(reconNow.getTime() + 48 * 60 * 60 * 1000);
       const freshCutoff = new Date(reconNow.getTime() - 48 * 60 * 60 * 1000); // 48h
 
+      // Repair the previous time-only lifecycle projection only when the
+      // provider schedule itself says the lot is still in the future.  This is
+      // deliberately narrow: no terminal result is invented or overwritten.
+      const recoveredFutureLots = await this.prisma.discoveredLot.updateMany({
+        where: {
+          state: { in: ['DISCOVERED', 'IMPORTED'] },
+          lifecycleState: 'ENDED',
+          providerResultState: { in: ['UNKNOWN', 'RESULT_PENDING'] },
+          auctionTime: { gte: reconNow },
+        },
+        data: { lifecycleState: 'UPCOMING' },
+      });
+
       // Step 1: Assign tier by auction proximity (refresh priority only)
       await this.prisma.discoveredLot.updateMany({
         where: {
@@ -888,15 +901,15 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       const terminalCleared = await this.prisma.discoveredLot.updateMany({
         where: {
           state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['ENDED', 'SOLD', 'REMOVED'] },
+          providerResultState: { in: ['SOLD', 'UNSOLD', 'REMOVED'] },
           OR: [{ freshnessTier: { not: 'COLD' } }, { nextRefreshAt: { not: null } }],
         },
         data: { freshnessTier: 'COLD', nextRefreshAt: null },
       });
 
-      if (markedFresh.count > 0 || markedStale.count > 0 || terminalCleared.count > 0) {
+      if (recoveredFutureLots.count > 0 || markedFresh.count > 0 || markedStale.count > 0 || terminalCleared.count > 0) {
         this.logger.log(
-          `Canonical reconciliation: FRESH=${markedFresh.count}, STALE=${markedStale.count} (48h window), terminal cleared=${terminalCleared.count}`,
+          `Canonical reconciliation: recovered future=${recoveredFutureLots.count}, FRESH=${markedFresh.count}, STALE=${markedStale.count} (48h window), terminal cleared=${terminalCleared.count}`,
         );
       }
     } catch (err) {
@@ -915,7 +928,7 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       // until an explicit provider result arrives.
       const pendingResult = await this.prisma.discoveredLot.updateMany({
         where: {
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
+          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE', 'ENDED'] },
           auctionTime: { lt: reconciledNow },
           state: { in: ['DISCOVERED', 'IMPORTED'] },
           providerResultState: 'UNKNOWN',

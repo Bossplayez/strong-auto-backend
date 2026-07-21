@@ -35,6 +35,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { CONTRACT_VERSION, auctionItem, priceFact } from './inventory-projection';
 import { NotFoundException } from '@nestjs/common';
+import { deriveAuctionLifecycle, evaluateAuctionTruth, hasFreshAuctionPrice } from './public-eligibility';
 
 @ApiTags('auction-lots')
 @UseFilters(ContractErrorFilter)
@@ -83,6 +84,9 @@ export class AuctionLotsController {
   }
 
   @Get('admin/metrics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MANAGER')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin: auction lot metrics with coverage diagnostics' })
   @ApiResponse({ status: 200, description: 'Detailed metrics including quality coverage' })
   async adminMetrics() {
@@ -90,6 +94,9 @@ export class AuctionLotsController {
   }
 
   @Get('admin/lot/:provider/:externalLotId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MANAGER')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin: full lot detail with quality outcome' })
   @ApiParam({ name: 'provider', description: 'Provider (copart, iaai)' })
   @ApiParam({ name: 'externalLotId', description: 'External lot number' })
@@ -142,20 +149,37 @@ export class AuctionLotFavoritesController {
       include: { discoveredLot: true },
       orderBy: { createdAt: 'desc' },
     });
+    const now = new Date();
     return {
       contractVersion: CONTRACT_VERSION,
-      items: favorites.map(f => ({
-        key: `auctionLot:${f.discoveredLot.provider}:${f.discoveredLot.externalLotId}`,
-        provider: f.discoveredLot.provider,
-        externalLotId: f.discoveredLot.externalLotId,
-        title: f.discoveredLot.title,
-        lifecycle: f.discoveredLot.lifecycleState,
-        freshness: f.discoveredLot.freshnessState,
-        price: priceFact(f.discoveredLot),
-        thumbnailUrl: f.discoveredLot.mediaUrls[0] ?? null,
-        auctionAt: f.discoveredLot.auctionTime?.toISOString() ?? null,
-        createdAt: f.createdAt.toISOString(),
-      })),
+      items: favorites.map(f => {
+        const lot = f.discoveredLot;
+        const truth = evaluateAuctionTruth(lot, now);
+        const priceFresh = truth.publicVisible && hasFreshAuctionPrice(lot, now);
+        return {
+          key: `auctionLot:${lot.provider}:${lot.externalLotId}`,
+          provider: lot.provider,
+          externalLotId: lot.externalLotId,
+          title: lot.title,
+          lifecycle: deriveAuctionLifecycle(lot, now),
+          freshness: truth.publicVisible ? 'FRESH' : truth.reasonCode === 'LISTING_STALE' ? 'STALE' : 'DEFERRED',
+          price: priceFresh ? priceFact(lot) : {
+            currency: 'USD' as const,
+            primaryUsd: null,
+            basis: null,
+            currentBidUsd: null,
+            buyNowUsd: null,
+            buyNowAvailable: false,
+          },
+          isActive: truth.publicVisible,
+          isPriceStale: truth.publicVisible && !priceFresh,
+          resultPending: truth.reasonCode === 'RESULT_PENDING',
+          terminal: truth.reasonCode === 'TERMINAL_RESULT',
+          thumbnailUrl: lot.mediaUrls[0] ?? null,
+          auctionAt: lot.auctionTime?.toISOString() ?? null,
+          createdAt: f.createdAt.toISOString(),
+        };
+      }),
       total: favorites.length,
       asOf: new Date().toISOString(),
     };

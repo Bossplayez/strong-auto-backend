@@ -6,6 +6,7 @@
 
 import {
   normalizeLifecycleState,
+  providerResultStateFromRaw,
   computeFreshnessState,
   isPublicEligible,
   lifecycleToProviderStates,
@@ -28,14 +29,19 @@ describe('normalizeLifecycleState', () => {
     expect(normalizeLifecycleState(null, future, now)).toBe(AuctionLifecycleState.UPCOMING);
   });
 
-  it('returns ENDED when no state but past date', () => {
-    expect(normalizeLifecycleState(null, past, now)).toBe(AuctionLifecycleState.ENDED);
+  it('keeps an elapsed auction OPEN until the provider confirms a terminal result', () => {
+    expect(normalizeLifecycleState(null, past, now)).toBe(AuctionLifecycleState.OPEN);
   });
 
   it('maps SOLD states correctly', () => {
     expect(normalizeLifecycleState('sold', future, now)).toBe(AuctionLifecycleState.SOLD);
     expect(normalizeLifecycleState('Sold', past, now)).toBe(AuctionLifecycleState.SOLD);
     expect(normalizeLifecycleState('SOLD', null, now)).toBe(AuctionLifecycleState.SOLD);
+  });
+
+  it('keeps UNSOLD distinct from SOLD', () => {
+    expect(normalizeLifecycleState('unsold', past, now)).toBe(AuctionLifecycleState.ENDED);
+    expect(providerResultStateFromRaw('unsold', past, now)).toBe('UNSOLD');
   });
 
   it('maps REMOVED states correctly', () => {
@@ -45,9 +51,9 @@ describe('normalizeLifecycleState', () => {
     expect(normalizeLifecycleState('withdrawn', null, now)).toBe(AuctionLifecycleState.REMOVED);
   });
 
-  it('maps ENDED states correctly', () => {
-    expect(normalizeLifecycleState('ended', null, now)).toBe(AuctionLifecycleState.ENDED);
-    expect(normalizeLifecycleState('closed', null, now)).toBe(AuctionLifecycleState.ENDED);
+  it('keeps ended/closed provider wording non-terminal until a result is explicit', () => {
+    expect(normalizeLifecycleState('ended', null, now)).toBe(AuctionLifecycleState.OPEN);
+    expect(normalizeLifecycleState('closed', null, now)).toBe(AuctionLifecycleState.OPEN);
   });
 
   it('maps LIVE states correctly', () => {

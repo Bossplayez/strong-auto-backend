@@ -28,6 +28,7 @@ import { AuctionSearchService } from '../copart/auction-search.service';
 import { FreshnessSchedulerService } from '../copart/freshness-scheduler.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionLotsService } from '../auction-lot/auction-lots.service';
+import { publicCatalogWhere } from '../auction-lot/public-eligibility';
 import { CONTRACT_VERSION, PROVIDERS, validationError } from '../auction-lot/inventory-projection';
 import { ContractErrorFilter } from '../auction-lot/contract-error.filter';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -337,6 +338,7 @@ export class AdminController {
   async getDashboardSummary(): Promise<any> {
     const requestId = crypto.randomUUID();
     const startedAt = Date.now();
+    const auctionTruthNow = new Date();
     this.logger.log(`[dashboard-summary ${requestId}] started`);
 
     // Helper: run a single aggregate safely
@@ -383,30 +385,13 @@ export class AdminController {
       safe('discoveredCopart', () => this.prisma.discoveredLot.count({ where: { provider: 'copart' } })),
       safe('discoveredIaai', () => this.prisma.discoveredLot.count({ where: { provider: 'iaai' } })),
       safe('activePublicLots', () => this.prisma.discoveredLot.count({
-        where: {
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          availabilityConfirmed: true,
-          consecutiveMisses: { lt: 3 },
-          freshnessState: 'FRESH',
-        },
+        where: publicCatalogWhere(undefined, auctionTruthNow),
       })),
       safe('activeCopart', () => this.prisma.discoveredLot.count({
-        where: {
-          provider: 'copart',
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          availabilityConfirmed: true,
-          consecutiveMisses: { lt: 3 },
-          freshnessState: 'FRESH',
-        },
+        where: publicCatalogWhere({ provider: 'copart' }, auctionTruthNow),
       })),
       safe('activeIaai', () => this.prisma.discoveredLot.count({
-        where: {
-          provider: 'iaai',
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-          availabilityConfirmed: true,
-          consecutiveMisses: { lt: 3 },
-          freshnessState: 'FRESH',
-        },
+        where: publicCatalogWhere({ provider: 'iaai' }, auctionTruthNow),
       })),
       // Manual vehicles by region
       safe('vehiclesUkraine', () => this.prisma.vehicle.count({ where: { sourceType: 'INTERNAL', sourceRegion: 'UKRAINE' } })),

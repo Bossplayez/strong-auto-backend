@@ -6,7 +6,7 @@
  */
 import { computeFreshnessState, STALE_AFTER_MS } from './lifecycle-mapping';
 import { AuctionLifecycleState, AuctionFreshnessState } from './types';
-import { publicCatalogWhere } from './catalog-quality';
+import { publicCatalogWhere } from './public-eligibility';
 
 describe('Task 050B: Old provider observation → STALE', () => {
   const now = new Date('2026-07-20T12:00:00Z');
@@ -54,15 +54,13 @@ describe('Task 050B: Old provider observation → STALE', () => {
     )).toBe(AuctionFreshnessState.FRESH);
   });
 
-  it('publicCatalogWhere gates on lastProviderUpdateAt within 12h', () => {
-    const where = publicCatalogWhere();
-    expect(where.lastProviderUpdateAt).toBeDefined();
-    const gate = where.lastProviderUpdateAt as { gte: Date };
-    expect(gate.gte).toBeInstanceOf(Date);
-    // Gate should be ~12h ago
-    const ageMs = Date.now() - gate.gte.getTime();
-    expect(ageMs).toBeGreaterThan(11 * 60 * 60 * 1000);
-    expect(ageMs).toBeLessThan(13 * 60 * 60 * 1000);
+  it('publicCatalogWhere uses the 48h canonical observation chain', () => {
+    const where = publicCatalogWhere(undefined, now);
+    const rules = (where.AND as Array<Record<string, unknown>>);
+    const observationRule = rules.find((rule) => Array.isArray(rule.OR));
+    expect(observationRule).toBeDefined();
+    expect(JSON.stringify(observationRule)).toContain('listingObservedAt');
+    expect(JSON.stringify(observationRule)).toContain('lastProviderUpdateAt');
   });
 });
 
