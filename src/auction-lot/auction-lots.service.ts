@@ -7,12 +7,30 @@ import {
   parseInventoryQuery, PROVIDERS, sortItems, validationError,
 } from './inventory-projection';
 import { evaluateCatalogQuality, publicCatalogWhere } from './catalog-quality';
-import { STALE_AFTER_MS } from './lifecycle-mapping';
 import {
   computeProjectionV2, deriveCatalogScheduleState,
   deriveListingFreshness, derivePriceFreshness,
   type CatalogScheduleState, type ListingFreshnessV2, type PriceFreshnessV2,
 } from './projection-v2';
+import { resolveListingObservedAt } from './observation-resolver';
+
+/** Task 054: Parse runCondition from stored JSON/string into clean label */
+function normalizeRunCondition(raw: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  // Try parsing JSON (legacy stored values)
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.label) return String(parsed.label);
+      if (parsed.value) return String(parsed.value);
+      return null;
+    } catch {
+      // Not valid JSON — fall through to return as-is
+    }
+  }
+  return trimmed;
+}
 
 @Injectable()
 export class AuctionLotsService {
@@ -100,20 +118,25 @@ export class AuctionLotsService {
     const isResultPending = !!(lot.auctionTime && lot.auctionTime <= now &&
       !['SOLD', 'REMOVED'].includes(lot.lifecycleState));
 
-    // Task 050B: Compute read-time freshness.
-    // Determine tier by auction proximity, then check observation age.
-    const observationTime = lot.lastProviderUpdateAt ?? lot.lastSeenAt;
+    // Task 054: Use shared observation resolver for canonical timestamp.
+    // Fallback: listingObservedAt → lastProviderUpdateAt → availabilityConfirmedAt.
+    const resolvedObs = resolveListingObservedAt({
+      listingObservedAt: (lot as any).listingObservedAt ?? null,
+      priceObservedAt: (lot as any).priceObservedAt ?? null,
+      lastProviderUpdateAt: lot.lastProviderUpdateAt,
+      availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt : null,
+      currentBidUsd: lot.currentBidUsd,
+      buyNowUsd: lot.buyNowUsd,
+    });
+    const observationTime = resolvedObs ?? lot.lastSeenAt;
     const observationAgeMs = now.getTime() - observationTime.getTime();
     const hoursUntilAuction = lot.auctionTime
       ? (lot.auctionTime.getTime() - now.getTime()) / (60 * 60 * 1000)
       : Infinity;
     const tier = hoursUntilAuction <= 12 ? 'HOT' : hoursUntilAuction <= 48 ? 'WARM' : 'COLD';
-    const tierTtlMs = tier === 'HOT'
-      ? STALE_AFTER_MS.HOT
-      : tier === 'WARM'
-        ? STALE_AFTER_MS.WARM
-        : STALE_AFTER_MS.COLD;
-    const isStaleByObservation = observationAgeMs > tierTtlMs;
+    // Task 054: Use V2 listing freshness (48h window) instead of aggressive tier TTL
+    const LISTING_FRESH_WINDOW_MS = 48 * 60 * 60 * 1000;
+    const isStaleByObservation = observationAgeMs > LISTING_FRESH_WINDOW_MS;
 
     // For past-auction lots: show "Аукціон завершився, результат уточнюється"
     // Do not show active prices, countdown, or Buy Now for ended lots
@@ -134,7 +157,7 @@ export class AuctionLotsService {
       primaryDamage: lot.primaryDamage ?? null,
       secondaryDamage: lot.secondaryDamage ?? null,
       loss: lot.loss ?? null,
-      runCondition: lot.runCondition ?? null,
+      runCondition: normalizeRunCondition(lot.runCondition ?? null),
       hasKey: lot.hasKey,
       // Sale document
       saleDocumentName: lot.saleDocumentName ?? null,
@@ -347,6 +370,8 @@ export class AuctionLotsService {
           providerResultState: lot.providerResultState,
           listingObservedAt: lot.listingObservedAt,
           priceObservedAt: lot.priceObservedAt,
+          lastProviderUpdateAt: lot.lastProviderUpdateAt,
+          availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt : null,
           buyNowUsd: lot.buyNowUsd,
           currentBidUsd: lot.currentBidUsd,
         }, now);
@@ -472,6 +497,8 @@ export class AuctionLotsService {
       providerResultState: lot.providerResultState,
       listingObservedAt: lot.listingObservedAt,
       priceObservedAt: lot.priceObservedAt,
+      lastProviderUpdateAt: lot.lastProviderUpdateAt,
+      availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt : null,
       buyNowUsd: lot.buyNowUsd,
       currentBidUsd: lot.currentBidUsd,
     });

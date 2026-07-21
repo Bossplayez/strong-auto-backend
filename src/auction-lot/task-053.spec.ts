@@ -184,6 +184,7 @@ describe('Task 053: Full Projection V2', () => {
     const v2 = computeProjectionV2({
       auctionTime: auction, providerResultState: 'UNKNOWN',
       listingObservedAt: listing, priceObservedAt: price,
+      lastProviderUpdateAt: null, availabilityConfirmedAt: null,
       buyNowUsd: null, currentBidUsd: null,
     }, NOW);
     expect(v2.publicVisible).toBe(true);
@@ -197,6 +198,7 @@ describe('Task 053: Full Projection V2', () => {
     const v2 = computeProjectionV2({
       auctionTime: auction, providerResultState: 'UNKNOWN',
       listingObservedAt: listing, priceObservedAt: null,
+      lastProviderUpdateAt: null, availabilityConfirmedAt: null,
       buyNowUsd: null, currentBidUsd: null,
     }, NOW);
     expect(v2.publicVisible).toBe(true);
@@ -209,6 +211,7 @@ describe('Task 053: Full Projection V2', () => {
     const v2 = computeProjectionV2({
       auctionTime: auction, providerResultState: 'UNKNOWN',
       listingObservedAt: null, priceObservedAt: null,
+      lastProviderUpdateAt: null, availabilityConfirmedAt: null,
       buyNowUsd: null, currentBidUsd: null,
     }, NOW);
     expect(v2.publicVisible).toBe(false);
@@ -220,6 +223,7 @@ describe('Task 053: Full Projection V2', () => {
     const v2 = computeProjectionV2({
       auctionTime: past, providerResultState: 'UNKNOWN',
       listingObservedAt: new Date(NOW.getTime() - ONE_HOUR), priceObservedAt: new Date(NOW.getTime() - ONE_HOUR),
+      lastProviderUpdateAt: null, availabilityConfirmedAt: null,
       buyNowUsd: null, currentBidUsd: null,
     }, NOW);
     expect(v2.publicVisible).toBe(false);
@@ -230,6 +234,7 @@ describe('Task 053: Full Projection V2', () => {
     const v2 = computeProjectionV2({
       auctionTime: null, providerResultState: 'SOLD',
       listingObservedAt: new Date(NOW.getTime() - ONE_HOUR), priceObservedAt: new Date(NOW.getTime() - ONE_HOUR),
+      lastProviderUpdateAt: null, availabilityConfirmedAt: null,
       buyNowUsd: null, currentBidUsd: null,
     }, NOW);
     expect(v2.publicVisible).toBe(false);

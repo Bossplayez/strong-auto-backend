@@ -180,10 +180,13 @@ export function normalizeDiscoveredLot(
     primaryDamage: condition.primary_damage ? String(condition.primary_damage) : null,
     secondaryDamage: condition.secondary_damage ? String(condition.secondary_damage) : null,
     loss: condition.loss ? String(condition.loss) : null,
-    runCondition: condition.run_condition
+      runCondition: condition.run_condition
       ? typeof condition.run_condition === 'object'
-        ? JSON.stringify(condition.run_condition)
-        : String(condition.run_condition)
+        ? (String((condition.run_condition as Record<string, unknown>).label ?? (condition.run_condition as Record<string, unknown>).value ?? '') || null)
+        : (() => {
+            const s = String(condition.run_condition);
+            try { const p = JSON.parse(s); return String(p.label ?? p.value ?? s); } catch { return s; }
+          })()
       : null,
     hasKey: toBool(condition.has_key),
     bodyStyle: specs.body_style ? String(specs.body_style) : null,

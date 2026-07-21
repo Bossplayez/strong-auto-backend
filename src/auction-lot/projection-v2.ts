@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import type { Prisma } from '@prisma/client';
+import { resolveObservations, type ObservationInput } from './observation-resolver';
 
 export type CatalogScheduleState =
   | 'SCHEDULED_ACTIVE'       // N <= auctionAtUtc < N + 7 days
@@ -160,15 +161,28 @@ export function computeProjectionV2(lot: {
   providerResultState: string;
   listingObservedAt: Date | null;
   priceObservedAt: Date | null;
+  lastProviderUpdateAt: Date | null;
+  availabilityConfirmedAt: Date | null;
   buyNowUsd: Prisma.Decimal | null;
   currentBidUsd: Prisma.Decimal | null;
 }, now: Date = new Date()): PublicProjectionV2 {
   const auctionAtUtc = lot.auctionTime;
   const providerResultState = lot.providerResultState as ProviderResultStateV2;
 
+  // Task 054: Use shared observation resolver for canonical timestamps
+  const obsInput: ObservationInput = {
+    listingObservedAt: lot.listingObservedAt,
+    priceObservedAt: lot.priceObservedAt,
+    lastProviderUpdateAt: lot.lastProviderUpdateAt,
+    availabilityConfirmedAt: lot.availabilityConfirmedAt,
+    currentBidUsd: lot.currentBidUsd,
+    buyNowUsd: lot.buyNowUsd,
+  };
+  const resolved = resolveObservations(obsInput);
+
   const { schedule, isResultPending, isTerminal } = deriveCatalogScheduleState(auctionAtUtc, providerResultState, now);
-  const listingFreshness = deriveListingFreshness(lot.listingObservedAt, now);
-  const priceFreshness = derivePriceFreshness(lot.priceObservedAt, auctionAtUtc, now);
+  const listingFreshness = deriveListingFreshness(resolved.listingObservedAt, now);
+  const priceFreshness = derivePriceFreshness(resolved.priceObservedAt, auctionAtUtc, now);
 
   // Determine visibility and showPrice based on state
   let publicVisible = false;
