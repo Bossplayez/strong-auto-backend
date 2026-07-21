@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   computeFreshnessState,
   normalizeLifecycleState,
+  providerResultStateFromRaw,
   STALE_AFTER_MS,
 } from '../auction-lot/lifecycle-mapping';
 import { normalizeAuctionTimestamp } from '../auction-lot/time-normalization';
@@ -267,8 +268,14 @@ export class DiscoveryService {
                     normalized.isBuyNow,
                     normalized.buyNowUsd,
                   );
+                  const providerResultState = providerResultStateFromRaw(
+                    normalized.auctionState,
+                    normalized.auctionTime ?? normalized.ad,
+                    observedAt,
+                  );
                   // Task 044: Provider-confirmed SOLD detection
                   const isSold = (lifecycleState as any) === 'SOLD';
+                  const isTerminalResult = ['SOLD', 'UNSOLD', 'REMOVED'].includes(providerResultState);
                   const soldPriceUsd: number | null = isSold
                     ? (normalized as any).lastSoldPriceUsd ?? null
                     : null;
@@ -294,6 +301,7 @@ export class DiscoveryService {
                   const data: Record<string, unknown> = {
                     ...prismaNormalized,
                     lifecycleState,
+                    providerResultState,
                     freshnessState,
                     lastSeenAt: observedAt,
                     lastProviderUpdateAt: observedAt,
@@ -323,8 +331,8 @@ export class DiscoveryService {
                     data.priceObservedAt = observedAt;
                   }
                   // If pricing missing entirely, do not refresh old price freshness
-                  // Task 044: SOLD fields
-                  if (isSold) {
+                  // Explicit provider result is terminal. An elapsed timestamp alone is not.
+                  if (isTerminalResult) {
                     data.isBuyNow = false;
                     data.terminalAt = observedAt;
                     if (soldPriceUsd !== null) data.lastSoldPriceUsd = soldPriceUsd;

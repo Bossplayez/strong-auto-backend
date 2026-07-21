@@ -123,6 +123,10 @@ export const positive = (value: unknown): number | null => {
 const iso = (value: Date | null | undefined) => value ? value.toISOString() : null;
 const nullable = (value: string | null | undefined) => value || null;
 
+/**
+ * @deprecated Compatibility helper retained only for the historical Task 042
+ * test. Public endpoints use evaluateAuctionTruth/publicCatalogWhere instead.
+ */
 export function eligibleLot(lot: Pick<DiscoveredLot, 'lifecycleState' | 'freshnessState' | 'availabilityConfirmed' | 'consecutiveMisses' | 'year' | 'bodyStyle' | 'title' | 'primaryDamage' | 'secondaryDamage' | 'loss' | 'saleDocumentName' | 'saleDocumentType' | 'make' | 'model'>): boolean {
   // Terminal lifecycles never appear in public catalog
   if (['ENDED', 'SOLD', 'REMOVED'].includes(lot.lifecycleState)) return false;

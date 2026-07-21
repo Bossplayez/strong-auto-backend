@@ -11,10 +11,9 @@
 //  7. Public 0–7 day horizon enforced
 // ─────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from 'vitest';
 import { resolveListingObservedAt } from './observation-resolver';
 import { computeProjectionV2 } from './projection-v2';
-import { publicCatalogWhere, LISTING_FRESH_WINDOW_MS } from './catalog-quality';
+import { publicCatalogWhere, LISTING_FRESH_WINDOW_MS } from './public-eligibility';
 
 const NOW = new Date('2026-07-21T12:00:00.000Z');
 const ONE_HOUR = 60 * 60 * 1000;
@@ -139,7 +138,7 @@ describe('Task 056 — Scenario 3: resolveListingObservedAt fallback priority', 
 
 describe('Task 056 — Scenario 4: publicCatalogWhere excludes unavailable lots', () => {
   it('includes state != UNAVAILABLE condition', () => {
-    const where = publicCatalogWhere();
+    const where = publicCatalogWhere(undefined, NOW);
     const andArray = (where as any).AND as any[];
 
     // Find the state condition
@@ -150,7 +149,7 @@ describe('Task 056 — Scenario 4: publicCatalogWhere excludes unavailable lots'
   });
 
   it('includes availabilityConfirmed = true condition', () => {
-    const where = publicCatalogWhere();
+    const where = publicCatalogWhere(undefined, NOW);
     const andArray = (where as any).AND as any[];
 
     const availCond = andArray.find(
@@ -191,7 +190,7 @@ describe('Task 056 — Scenario 6: search query AND-nesting', () => {
       ],
     };
 
-    const where = publicCatalogWhere(searchExtra);
+    const where = publicCatalogWhere(searchExtra, NOW);
     const andArray = (where as any).AND as any[];
 
     // The extra clause must be part of AND (not replacing it)
@@ -203,8 +202,8 @@ describe('Task 056 — Scenario 6: search query AND-nesting', () => {
     expect(extraEntry.OR).toHaveLength(2);
 
     // Verify critical visibility conditions are still present alongside the extra
-    const hasLifecycle = andArray.some(
-      (c) => c.lifecycleState && c.lifecycleState.in,
+    const hasTerminalResultGate = andArray.some(
+      (c) => c.providerResultState && c.providerResultState.notIn,
     );
     const hasAvailability = andArray.some(
       (c) => c.availabilityConfirmed === true,
@@ -213,7 +212,7 @@ describe('Task 056 — Scenario 6: search query AND-nesting', () => {
       (c) => c.OR && c.OR.some((o: any) => o.listingObservedAt),
     );
 
-    expect(hasLifecycle).toBe(true);
+    expect(hasTerminalResultGate).toBe(true);
     expect(hasAvailability).toBe(true);
     expect(hasFreshness).toBe(true);
   });
@@ -222,20 +221,18 @@ describe('Task 056 — Scenario 6: search query AND-nesting', () => {
 // ── Scenario 7: public 0–7 day horizon ──
 
 describe('Task 056 — Scenario 7: auctionTime beyond 7 days excluded', () => {
-  it('publicCatalogWhere includes auctionTime gte=now, lte=now+7d', () => {
-    const where = publicCatalogWhere();
+  it('publicCatalogWhere includes auctionTime gte=now, lt=now+7d', () => {
+    const where = publicCatalogWhere(undefined, NOW);
     const andArray = (where as any).AND as any[];
 
     const timeCond = andArray.find((c) => c.auctionTime);
     expect(timeCond).toBeDefined();
     expect(timeCond.auctionTime.gte).toBeInstanceOf(Date);
-    expect(timeCond.auctionTime.lte).toBeInstanceOf(Date);
+    expect(timeCond.auctionTime.lt).toBeInstanceOf(Date);
 
     // Verify the horizon is exactly 7 days
-    const horizonMs = timeCond.auctionTime.lte.getTime() - timeCond.auctionTime.gte.getTime();
-    // Allow a few ms tolerance for execution time
-    expect(horizonMs).toBeGreaterThanOrEqual(7 * ONE_DAY - 1000);
-    expect(horizonMs).toBeLessThanOrEqual(7 * ONE_DAY + 1000);
+    const horizonMs = timeCond.auctionTime.lt.getTime() - timeCond.auctionTime.gte.getTime();
+    expect(horizonMs).toBe(7 * ONE_DAY);
   });
 
   it('computeProjectionV2 returns OUT_OF_HORIZON for auction beyond 7 days', () => {

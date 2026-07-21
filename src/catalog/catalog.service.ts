@@ -3,8 +3,57 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehicleFilterDto } from './dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
-import { auctionItem, eligibleLot, filterItems, page, parseInventoryQuery, sortItems, vehicleItem } from '../auction-lot/inventory-projection';
-import { publicCatalogWhere, MIN_CATALOG_YEAR } from '../auction-lot/catalog-quality';
+import { auctionItem, filterItems, page, parseInventoryQuery, sortItems, vehicleItem } from '../auction-lot/inventory-projection';
+import { evaluateCatalogQuality, MIN_CATALOG_YEAR } from '../auction-lot/catalog-quality';
+import {
+  deriveAuctionLifecycle,
+  evaluateAuctionTruth,
+  freshAuctionPriceWhere,
+  hasFreshAuctionPrice,
+  publicCatalogWhere,
+  publicLifecycleWhere,
+} from '../auction-lot/public-eligibility';
+import { computeProjectionV2 } from '../auction-lot/projection-v2';
+
+function publicAuctionItem(lot: any, now: Date) {
+  const item = auctionItem(lot);
+  const projection = computeProjectionV2({
+    auctionTime: lot.auctionTime,
+    providerResultState: lot.providerResultState ?? 'UNKNOWN',
+    listingObservedAt: lot.listingObservedAt ?? null,
+    priceObservedAt: lot.priceObservedAt ?? null,
+    lastProviderUpdateAt: lot.lastProviderUpdateAt ?? null,
+    availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt : null,
+    currentBidUsd: lot.currentBidUsd,
+    buyNowUsd: lot.buyNowUsd,
+  }, now);
+  const lifecycle = deriveAuctionLifecycle({
+    auctionTime: lot.auctionTime,
+    providerResultState: lot.providerResultState ?? 'UNKNOWN',
+    listingObservedAt: lot.listingObservedAt ?? null,
+    lastProviderUpdateAt: lot.lastProviderUpdateAt ?? null,
+    availabilityConfirmed: lot.availabilityConfirmed ?? true,
+    lastSeenAt: lot.lastSeenAt ?? null,
+    state: lot.state ?? 'DISCOVERED',
+    consecutiveMisses: lot.consecutiveMisses ?? 0,
+    auctionState: lot.auctionState ?? null,
+    lifecycleState: item.lifecycle,
+  }, now);
+  if (projection.priceFreshness === 'FRESH') return { ...item, lifecycle, freshness: 'FRESH' as const };
+  return {
+    ...item,
+    lifecycle,
+    freshness: 'FRESH' as const,
+    price: {
+      currency: 'USD' as const,
+      primaryUsd: null,
+      basis: null,
+      currentBidUsd: null,
+      buyNowUsd: null,
+      buyNowAvailable: false,
+    },
+  };
+}
 
 @Injectable()
 export class CatalogService {
@@ -113,9 +162,10 @@ export class CatalogService {
       this.prisma.vehicle.findMany({ where: { publicationStatus: 'PUBLISHED' }, include: { media: { orderBy: { sortOrder: 'asc' }, select: { sourceUrl: true } } } }),
     ]);
     const publishedVehicleIds = new Set(vehicles.map((vehicle) => vehicle.id));
-    const projectedLots = lots.filter(eligibleLot).filter((lot) =>
+    const truthNow = new Date();
+    const projectedLots = lots.filter((lot) => evaluateAuctionTruth(lot, truthNow).publicVisible && evaluateCatalogQuality(lot).include).filter((lot) =>
       parsed.view !== 'all' || !lot.vehicleId || !publishedVehicleIds.has(lot.vehicleId));
-    const items = [...projectedLots.map(auctionItem), ...vehicles.map(vehicleItem)];
+    const items = [...projectedLots.map((lot) => publicAuctionItem(lot, truthNow)), ...vehicles.map(vehicleItem)];
     const newestAt = new Map([...lots.map((lot) => [`auctionLot:${lot.provider}:${lot.externalLotId}`, lot.firstSeenAt] as const), ...vehicles.map((vehicle) => [`vehicle:${vehicle.id}`, vehicle.createdAt] as const)]);
     const filtered = sortItems(filterItems(items, parsed), parsed.sort, newestAt);
     const offset = (parsed.page - 1) * parsed.pageSize;
@@ -136,9 +186,10 @@ export class CatalogService {
       this.prisma.vehicle.findMany({ where: { publicationStatus: 'PUBLISHED' }, include: { media: { orderBy: { sortOrder: 'asc' }, select: { sourceUrl: true } } } }),
     ]);
     const publishedVehicleIds = new Set(vehicles.map((vehicle) => vehicle.id));
-    const projectedLots = lots.filter(eligibleLot).filter((lot) =>
+    const truthNow = new Date();
+    const projectedLots = lots.filter((lot) => evaluateAuctionTruth(lot, truthNow).publicVisible && evaluateCatalogQuality(lot).include).filter((lot) =>
       parsed.view !== 'all' || !lot.vehicleId || !publishedVehicleIds.has(lot.vehicleId));
-    const items = [...projectedLots.map(auctionItem), ...vehicles.map(vehicleItem)];
+    const items = [...projectedLots.map((lot) => publicAuctionItem(lot, truthNow)), ...vehicles.map(vehicleItem)];
     const fields: Record<string, string> = { makes: 'make', models: 'model', bodyTypes: 'bodyType', fuelTypes: 'fuelType', transmissions: 'transmission', driveTypes: 'driveType', sources: 'source', providers: 'provider', locationStates: 'locationState', lifecycles: 'lifecycle' };
     const options = Object.fromEntries(Object.entries(fields).map(([name, field]) => {
       const eligible = filterItems(items, parsed, field as any);
@@ -264,8 +315,8 @@ export class CatalogService {
   /**
    * Build a Prisma WHERE from parsed inventory filters for USA view.
    */
-  private usaWhere(parsed: ReturnType<typeof parseInventoryQuery>): Prisma.DiscoveredLotWhereInput {
-    const where = publicCatalogWhere();
+  private usaWhere(parsed: ReturnType<typeof parseInventoryQuery>, now: Date): Prisma.DiscoveredLotWhereInput {
+    const where = publicCatalogWhere(undefined, now);
     if (parsed.provider) where.provider = parsed.provider;
     if (parsed.make) where.make = { equals: parsed.make, mode: 'insensitive' };
     if (parsed.model) where.model = { contains: parsed.model, mode: 'insensitive' };
@@ -274,7 +325,8 @@ export class CatalogService {
     if (parsed.transmission) where.transmission = { equals: parsed.transmission, mode: 'insensitive' };
     if (parsed.driveType) where.driveType = { equals: parsed.driveType, mode: 'insensitive' };
     if (parsed.locationState) where.locationState = { equals: parsed.locationState, mode: 'insensitive' };
-    if (parsed.lifecycle) where.lifecycleState = parsed.lifecycle;
+    const lifecycleWhere = publicLifecycleWhere(parsed.lifecycle);
+    if (lifecycleWhere) (where.AND as Prisma.DiscoveredLotWhereInput[]).push(lifecycleWhere);
     if (parsed.q) {
       where.OR = [
         { title: { contains: parsed.q, mode: 'insensitive' } },
@@ -287,13 +339,16 @@ export class CatalogService {
       where.year = { gte: parsed.yearFrom ?? MIN_CATALOG_YEAR, ...(parsed.yearTo && { lte: parsed.yearTo }) };
     }
     if (parsed.priceFrom ?? parsed.priceTo) {
-      where.OR = [
-        ...(parsed.priceFrom ? [{ buyNowUsd: { gte: parsed.priceFrom } }, { currentBidUsd: { gte: parsed.priceFrom } }] : []),
-        ...(parsed.priceTo ? [{ buyNowUsd: { lte: parsed.priceTo } }, { currentBidUsd: { lte: parsed.priceTo } }] : []),
-      ];
+      (where.AND as Prisma.DiscoveredLotWhereInput[]).push(freshAuctionPriceWhere(now), {
+        OR: [
+          { buyNowUsd: { ...(parsed.priceFrom !== undefined ? { gte: parsed.priceFrom } : {}), ...(parsed.priceTo !== undefined ? { lte: parsed.priceTo } : {}) } },
+          { currentBidUsd: { ...(parsed.priceFrom !== undefined ? { gte: parsed.priceFrom } : {}), ...(parsed.priceTo !== undefined ? { lte: parsed.priceTo } : {}) } },
+        ],
+      });
     }
     if (parsed.buyNow !== undefined) {
       where.isBuyNow = parsed.buyNow;
+      (where.AND as Prisma.DiscoveredLotWhereInput[]).push(freshAuctionPriceWhere(now));
     }
     return where;
   }
@@ -315,6 +370,8 @@ export class CatalogService {
       locationState: true, locationDisplay: true,
       odometerKm: true, odometerMi: true,
       buyNowUsd: true, currentBidUsd: true, isBuyNow: true,
+      providerResultState: true, listingObservedAt: true, priceObservedAt: true, lastProviderUpdateAt: true,
+      availabilityConfirmed: true, consecutiveMisses: true, state: true, lastSeenAt: true, auctionState: true,
       mediaUrls: true, auctionTime: true, auctionTimezoneOffset: true,
       lifecycleState: true, freshnessState: true,
       vehicleId: true, firstSeenAt: true,
@@ -322,7 +379,8 @@ export class CatalogService {
   }
 
   async usaInventory(parsed: ReturnType<typeof parseInventoryQuery>) {
-    const where = this.usaWhere(parsed);
+    const now = new Date();
+    const where = this.usaWhere(parsed, now);
     const orderBy = this.usaOrderBy(parsed.sort);
     const skip = (parsed.page - 1) * parsed.pageSize;
     const take = parsed.pageSize;
@@ -346,8 +404,8 @@ export class CatalogService {
       const total = await this.prisma.discoveredLot.count({ where });
 
       // Map to items and interleave
-      const copartItems = providerResults[0].map((lot) => auctionItem(lot as any));
-      const iaaiItems = providerResults[1].map((lot) => auctionItem(lot as any));
+      const copartItems = providerResults[0].map((lot) => publicAuctionItem(lot, now));
+      const iaaiItems = providerResults[1].map((lot) => publicAuctionItem(lot, now));
       const items = interleaveProviders(copartItems, iaaiItems, skip, take);
 
       // Task 051: Detect inventory recovery for unfiltered USA catalog
@@ -364,7 +422,7 @@ export class CatalogService {
       this.prisma.discoveredLot.count({ where }),
     ]);
 
-    const items = lots.map((lot) => auctionItem(lot as any));
+    const items = lots.map((lot) => publicAuctionItem(lot, now));
     const result = page(items, total, parsed.page, parsed.pageSize);
     return { ...result, catalogState: 'NORMAL' };
   }
@@ -372,12 +430,7 @@ export class CatalogService {
   /** Task 051: Detect whether catalog is in inventory recovery mode. */
   private async detectCatalogState(): Promise<'NORMAL' | 'INVENTORY_RECOVERY'> {
     const [activeCount, historicalCount] = await Promise.all([
-      this.prisma.discoveredLot.count({
-        where: {
-          state: { in: ['DISCOVERED', 'IMPORTED'] },
-          lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] },
-        },
-      }),
+      this.prisma.discoveredLot.count({ where: publicCatalogWhere(undefined, new Date()) }),
       this.prisma.discoveredLot.count({
         where: { state: { in: ['DISCOVERED', 'IMPORTED'] } },
       }),
@@ -387,7 +440,8 @@ export class CatalogService {
   }
 
   async usaFilterOptions(parsed: ReturnType<typeof parseInventoryQuery>) {
-    const where = publicCatalogWhere();
+    const now = new Date();
+    const where = publicCatalogWhere(undefined, now);
     if (parsed.provider) where.provider = parsed.provider;
     // Task 050: Apply make/model/bodyType etc. to filter-options query
     // so that filter-options?view=usa&make=AUDI returns only AUDI models.
@@ -398,8 +452,12 @@ export class CatalogService {
     if (parsed.transmission) where.transmission = { equals: parsed.transmission, mode: 'insensitive' };
     if (parsed.driveType) where.driveType = { equals: parsed.driveType, mode: 'insensitive' };
     if (parsed.locationState) where.locationState = { equals: parsed.locationState, mode: 'insensitive' };
-    if (parsed.lifecycle) where.lifecycleState = parsed.lifecycle;
-    if (parsed.buyNow !== undefined) where.isBuyNow = parsed.buyNow;
+    const lifecycleWhere = publicLifecycleWhere(parsed.lifecycle);
+    if (lifecycleWhere) (where.AND as Prisma.DiscoveredLotWhereInput[]).push(lifecycleWhere);
+    if (parsed.buyNow !== undefined) {
+      where.isBuyNow = parsed.buyNow;
+      (where.AND as Prisma.DiscoveredLotWhereInput[]).push(freshAuctionPriceWhere(now));
+    }
 
     // Fetch only the fields we need for filter options — no auctionItem projection needed
     const lots = await this.prisma.discoveredLot.findMany({
@@ -407,9 +465,11 @@ export class CatalogService {
       select: {
         make: true, model: true, bodyStyle: true, fuelType: true,
         transmission: true, driveType: true, provider: true,
-        locationState: true, lifecycleState: true,
+        locationState: true, auctionState: true, lifecycleState: true,
         year: true, buyNowUsd: true, currentBidUsd: true, odometerKm: true,
-        isBuyNow: true,
+        isBuyNow: true, auctionTime: true, priceObservedAt: true,
+        providerResultState: true, listingObservedAt: true, lastProviderUpdateAt: true,
+        availabilityConfirmed: true, consecutiveMisses: true, state: true, lastSeenAt: true,
       },
     });
 
@@ -435,13 +495,21 @@ export class CatalogService {
       sources: [...new Set(lots.map(l => l.provider))].sort().map(v => ({ value: v, label: v, count: lots.filter(l => l.provider === v).length })),
       providers: countField('provider'),
       locationStates: countField('locationState'),
-      lifecycles: countField('lifecycleState'),
+      lifecycles: (() => {
+        const counts = new Map<string, number>();
+        for (const lot of lots) {
+          const value = deriveAuctionLifecycle(lot, now);
+          if (value === 'UPCOMING' || value === 'LIVE') counts.set(value, (counts.get(value) ?? 0) + 1);
+        }
+        return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([value, count]) => ({ value, label: value, count }));
+      })(),
     };
 
     // Compute ranges
     const years = lots.map(l => l.year).filter((y): y is number => y !== null && y > 0);
-    const bids = lots.map(l => l.currentBidUsd ? Number(l.currentBidUsd) : null).filter((p): p is number => p !== null && p > 0);
-    const buyNows = lots.map(l => l.buyNowUsd ? Number(l.buyNowUsd) : null).filter((p): p is number => p !== null && p > 0);
+    const priceFreshLots = lots.filter((lot) => hasFreshAuctionPrice(lot, now));
+    const bids = priceFreshLots.map(l => l.currentBidUsd ? Number(l.currentBidUsd) : null).filter((p): p is number => p !== null && p > 0);
+    const buyNows = priceFreshLots.map(l => l.buyNowUsd ? Number(l.buyNowUsd) : null).filter((p): p is number => p !== null && p > 0);
     const allPrices = [...bids, ...buyNows];
     const mileages = lots.map(l => l.odometerKm).filter((m): m is number => m !== null && m > 0);
 

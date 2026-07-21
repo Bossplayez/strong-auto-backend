@@ -166,8 +166,12 @@ export function qualityExclusionWhere(): Prisma.DiscoveredLotWhereInput {
 // The scheduler's HOT/WARM/COLD tiers control REFRESH PRIORITY only.
 // A missed 15-minute refresh must NEVER hide a valid future lot.
 //
-export const LISTING_FRESH_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Canonical public-auction decision. This deliberately ignores persisted
+ * lifecycle/freshness/tier fields: they are scheduler projections, not
+ * provider truth.
+ */
 
 /**
  * Full public-catalog WHERE: canonical visibility + quality.
@@ -185,40 +189,3 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
  * NOTE: freshnessState is NOT used. The scheduler may mark STALE for
  * refresh-priority purposes — this does NOT affect public visibility.
  */
-export function publicCatalogWhere(
-  extra?: Prisma.DiscoveredLotWhereInput,
-): Prisma.DiscoveredLotWhereInput {
-  const now = Date.now();
-  const freshCutoff = new Date(now - LISTING_FRESH_WINDOW_MS);
-  const horizonEnd = new Date(now + SEVEN_DAYS_MS);
-
-  return {
-    AND: [
-      // Lifecycle active
-      { lifecycleState: { in: ['UPCOMING', 'OPEN', 'LIVE'] } },
-      // Availability confirmed
-      { availabilityConfirmed: true },
-      // Not unavailable
-      { state: { not: 'UNAVAILABLE' } },
-      // Consecutive misses
-      { consecutiveMisses: { lt: 3 } },
-      // Auction time: now through +7 days
-      { auctionTime: { gte: new Date(now), lte: horizonEnd } },
-      // No explicit terminal provider result
-      { providerResultState: { notIn: ['SOLD', 'UNSOLD', 'REMOVED'] } },
-      // Canonical observation within 48h:
-      // listingObservedAt if present, else lastProviderUpdateAt, else lastSeenAt (when availabilityConfirmed)
-      {
-        OR: [
-          { listingObservedAt: { gte: freshCutoff } },
-          { listingObservedAt: null, lastProviderUpdateAt: { gte: freshCutoff } },
-          { listingObservedAt: null, lastProviderUpdateAt: null, lastSeenAt: { gte: freshCutoff } },
-        ],
-      },
-      // Quality exclusions
-      qualityExclusionWhere(),
-      // Caller overrides
-      ...(extra ? [extra] : []),
-    ],
-  };
-}
