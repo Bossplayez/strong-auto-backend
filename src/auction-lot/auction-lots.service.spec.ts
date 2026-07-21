@@ -66,7 +66,7 @@ describe('AuctionLotsService unified catalog invariants', () => {
     expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
   });
 
-  it('computes metrics for 35,706 projected lots without an interactive transaction', async () => {
+  it('computes metrics for 35,706 projected lots from a narrow shared snapshot', async () => {
     transaction.discoveredLot.findMany.mockResolvedValue(Array.from({ length: 35706 }, (_, index) => lot({
       externalLotId: `lot-${index}`,
       provider: index % 2 === 0 ? 'copart' : 'iaai',
@@ -84,14 +84,28 @@ describe('AuctionLotsService unified catalog invariants', () => {
     expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
   });
 
-  it('releases the shared snapshot before the metrics analysis runs', async () => {
+  it('releases the shared snapshot before metrics classification and analysis run', async () => {
     let snapshotReleased = false;
+    let classificationStarted = false;
     prisma.$transaction.mockImplementationOnce(async (operation: (client: typeof transaction) => Promise<unknown>) => {
       const result = await operation(transaction);
       snapshotReleased = true;
       return result;
     });
-    transaction.discoveredLot.findMany.mockResolvedValue([]);
+    const classificationLot = lot({
+      providerResultState: 'UNKNOWN',
+      auctionTime: new Date(Date.now() + 3600000),
+      listingObservedAt: new Date(),
+      lastProviderUpdateAt: new Date(),
+    });
+    Object.defineProperty(classificationLot, 'providerResultState', {
+      get: () => {
+        expect(snapshotReleased).toBe(true);
+        classificationStarted = true;
+        return 'UNKNOWN';
+      },
+    });
+    transaction.discoveredLot.findMany.mockResolvedValue([classificationLot]);
     transaction.vehicle.findMany.mockResolvedValue([]);
     const originalComputeDataHealth = (service as any).computeDataHealth;
     const computeDataHealth = jest.spyOn(service as any, 'computeDataHealth').mockImplementation((...args: any[]) => {
@@ -101,6 +115,7 @@ describe('AuctionLotsService unified catalog invariants', () => {
 
     await service.adminMetrics();
 
+    expect(classificationStarted).toBe(true);
     expect(computeDataHealth).toHaveBeenCalled();
     expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
     expect(prisma.vehicle.findMany).not.toHaveBeenCalled();
