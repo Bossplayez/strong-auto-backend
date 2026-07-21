@@ -870,6 +870,14 @@ model DiscoveredLot {
   terminalAt            DateTime?             @map("terminal_at")
   mediaUrls             String[]              @default([]) @map("media_urls")
 
+  // ── Task 053: Auction Truth Contract V2 — additive fields ──
+  providerLifecycleState    String?               @map("provider_lifecycle_state")
+  providerResultState       ProviderResultState   @default(UNKNOWN) @map("provider_result_state")
+  providerAuctionTimestampRaw String?             @map("provider_auction_timestamp_raw")
+  auctionTimestampEvidence  AuctionTimestampEvidence @default(NONE) @map("auction_timestamp_evidence")
+  listingObservedAt         DateTime?             @map("listing_observed_at")
+  priceObservedAt           DateTime?             @map("price_observed_at")
+
   @@unique([provider, externalLotId])
   @@index([provider, freshnessTier, nextRefreshAt])
   @@index([provider, state])
@@ -1041,4 +1049,21 @@ enum AuctionFreshnessState {
   STALE
   DEFERRED
   TERMINAL
+}
+
+/// Task 053: Provider result state — only explicit provider result may set SOLD/UNSOLD/REMOVED.
+/// Past time alone must NEVER produce SOLD.
+enum ProviderResultState {
+  UNKNOWN
+  RESULT_PENDING
+  SOLD
+  UNSOLD
+  REMOVED
+}
+
+/// Task 053: Evidence for auction timestamp confidence.
+enum AuctionTimestampEvidence {
+  UTC_OFFSET
+  PROVIDER_TIMEZONE
+  NONE
 }

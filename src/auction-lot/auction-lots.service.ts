@@ -8,6 +8,11 @@ import {
 } from './inventory-projection';
 import { evaluateCatalogQuality, publicCatalogWhere } from './catalog-quality';
 import { STALE_AFTER_MS } from './lifecycle-mapping';
+import {
+  computeProjectionV2, deriveCatalogScheduleState,
+  deriveListingFreshness, derivePriceFreshness,
+  type CatalogScheduleState, type ListingFreshnessV2, type PriceFreshnessV2,
+} from './projection-v2';
 
 @Injectable()
 export class AuctionLotsService {
@@ -316,9 +321,53 @@ export class AuctionLotsService {
         otherImportedVehicles: imported.filter((vehicle) => !['DRAFT', 'PUBLISHED'].includes(vehicle.publicationStatus)).length,
         byProvider: { copart: partition('copart'), iaai: partition('iaai') },
         coverage: { copart: coverage('copart'), iaai: coverage('iaai'), all: coverage() },
+        // Task 053: V2 data health metrics
+        dataHealth: this.computeDataHealth(lots, asOf),
         asOf: asOf.toISOString(),
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
+  /** Task 053: V2 data health metrics for admin diagnostics */
+  private computeDataHealth(lots: DiscoveredLot[], now: Date) {
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const fortyEightHours = 48 * 60 * 60 * 1000;
+    const byProvider = (provider?: string) => {
+      const selected = provider ? lots.filter(l => l.provider === provider) : lots;
+      const { schedule, isResultPending } = deriveCatalogScheduleState(
+        selected[0]?.auctionTime ?? null, 'UNKNOWN' as any, now,
+      );
+      // Per-lot computation
+      let confirmedHorizon = 0, unscheduled = 0, outOfHorizon = 0;
+      let resultPending = 0, staleListing = 0, stalePrice = 0;
+      let timestampEvidenceOffset = 0, timestampEvidenceTz = 0, timestampEvidenceNone = 0;
+      for (const lot of selected) {
+        const v2 = computeProjectionV2({
+          auctionTime: lot.auctionTime,
+          providerResultState: lot.providerResultState,
+          listingObservedAt: lot.listingObservedAt,
+          priceObservedAt: lot.priceObservedAt,
+          buyNowUsd: lot.buyNowUsd,
+          currentBidUsd: lot.currentBidUsd,
+        }, now);
+        if (v2.catalogScheduleState === 'SCHEDULED_ACTIVE') confirmedHorizon++;
+        else if (v2.catalogScheduleState === 'UNSCHEDULED') unscheduled++;
+        else if (v2.catalogScheduleState === 'SCHEDULED_OUT_OF_HORIZON') outOfHorizon++;
+        if (v2.isResultPending) resultPending++;
+        if (v2.listingFreshness === 'STALE') staleListing++;
+        if (v2.priceFreshness === 'MISSING_OR_STALE') stalePrice++;
+        if (lot.auctionTimestampEvidence === 'UTC_OFFSET') timestampEvidenceOffset++;
+        else if (lot.auctionTimestampEvidence === 'PROVIDER_TIMEZONE') timestampEvidenceTz++;
+        else timestampEvidenceNone++;
+      }
+      return {
+        total: selected.length,
+        confirmedHorizon, unscheduled, outOfHorizon,
+        resultPending, staleListing, stalePrice,
+        timestampEvidence: { utcOffset: timestampEvidenceOffset, providerTz: timestampEvidenceTz, none: timestampEvidenceNone },
+      };
+    };
+    return { copart: byProvider('copart'), iaai: byProvider('iaai'), all: byProvider() };
   }
 
   async importPersistedLot(raw: Record<string, unknown>) {
@@ -417,6 +466,15 @@ export class AuctionLotsService {
 
   private adminItem(lot: DiscoveredLot, vehicle?: LinkedVehicle) {
     const projected = auctionItem(lot);
+    // Task 053: Compute V2 projection for admin diagnostics
+    const v2 = computeProjectionV2({
+      auctionTime: lot.auctionTime,
+      providerResultState: lot.providerResultState,
+      listingObservedAt: lot.listingObservedAt,
+      priceObservedAt: lot.priceObservedAt,
+      buyNowUsd: lot.buyNowUsd,
+      currentBidUsd: lot.currentBidUsd,
+    });
     return {
       key: projected.key,
       provider: lot.provider,
@@ -436,10 +494,24 @@ export class AuctionLotsService {
       thumbnailUrl: projected.thumbnailUrl,
       mediaCount: projected.mediaCount,
       price: projected.price,
-      importState: !vehicle ? 'notImported' : vehicle.publicationStatus === 'DRAFT' ? 'draft' : vehicle.publicationStatus === 'PUBLISHED' ? 'published' : 'other',
+      // Task 053: Rename ambiguous import semantics
+      importState: !vehicle ? 'unlinked' : vehicle.publicationStatus === 'DRAFT' ? 'linked_draft' : vehicle.publicationStatus === 'PUBLISHED' ? 'linked_published' : 'linked_other',
       linkedVehicle: vehicle ? { vehicleId: vehicle.id, slug: vehicle.slug, publicationStatus: vehicle.publicationStatus } : null,
       consecutiveMisses: lot.consecutiveMisses, firstDiscoveredAt: lot.firstSeenAt.toISOString(), lastObservedAt: lot.lastSeenAt?.toISOString() ?? null,
       availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt.toISOString() : null, updatedAt: lot.updatedAt.toISOString(),
+      // Task 053: V2 diagnostics
+      providerResultState: lot.providerResultState,
+      catalogScheduleState: v2.catalogScheduleState,
+      isResultPending: v2.isResultPending,
+      isTerminal: v2.isTerminal,
+      listingFreshnessV2: v2.listingFreshness,
+      priceFreshnessV2: v2.priceFreshness,
+      v2ReasonCode: v2.reasonCode.code,
+      v2ReasonMessage: v2.reasonCode.message,
+      auctionTimestampEvidence: lot.auctionTimestampEvidence,
+      providerAuctionTimestampRaw: lot.providerAuctionTimestampRaw,
+      listingObservedAt: lot.listingObservedAt?.toISOString() ?? null,
+      priceObservedAt: lot.priceObservedAt?.toISOString() ?? null,
     };
   }
 
@@ -473,7 +545,7 @@ function parseAdminLotQuery(raw: Record<string, unknown>) {
   if (!Number.isInteger(pageNumber) || pageNumber < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50 || (q !== undefined && (!q || q.length > 100)) ||
     (provider && !PROVIDERS.includes(provider as 'copart' | 'iaai')) || (state && !['DISCOVERED', 'IMPORTING', 'IMPORTED', 'SOLD', 'REMOVED', 'UNAVAILABLE'].includes(state)) ||
     (tier && !['HOT', 'WARM', 'COLD'].includes(tier)) || (lifecycle && !['UPCOMING', 'OPEN', 'LIVE', 'ENDED', 'SOLD', 'REMOVED', 'NOT_READY'].includes(lifecycle)) ||
-    (freshness && !['FRESH', 'STALE', 'DEFERRED'].includes(freshness)) || (importState && !['notImported', 'draft', 'published', 'other'].includes(importState)) ||
+    (freshness && !['FRESH', 'STALE', 'DEFERRED'].includes(freshness)) || (importState && !['notImported', 'unlinked', 'draft', 'linked_draft', 'published', 'linked_published', 'other', 'linked_other'].includes(importState)) ||
     !['lastObserved_desc', 'auction_asc', 'auction_desc', 'year_asc', 'year_desc', 'price_asc', 'price_desc', 'mileage_asc', 'mileage_desc'].includes(sort)) validationError();
   const buyNow = raw.buyNow === undefined ? undefined : raw.buyNow === 'true' ? true : raw.buyNow === 'false' ? false : undefined;
   if (raw.buyNow !== undefined && buyNow === undefined) validationError();

@@ -6,6 +6,7 @@ import {
   normalizeLifecycleState,
   STALE_AFTER_MS,
 } from '../auction-lot/lifecycle-mapping';
+import { normalizeAuctionTimestamp } from '../auction-lot/time-normalization';
 import {
   RapidApiTransport,
   TransportLeaseLostError,
@@ -289,8 +290,9 @@ export class DiscoveryService {
                     },
                     select: { id: true },
                   });
+                  const { providerAuctionTimestampRaw: _rawTs, hasPricingData: _hasPricing, buyNowExplicitlyAbsent: _bnAbsent, ...prismaNormalized } = normalized;
                   const data: Record<string, unknown> = {
-                    ...normalized,
+                    ...prismaNormalized,
                     lifecycleState,
                     freshnessState,
                     lastSeenAt: observedAt,
@@ -298,6 +300,29 @@ export class DiscoveryService {
                     consecutiveMisses: 0,
                     availabilityConfirmed: true,
                   };
+
+                  // Task 053: Truth Contract V2 — strict time normalization
+                  const timeResult = normalizeAuctionTimestamp(
+                    normalized.providerAuctionTimestampRaw,
+                    normalized.facilityState,
+                  );
+                  data.providerAuctionTimestampRaw = timeResult.raw;
+                  data.auctionTimestampEvidence = timeResult.evidence;
+                  data.listingObservedAt = observedAt; // successful provider observation
+
+                  // Only update auctionTime if we have confirmed UTC
+                  if (timeResult.auctionAtUtc) {
+                    data.auctionTime = timeResult.auctionAtUtc;
+                  } else {
+                    // Unconfirmed — clear derived schedule state
+                    data.auctionTime = null;
+                  }
+
+                  // Task 053: Price freshness — only when provider explicitly supplied pricing
+                  if (normalized.hasPricingData) {
+                    data.priceObservedAt = observedAt;
+                  }
+                  // If pricing missing entirely, do not refresh old price freshness
                   // Task 044: SOLD fields
                   if (isSold) {
                     data.isBuyNow = false;
@@ -306,9 +331,8 @@ export class DiscoveryService {
                   }
 
                   // Task 050B: Explicitly clear Buy Now when provider says it's gone.
-                  // Provider payload with isBuyNow=false, null, or buyNowUsd=null/non-positive
-                  // must atomically clear both fields.
-                  if (!normalized.isBuyNow || !(normalized.buyNowUsd && normalized.buyNowUsd > 0)) {
+                  // Task 053: Also use buyNowExplicitlyAbsent flag from normalizer.
+                  if (!normalized.isBuyNow || !(normalized.buyNowUsd && normalized.buyNowUsd > 0) || normalized.buyNowExplicitlyAbsent) {
                     data.isBuyNow = false;
                     data.buyNowUsd = null;
                   }

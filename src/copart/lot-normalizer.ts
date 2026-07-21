@@ -53,6 +53,10 @@ export interface NormalizedLotData {
   saleDocumentName: string | null;
   saleDocumentType: string | null;
   sourcePayloadHash: string | null;
+  // Task 053: Truth Contract V2 fields
+  providerAuctionTimestampRaw: string | null;
+  hasPricingData: boolean;
+  buyNowExplicitlyAbsent: boolean;
 }
 
 function toNumber(v: unknown): number | null {
@@ -218,6 +222,11 @@ export function normalizeDiscoveredLot(
     saleDocumentName: saleDoc.name ? String(saleDoc.name) : null,
     saleDocumentType: saleDoc.type ? String(saleDoc.type) : null,
     sourcePayloadHash: null, // computed separately if needed
+
+    // Task 053: Truth Contract V2
+    providerAuctionTimestampRaw: auctionTimeRaw, // preserve raw for diagnostics
+    hasPricingData: isRecord(raw.pricing) && Object.keys(raw.pricing).length > 0,
+    buyNowExplicitlyAbsent: isRecord(raw.auction) && auction.is_buy_now === false,
   };
 }
 
