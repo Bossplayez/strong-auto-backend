@@ -35,13 +35,13 @@ describe('AuctionLotsService unified catalog invariants', () => {
 
   it('returns disjoint exhaustive admin metric partitions', async () => {
     const now = new Date();
-    prisma.discoveredLot.findMany.mockResolvedValue([
+    transaction.discoveredLot.findMany.mockResolvedValue([
       lot({ provider: 'copart', providerResultState: 'UNKNOWN', auctionTime: new Date(now.getTime() + 3600000), listingObservedAt: now, lastProviderUpdateAt: now }),
       lot({ provider: 'copart', providerResultState: 'UNKNOWN', auctionTime: new Date(now.getTime() + 3600000), listingObservedAt: new Date(now.getTime() - 3 * 86400000) }),
       lot({ provider: 'iaai', providerResultState: 'SOLD', availabilityConfirmed: false, state: 'UNAVAILABLE' }),
       lot({ provider: 'iaai', providerResultState: 'UNKNOWN', auctionTime: new Date(now.getTime() + 8 * 86400000), listingObservedAt: now, lastProviderUpdateAt: now }),
     ]);
-    prisma.vehicle.findMany.mockResolvedValue([]);
+    transaction.vehicle.findMany.mockResolvedValue([]);
 
     const result = await service.adminMetrics();
 
@@ -57,25 +57,53 @@ describe('AuctionLotsService unified catalog invariants', () => {
       },
     });
     expect(result.currentExternal + result.staleExternal + result.endedExternal + result.unclassifiedExternal).toBe(result.totalExternal);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(prisma.discoveredLot.findMany).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'RepeatableRead',
+    });
+    expect(transaction.discoveredLot.findMany).toHaveBeenCalledWith(expect.objectContaining({
       select: expect.not.objectContaining({ mediaUrls: true }),
     }));
+    expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
   });
 
   it('computes metrics for 35,706 projected lots without an interactive transaction', async () => {
-    prisma.discoveredLot.findMany.mockResolvedValue(Array.from({ length: 35706 }, (_, index) => lot({
+    transaction.discoveredLot.findMany.mockResolvedValue(Array.from({ length: 35706 }, (_, index) => lot({
       externalLotId: `lot-${index}`,
       provider: index % 2 === 0 ? 'copart' : 'iaai',
     })));
-    prisma.vehicle.findMany.mockResolvedValue([]);
+    transaction.vehicle.findMany.mockResolvedValue([]);
 
     const result = await service.adminMetrics();
 
     expect(result.totalExternal).toBe(35706);
     expect(result.currentExternal + result.staleExternal + result.endedExternal + result.unclassifiedExternal).toBe(35706);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(prisma.discoveredLot.findMany).toHaveBeenCalledWith(expect.objectContaining({ select: expect.any(Object) }));
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'RepeatableRead',
+    });
+    expect(transaction.discoveredLot.findMany).toHaveBeenCalledWith(expect.objectContaining({ select: expect.any(Object) }));
+    expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
+  });
+
+  it('releases the shared snapshot before the metrics analysis runs', async () => {
+    let snapshotReleased = false;
+    prisma.$transaction.mockImplementationOnce(async (operation: (client: typeof transaction) => Promise<unknown>) => {
+      const result = await operation(transaction);
+      snapshotReleased = true;
+      return result;
+    });
+    transaction.discoveredLot.findMany.mockResolvedValue([]);
+    transaction.vehicle.findMany.mockResolvedValue([]);
+    const originalComputeDataHealth = (service as any).computeDataHealth;
+    const computeDataHealth = jest.spyOn(service as any, 'computeDataHealth').mockImplementation((...args: any[]) => {
+      expect(snapshotReleased).toBe(true);
+      return originalComputeDataHealth.apply(service, args);
+    });
+
+    await service.adminMetrics();
+
+    expect(computeDataHealth).toHaveBeenCalled();
+    expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
+    expect(prisma.vehicle.findMany).not.toHaveBeenCalled();
   });
 
   it('imports one persisted lot atomically as a media-rich DRAFT vehicle', async () => {

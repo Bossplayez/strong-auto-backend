@@ -407,21 +407,24 @@ export class AuctionLotsService {
 
   async adminMetrics() {
     const asOf = new Date();
-    const [lots, vehicles] = await Promise.all([
-      this.prisma.discoveredLot.findMany({
-        select: {
-          provider: true, vehicleId: true, providerResultState: true, auctionTime: true,
-          listingObservedAt: true, lastProviderUpdateAt: true, availabilityConfirmed: true,
-          lastSeenAt: true, state: true, consecutiveMisses: true, year: true, bodyStyle: true,
-          locationState: true, locationDisplay: true,
-          title: true, primaryDamage: true, secondaryDamage: true, loss: true,
-          saleDocumentName: true, saleDocumentType: true, make: true, model: true,
-          priceObservedAt: true, currentBidUsd: true, buyNowUsd: true,
-          auctionTimestampEvidence: true,
-        },
-      }),
-      this.prisma.vehicle.findMany({ select: { id: true, publicationStatus: true } }),
-    ]);
+    const { lots, vehicles } = await this.prisma.$transaction(async (tx) => {
+      const [lots, vehicles] = await Promise.all([
+        tx.discoveredLot.findMany({
+          select: {
+            provider: true, vehicleId: true, providerResultState: true, auctionTime: true,
+            listingObservedAt: true, lastProviderUpdateAt: true, availabilityConfirmed: true,
+            lastSeenAt: true, state: true, consecutiveMisses: true, year: true, bodyStyle: true,
+            locationState: true, locationDisplay: true,
+            title: true, primaryDamage: true, secondaryDamage: true, loss: true,
+            saleDocumentName: true, saleDocumentType: true, make: true, model: true,
+            priceObservedAt: true, currentBidUsd: true, buyNowUsd: true,
+            auctionTimestampEvidence: true,
+          },
+        }),
+        tx.vehicle.findMany({ select: { id: true, publicationStatus: true } }),
+      ]);
+      return { lots, vehicles };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
       const classify = (lot: (typeof lots)[number]) => {
         const truth = evaluateAuctionTruth(lot, asOf);
         const ended = ['SOLD', 'UNSOLD', 'REMOVED'].includes(lot.providerResultState);
