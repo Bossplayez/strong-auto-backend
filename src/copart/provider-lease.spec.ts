@@ -276,6 +276,38 @@ describe('ProviderLeaseService', () => {
     expect(isOwner).toBe(false);
   });
 
+  it('keeps a 180-second discovery lease alive through an early heartbeat and later fenced write', async () => {
+    jest.useFakeTimers();
+    const startedAt = new Date('2026-07-21T12:00:00.000Z');
+    jest.setSystemTime(startedAt);
+    const initialExpiry = new Date(startedAt.getTime() + 180000);
+    prisma = makePrismaMock(makeLeaseRow({ ownerToken: 'owner-A', fencingToken: 7, expiresAt: initialExpiry }));
+    service = new ProviderLeaseService(prisma as any);
+
+    jest.setSystemTime(new Date(startedAt.getTime() + 61000));
+    await expect(service.withLeasedTransaction('copart', 'owner-A', 7, async () => 'early')).resolves.toBe('early');
+    expect(prisma._leaseStore.expiresAt.getTime()).toBe(initialExpiry.getTime());
+
+    jest.setSystemTime(new Date(startedAt.getTime() + 120000));
+    await expect(service.withLeasedTransaction('copart', 'owner-A', 7, async () => 'later')).resolves.toBe('later');
+    jest.useRealTimers();
+  });
+
+  it('rejects expired, wrong-owner, and wrong-fence leased writes', async () => {
+    const scenarios = [
+      { lease: { expiresAt: new Date(Date.now() - 1) }, owner: 'owner-A', fence: 1 },
+      { lease: {}, owner: 'owner-B', fence: 1 },
+      { lease: {}, owner: 'owner-A', fence: 2 },
+    ];
+    for (const scenario of scenarios) {
+      prisma = makePrismaMock(makeLeaseRow(scenario.lease));
+      service = new ProviderLeaseService(prisma as any);
+      const write = jest.fn().mockResolvedValue('write');
+      await expect(service.withLeasedTransaction('copart', scenario.owner, scenario.fence, write)).resolves.toBeNull();
+      expect(write).not.toHaveBeenCalled();
+    }
+  });
+
   // ── Test 11: Stale worker cannot release or finalize ──
 
   it('11a. stale worker release does not affect new owner', async () => {

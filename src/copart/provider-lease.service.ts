@@ -520,10 +520,13 @@ export class ProviderLeaseService {
         const result = await fn(tx);
 
         // 4. Update heartbeat within the same transaction
-        const newExpiresAt = new Date(now.getTime() + 60000);
+        const heartbeatAt = new Date();
+        const heartbeatExpiry = new Date(heartbeatAt.getTime() + 60000);
+        const existingExpiry = new Date(lease.expiresAt);
+        const newExpiresAt = existingExpiry > heartbeatExpiry ? existingExpiry : heartbeatExpiry;
         await tx.providerLease.update({
           where: { provider },
-          data: { heartbeatAt: now, expiresAt: newExpiresAt },
+          data: { heartbeatAt, expiresAt: newExpiresAt },
         });
 
         return result;

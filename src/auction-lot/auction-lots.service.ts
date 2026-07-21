@@ -406,12 +406,22 @@ export class AuctionLotsService {
   }
 
   async adminMetrics() {
-    return this.prisma.$transaction(async (tx) => {
-      const asOf = new Date();
-      const [lots, vehicles] = await Promise.all([
-        tx.discoveredLot.findMany(),
-        tx.vehicle.findMany({ select: { id: true, publicationStatus: true } }),
-      ]);
+    const asOf = new Date();
+    const [lots, vehicles] = await Promise.all([
+      this.prisma.discoveredLot.findMany({
+        select: {
+          provider: true, vehicleId: true, providerResultState: true, auctionTime: true,
+          listingObservedAt: true, lastProviderUpdateAt: true, availabilityConfirmed: true,
+          lastSeenAt: true, state: true, consecutiveMisses: true, year: true, bodyStyle: true,
+          locationState: true, locationDisplay: true,
+          title: true, primaryDamage: true, secondaryDamage: true, loss: true,
+          saleDocumentName: true, saleDocumentType: true, make: true, model: true,
+          priceObservedAt: true, currentBidUsd: true, buyNowUsd: true,
+          auctionTimestampEvidence: true,
+        },
+      }),
+      this.prisma.vehicle.findMany({ select: { id: true, publicationStatus: true } }),
+    ]);
       const classify = (lot: (typeof lots)[number]) => {
         const truth = evaluateAuctionTruth(lot, asOf);
         const ended = ['SOLD', 'UNSOLD', 'REMOVED'].includes(lot.providerResultState);
@@ -447,24 +457,27 @@ export class AuctionLotsService {
         };
       };
 
-      return {
-        contractVersion: CONTRACT_VERSION,
-        ...partition(),
-        importedVehicles: imported.length,
-        draftVehicles: imported.filter((vehicle) => vehicle.publicationStatus === 'DRAFT').length,
-        publishedVehicles: imported.filter((vehicle) => vehicle.publicationStatus === 'PUBLISHED').length,
-        otherImportedVehicles: imported.filter((vehicle) => !['DRAFT', 'PUBLISHED'].includes(vehicle.publicationStatus)).length,
-        byProvider: { copart: partition('copart'), iaai: partition('iaai') },
-        coverage: { copart: coverage('copart'), iaai: coverage('iaai'), all: coverage() },
-        // Task 053: V2 data health metrics
-        dataHealth: this.computeDataHealth(lots, asOf),
-        asOf: asOf.toISOString(),
-      };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    return {
+      contractVersion: CONTRACT_VERSION,
+      ...partition(),
+      importedVehicles: imported.length,
+      draftVehicles: imported.filter((vehicle) => vehicle.publicationStatus === 'DRAFT').length,
+      publishedVehicles: imported.filter((vehicle) => vehicle.publicationStatus === 'PUBLISHED').length,
+      otherImportedVehicles: imported.filter((vehicle) => !['DRAFT', 'PUBLISHED'].includes(vehicle.publicationStatus)).length,
+      byProvider: { copart: partition('copart'), iaai: partition('iaai') },
+      coverage: { copart: coverage('copart'), iaai: coverage('iaai'), all: coverage() },
+      // Task 053: V2 data health metrics
+      dataHealth: this.computeDataHealth(lots, asOf),
+      asOf: asOf.toISOString(),
+    };
   }
 
   /** Task 053: V2 data health metrics for admin diagnostics */
-  private computeDataHealth(lots: DiscoveredLot[], now: Date) {
+  private computeDataHealth(lots: Array<Pick<DiscoveredLot,
+    'provider' | 'auctionTime' | 'providerResultState' | 'listingObservedAt' |
+    'priceObservedAt' | 'lastProviderUpdateAt' | 'availabilityConfirmed' |
+    'lastSeenAt' | 'buyNowUsd' | 'currentBidUsd' | 'auctionTimestampEvidence'
+  >>, now: Date) {
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
     const fortyEightHours = 48 * 60 * 60 * 1000;
     const byProvider = (provider?: string) => {

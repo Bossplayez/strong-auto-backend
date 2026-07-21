@@ -826,16 +826,21 @@ export class AdminController {
     const mode = query.mode === undefined ? undefined : String(query.mode);
     if ((provider && !PROVIDERS.includes(provider as 'copart' | 'iaai')) || (mode && !['discovery', 'refresh'].includes(mode))) validationError();
     const providers = provider ? [provider] : [...PROVIDERS];
+    const isoOrNull = (value: unknown): string | null => {
+      if (!value) return null;
+      const date = new Date(value as string | number | Date);
+      return Number.isNaN(date.getTime()) ? null : date.toISOString();
+    };
     const items = (await Promise.all(providers.map(async (entry) => {
       const checkpoints = await this.discoveryService.getCheckpointState(entry);
       return checkpoints.map((checkpoint: any) => ({
         provider: entry, mode: checkpoint.mode ?? (String(checkpoint.queryFingerprint ?? '').includes('refresh') ? 'refresh' : 'discovery'),
-        cursor: checkpoint.lastCursor ?? checkpoint.cursor ?? null, cycleId: checkpoint.cycleId ?? null,
-        cycleStartedAt: checkpoint.lastStartedAt ? new Date(checkpoint.lastStartedAt).toISOString() : null,
-        lastSuccessfulPageAt: checkpoint.lastCompletedAt ? new Date(checkpoint.lastCompletedAt).toISOString() : null,
-        exhaustedAt: checkpoint.exhaustedAt ? new Date(checkpoint.exhaustedAt).toISOString() : null,
-        nextSweepAt: checkpoint.nextSweepAt ? new Date(checkpoint.nextSweepAt).toISOString() : null,
-        leaseVersion: Number(checkpoint.leaseVersion ?? 0),
+        hasResumeCursor: Boolean(checkpoint.lastCursor ?? checkpoint.cursor),
+        isExhausted: Boolean(checkpoint.isExhausted ?? checkpoint.exhaustedAt),
+        cycleStartedAt: isoOrNull(checkpoint.cycleStartedAt),
+        lastSuccessfulPageAt: isoOrNull(checkpoint.lastCompletedAt),
+        exhaustedAt: isoOrNull(checkpoint.exhaustedAt),
+        nextSweepAt: isoOrNull(checkpoint.nextDueAt),
       }));
     }))).flat().filter((item) => !mode || item.mode === mode).sort((left, right) => `${left.provider}:${left.mode}`.localeCompare(`${right.provider}:${right.mode}`));
     return { contractVersion: CONTRACT_VERSION, items, asOf: new Date().toISOString() };

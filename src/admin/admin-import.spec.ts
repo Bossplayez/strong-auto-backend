@@ -26,6 +26,7 @@ describe('AdminController — import operational status (Task 033R)', () => {
   let controller: AdminController;
   let leaseService: any;
   let budgetService: any;
+  let discoveryService: any;
   let prisma: any;
 
   beforeEach(async () => {
@@ -66,6 +67,7 @@ describe('AdminController — import operational status (Task 033R)', () => {
         ],
       }),
     };
+    discoveryService = { getCheckpointState: jest.fn().mockResolvedValue([]) };
 
     prisma = {
       importJob: {
@@ -97,7 +99,7 @@ describe('AdminController — import operational status (Task 033R)', () => {
         { provide: CopartService, useValue: { sync: jest.fn() } },
         { provide: ProviderLeaseService, useValue: leaseService },
         { provide: RequestBudgetService, useValue: budgetService },
-        { provide: DiscoveryService, useValue: { getCheckpointState: jest.fn().mockResolvedValue([]) } },
+        { provide: DiscoveryService, useValue: discoveryService },
         { provide: AuctionSearchService, useValue: { search: jest.fn(), importLot: jest.fn() } },
         { provide: FreshnessSchedulerService, useValue: { getStatus: jest.fn(), pause: jest.fn(), resume: jest.fn(), updateCadence: jest.fn(), tick: jest.fn() } },
         { provide: PrismaService, useValue: prisma },
@@ -234,5 +236,31 @@ describe('AdminController — import operational status (Task 033R)', () => {
     await expect(controller.getImportStatusByProvider('invalid')).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'VALIDATION_ERROR' }),
     });
+  });
+
+  it('projects checkpoint state without cursor tokens or internal fields', async () => {
+    discoveryService.getCheckpointState.mockImplementation(async (provider: string) => [{
+      mode: 'discovery',
+      lastCursor: 'opaque-provider-token',
+      queryFingerprint: 'internal-fingerprint',
+      lastError: 'raw provider error',
+      cycleStartedAt: 'not-a-date',
+      lastCompletedAt: new Date('2026-07-21T12:00:00.000Z'),
+      exhaustedAt: null,
+      nextDueAt: new Date('2026-07-21T13:00:00.000Z'),
+      isExhausted: false,
+      provider,
+    }]);
+
+    const result = await controller.getCheckpointStates({ provider: 'copart', mode: 'discovery' });
+
+    expect(result.items).toEqual([{
+      provider: 'copart', mode: 'discovery', hasResumeCursor: true, isExhausted: false,
+      cycleStartedAt: null, lastSuccessfulPageAt: '2026-07-21T12:00:00.000Z',
+      exhaustedAt: null, nextSweepAt: '2026-07-21T13:00:00.000Z',
+    }]);
+    expect(JSON.stringify(result)).not.toContain('opaque-provider-token');
+    expect(JSON.stringify(result)).not.toContain('internal-fingerprint');
+    expect(JSON.stringify(result)).not.toContain('raw provider error');
   });
 });

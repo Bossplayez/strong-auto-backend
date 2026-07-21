@@ -34,13 +34,14 @@ describe('AuctionLotsService unified catalog invariants', () => {
   });
 
   it('returns disjoint exhaustive admin metric partitions', async () => {
-    transaction.discoveredLot.findMany.mockResolvedValue([
-      lot({ provider: 'copart', lifecycleState: 'OPEN', freshnessState: 'FRESH', availabilityConfirmed: true }),
-      lot({ provider: 'copart', lifecycleState: 'OPEN', freshnessState: 'STALE', availabilityConfirmed: true }),
-      lot({ provider: 'iaai', lifecycleState: 'ENDED', freshnessState: 'STALE', availabilityConfirmed: false, state: 'UNAVAILABLE' }),
-      lot({ provider: 'iaai', lifecycleState: 'NOT_READY', freshnessState: 'FRESH', availabilityConfirmed: true }),
+    const now = new Date();
+    prisma.discoveredLot.findMany.mockResolvedValue([
+      lot({ provider: 'copart', providerResultState: 'UNKNOWN', auctionTime: new Date(now.getTime() + 3600000), listingObservedAt: now, lastProviderUpdateAt: now }),
+      lot({ provider: 'copart', providerResultState: 'UNKNOWN', auctionTime: new Date(now.getTime() + 3600000), listingObservedAt: new Date(now.getTime() - 3 * 86400000) }),
+      lot({ provider: 'iaai', providerResultState: 'SOLD', availabilityConfirmed: false, state: 'UNAVAILABLE' }),
+      lot({ provider: 'iaai', providerResultState: 'UNKNOWN', auctionTime: new Date(now.getTime() + 8 * 86400000), listingObservedAt: now, lastProviderUpdateAt: now }),
     ]);
-    transaction.vehicle.findMany.mockResolvedValue([]);
+    prisma.vehicle.findMany.mockResolvedValue([]);
 
     const result = await service.adminMetrics();
 
@@ -56,6 +57,25 @@ describe('AuctionLotsService unified catalog invariants', () => {
       },
     });
     expect(result.currentExternal + result.staleExternal + result.endedExternal + result.unclassifiedExternal).toBe(result.totalExternal);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.discoveredLot.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.not.objectContaining({ mediaUrls: true }),
+    }));
+  });
+
+  it('computes metrics for 35,706 projected lots without an interactive transaction', async () => {
+    prisma.discoveredLot.findMany.mockResolvedValue(Array.from({ length: 35706 }, (_, index) => lot({
+      externalLotId: `lot-${index}`,
+      provider: index % 2 === 0 ? 'copart' : 'iaai',
+    })));
+    prisma.vehicle.findMany.mockResolvedValue([]);
+
+    const result = await service.adminMetrics();
+
+    expect(result.totalExternal).toBe(35706);
+    expect(result.currentExternal + result.staleExternal + result.endedExternal + result.unclassifiedExternal).toBe(35706);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.discoveredLot.findMany).toHaveBeenCalledWith(expect.objectContaining({ select: expect.any(Object) }));
   });
 
   it('imports one persisted lot atomically as a media-rich DRAFT vehicle', async () => {
