@@ -163,19 +163,25 @@ function isExplicitlyUnavailable(
   ];
   if (explicitAvailability.some((value) => toBool(value) === false)) return true;
 
-  const status = firstProviderText(
+  const unavailableStatuses = new Set([
+    'unavailable',
+    'not available',
+    'not_available',
+    'no longer listed',
+    'removed',
+  ]);
+  const statuses = [
     auction.state,
     auction.status,
     raw.status,
     raw.availability_status,
     attributes.InventoryStatus,
-  )?.toLowerCase();
+  ];
 
-  return status === 'unavailable'
-    || status === 'not available'
-    || status === 'not_available'
-    || status === 'no longer listed'
-    || status === 'removed';
+  return statuses.some((value) => {
+    const status = typeof value === 'string' ? value.trim().toLowerCase() : null;
+    return status !== null && unavailableStatuses.has(status);
+  });
 }
 
 export function normalizeDiscoveredLot(

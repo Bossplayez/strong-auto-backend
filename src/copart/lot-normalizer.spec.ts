@@ -40,4 +40,14 @@ describe('lot normalizer provider facts', () => {
 
     expect(lot.availabilityConfirmed).toBe(false);
   });
+
+  it('does not let an active auction label hide IAAI unavailable inventory', () => {
+    const lot = normalizeDiscoveredLot({
+      lot_number: '3',
+      auction: { state: 'upcoming' },
+      attributes: { InventoryStatus: 'Unavailable' },
+    }, 'iaai');
+
+    expect(lot.availabilityConfirmed).toBe(false);
+  });
 });
