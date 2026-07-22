@@ -86,6 +86,26 @@ describe('auction lot calculator input', () => {
     }));
   });
 
+  it('resolves a Copart platform from an exact auction location when facility id is absent', () => {
+    const result = buildLotCalculatorInput(lot({
+      provider: 'copart', facilityId: null, locationDisplay: 'Miami Central (FL)',
+      locationState: null, facilityOfficeName: null, facilityState: null,
+      bodyStyle: 'SUV/Crossover',
+    }), now);
+
+    expect(result).toEqual(expect.objectContaining({
+      status: 'available',
+      input: expect.objectContaining({ provider: 'copart', platformId: '101' }),
+    }));
+  });
+
+  it('does not override an explicit unknown Copart facility with a name match', () => {
+    expect(buildLotCalculatorInput(lot({
+      provider: 'copart', facilityId: '999999', locationDisplay: 'Miami Central (FL)',
+      locationState: null, facilityOfficeName: null, facilityState: null,
+    }), now)).toEqual({ status: 'unavailable', reason: 'LOCATION_UNAVAILABLE' });
+  });
+
   it('does not resolve an IAAI platform from a city without an explicit state', () => {
     expect(buildLotCalculatorInput(lot({
       provider: 'iaai',

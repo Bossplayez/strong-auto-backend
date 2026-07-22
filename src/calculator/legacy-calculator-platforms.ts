@@ -23,6 +23,21 @@ for (const entry of IAAI_LOCATION_DIRECTORY.split('|')) {
   IAAI_LOCATION_TO_PLATFORM.set(key, ids);
 }
 
+// Exact public labels used by the calculator's Copart location selector. The
+// fallback is used only when RapidAPI did not send its facility id.
+const COPART_LOCATION_TO_PLATFORM = new Map<string, string[]>([
+  ['MIAMI CENTRAL (FL)', ['101']],
+  ['SPRINGFIELD (MO)', ['89']],
+  ['KNOXVILLE (TN)', ['109']],
+  ['CLEVELAND EAST (OH)', ['106']],
+  ['CLEVELAND WEST (OH)', ['107']],
+  ['HOUSTON (TX)', ['10']],
+  ['DALLAS (TX)', ['11']],
+  ['ATLANTA WEST (GA)', ['14']],
+  ['CHICAGO NORTH (IL)', ['35']],
+  ['LOS ANGELES (CA)', ['9']],
+]);
+
 export function isLegacyCalculatorPlatform(
   provider: LegacyCalculatorProvider,
   facilityId: string,
@@ -44,8 +59,11 @@ export function resolveLegacyCalculatorPlatform(
 ): string | null {
   const facilityId = location.facilityId?.trim();
   if (facilityId && isLegacyCalculatorPlatform(provider, facilityId)) return facilityId;
+  if (facilityId) return null;
 
-  if (provider !== 'iaai') return null;
+  const locationIndex = provider === 'iaai'
+    ? IAAI_LOCATION_TO_PLATFORM
+    : COPART_LOCATION_TO_PLATFORM;
 
   const keys = new Set([
     normalizeLocationKey(location.locationDisplay),
@@ -54,7 +72,7 @@ export function resolveLegacyCalculatorPlatform(
   ]);
   for (const key of keys) {
     if (!key) continue;
-    const matches = IAAI_LOCATION_TO_PLATFORM.get(key);
+    const matches = locationIndex.get(key);
     if (matches?.length === 1) return matches[0];
   }
   return null;
