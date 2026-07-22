@@ -67,6 +67,39 @@ describe('auction lot calculator input', () => {
     });
   });
 
+  it('resolves an IAAI platform only from an exact calculator directory location', () => {
+    const result = buildLotCalculatorInput(lot({
+      provider: 'iaai',
+      facilityId: null,
+      locationDisplay: 'Seattle (WA)',
+      locationState: null,
+      facilityOfficeName: null,
+      facilityState: null,
+      engine: '{"raw":"2.5L I-4","size_l":"2.5"}',
+      bodyStyle: 'SUV/Crossover',
+      fuelType: 'Gasoline',
+    }), now);
+
+    expect(result).toEqual(expect.objectContaining({
+      status: 'available',
+      input: expect.objectContaining({ provider: 'iaai', platformId: '531', engineVolumeCc: 2500 }),
+    }));
+  });
+
+  it('does not resolve an IAAI platform from a city without an explicit state', () => {
+    expect(buildLotCalculatorInput(lot({
+      provider: 'iaai',
+      facilityId: null,
+      locationDisplay: 'Seattle',
+      locationState: null,
+      facilityOfficeName: null,
+      facilityState: null,
+    }), now)).toEqual({
+      status: 'unavailable',
+      reason: 'LOCATION_UNAVAILABLE',
+    });
+  });
+
   it('does not infer an engine volume from cylinder notation', () => {
     expect(toEngineVolumeCc('V6')).toBeNull();
     expect(toEngineVolumeCc('2.0L I-4')).toBe(2000);

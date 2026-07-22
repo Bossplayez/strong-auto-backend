@@ -1,6 +1,6 @@
 import type { DiscoveredLot } from '@prisma/client';
 import { hasFreshAuctionPrice, evaluateAuctionTruth } from './public-eligibility';
-import { isLegacyCalculatorPlatform } from '../calculator/legacy-calculator-platforms';
+import { resolveLegacyCalculatorPlatform } from '../calculator/legacy-calculator-platforms';
 import type { CalculatorPreviewInput, CalculatorPreviewUnavailable } from '../calculator/calculator-preview.types';
 
 export type LotCalculatorInputResult =
@@ -23,8 +23,8 @@ export function buildLotCalculatorInput(
     return { status: 'unavailable', reason: 'PRICE_NOT_FRESH' };
   }
 
-  const facilityId = lot.facilityId?.trim();
-  if (!facilityId || !isLegacyCalculatorPlatform(lot.provider as 'copart' | 'iaai', facilityId)) {
+  const facilityId = resolveLegacyCalculatorPlatform(lot.provider as 'copart' | 'iaai', lot);
+  if (!facilityId) {
     return { status: 'unavailable', reason: 'LOCATION_UNAVAILABLE' };
   }
 
