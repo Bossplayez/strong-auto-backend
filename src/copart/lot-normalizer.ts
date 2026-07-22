@@ -53,6 +53,8 @@ export interface NormalizedLotData {
   saleDocumentName: string | null;
   saleDocumentType: string | null;
   sourcePayloadHash: string | null;
+  /** True unless the provider explicitly says that the listing is unavailable. */
+  availabilityConfirmed: boolean;
   // Task 053: Truth Contract V2 fields
   providerAuctionTimestampRaw: string | null;
   hasPricingData: boolean;
@@ -116,6 +118,66 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+function firstProviderText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const text = value.trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+/**
+ * Provider body-style fields are not uniform between Copart and IAAI payloads.
+ * These are direct provider fields only; never infer a body style from title,
+ * photos, make, model, or segment.
+ */
+export function readProviderBodyStyle(raw: unknown): string | null {
+  if (!isRecord(raw)) return null;
+  const specs = isRecord(raw.vehicle_specs) ? raw.vehicle_specs : {};
+  const attributes = isRecord(raw.attributes) ? raw.attributes : {};
+  const description = isRecord(raw.vehicle_description) ? raw.vehicle_description : {};
+
+  return firstProviderText(
+    specs.body_style,
+    raw.BodyStyleName,
+    raw.BodyStyle,
+    attributes.BodyStyleName,
+    attributes.BodyStyle,
+    description.BodyStyle,
+  );
+}
+
+function isExplicitlyUnavailable(
+  raw: Record<string, unknown>,
+  auction: Record<string, unknown>,
+  attributes: Record<string, unknown>,
+): boolean {
+  const explicitAvailability = [
+    raw.available,
+    raw.is_available,
+    raw.isAvailable,
+    auction.available,
+    auction.is_available,
+    auction.isAvailable,
+  ];
+  if (explicitAvailability.some((value) => toBool(value) === false)) return true;
+
+  const status = firstProviderText(
+    auction.state,
+    auction.status,
+    raw.status,
+    raw.availability_status,
+    attributes.InventoryStatus,
+  )?.toLowerCase();
+
+  return status === 'unavailable'
+    || status === 'not available'
+    || status === 'not_available'
+    || status === 'no longer listed'
+    || status === 'removed';
+}
+
 export function normalizeDiscoveredLot(
   raw: unknown,
   _provider: string,
@@ -134,6 +196,7 @@ export function normalizeDiscoveredLot(
   const seller = isRecord(raw.seller) ? raw.seller : {};
   const saleDoc = isRecord(raw.sale_document) ? raw.sale_document : {};
   const odometer = isRecord(raw.odometer) ? raw.odometer : {};
+  const attributes = isRecord(raw.attributes) ? raw.attributes : {};
 
   // IAAI alternative paths — some providers nest location under different keys
   const yard = isRecord(raw.yard) ? raw.yard : {};
@@ -189,7 +252,7 @@ export function normalizeDiscoveredLot(
           })()
       : null,
     hasKey: toBool(condition.has_key),
-    bodyStyle: specs.body_style ? String(specs.body_style) : null,
+    bodyStyle: readProviderBodyStyle(raw),
     engine: specs.engine ? (typeof specs.engine === 'object' ? JSON.stringify(specs.engine) : String(specs.engine)) : null,
     driveType: specs.drive_type ? String(specs.drive_type) : null,
     exteriorColor: specs.exterior_color ? String(specs.exterior_color) : null,
@@ -225,6 +288,7 @@ export function normalizeDiscoveredLot(
     saleDocumentName: saleDoc.name ? String(saleDoc.name) : null,
     saleDocumentType: saleDoc.type ? String(saleDoc.type) : null,
     sourcePayloadHash: null, // computed separately if needed
+    availabilityConfirmed: !isExplicitlyUnavailable(raw, auction, attributes),
 
     // Task 053: Truth Contract V2
     providerAuctionTimestampRaw: auctionTimeRaw, // preserve raw for diagnostics

@@ -72,6 +72,12 @@ const COMMERCIAL_TERMS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
   { pattern: /\bmoped\b/i, label: 'Moped' },
   { pattern: /\bsnowmobile\b/i, label: 'Snowmobile' },
   { pattern: /\bgolf\s*cart\b/i, label: 'Golf cart' },
+  { pattern: /\bgenerator\b/i, label: 'Generator' },
+  { pattern: /\btool\s*set\b/i, label: 'Tool set' },
+  { pattern: /\bair\s*compressor\b/i, label: 'Air compressor' },
+  { pattern: /\bcompressor\b/i, label: 'Compressor' },
+  { pattern: /\bwelder\b/i, label: 'Welder' },
+  { pattern: /\b(?:industrial|construction)\s+equipment\b/i, label: 'Equipment' },
 ];
 
 /** Non-repairable / junk title keywords. */
@@ -100,6 +106,17 @@ const CATASTROPHIC_TERMS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
 ];
 
 // ── Evaluator ──────────────────────────────────────────────────
+
+/**
+ * Admission gate for new provider records. It rejects only facts that clearly
+ * identify a non-passenger asset, without using year or damage quality rules.
+ */
+export function isPassengerAutomobile(
+  lot: Pick<QualitySubject, 'title' | 'bodyStyle' | 'make' | 'model'>,
+): boolean {
+  const vehicleText = [lot.title, lot.bodyStyle, lot.make, lot.model].filter(Boolean).join(' ');
+  return !COMMERCIAL_TERMS.some((term) => term.pattern.test(vehicleText));
+}
 
 export function evaluateCatalogQuality(lot: QualitySubject): QualityOutcome {
   if (lot.year === null || lot.year < MIN_CATALOG_YEAR) {
@@ -138,6 +155,8 @@ const DB_COMMERCIAL_TERMS = [
   'backhoe', 'harvester', 'tractor', 'trailer',
   'motorcycle', 'atv', 'utv', 'quad', 'dirt bike', 'scooter', 'moped',
   'snowmobile', 'golf cart',
+  'generator', 'tool set', 'air compressor', 'compressor', 'welder',
+  'industrial equipment', 'construction equipment',
 ];
 const DB_NON_REPAIRABLE_TERMS = [
   'non-repairable', 'non repairable', 'nonrepairable',

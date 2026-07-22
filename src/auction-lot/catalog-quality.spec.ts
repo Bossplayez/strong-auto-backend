@@ -1,7 +1,7 @@
 /**
  * Task 046 — Tests for evaluateCatalogQuality
  */
-import { evaluateCatalogQuality, MIN_CATALOG_YEAR } from './catalog-quality';
+import { evaluateCatalogQuality, isPassengerAutomobile, MIN_CATALOG_YEAR } from './catalog-quality';
 
 const baseLot = {
   year: 2020,
@@ -97,6 +97,25 @@ describe('evaluateCatalogQuality (Task 046)', () => {
     const result = evaluateCatalogQuality({ ...baseLot, title: '2019 CAT EXCAVATOR 320' });
     expect(result.include).toBe(false);
     expect(result.reasonCode).toBe('COMMERCIAL_VEHICLE');
+  });
+
+  it.each([
+    '2020 GENERATOR - GENERATOR',
+    '2021 DEWALT TOOL SET',
+    '2019 INDUSTRIAL AIR COMPRESSOR',
+    '2022 MILLER WELDER',
+  ])('excludes a non-automobile asset: %s', (title) => {
+    const result = evaluateCatalogQuality({ ...baseLot, title });
+
+    expect(result).toEqual(expect.objectContaining({
+      include: false,
+      reasonCode: 'COMMERCIAL_VEHICLE',
+    }));
+    expect(isPassengerAutomobile({ ...baseLot, title })).toBe(false);
+  });
+
+  it('accepts a passenger car for ingestion', () => {
+    expect(isPassengerAutomobile(baseLot)).toBe(true);
   });
 
   it('excludes non-repairable document', () => {

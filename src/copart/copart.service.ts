@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 import { normalizeFuelType, normalizeDriveType, normalizeBodyType } from '../common/normalization';
+import { readProviderBodyStyle } from './lot-normalizer';
 import {
   providerFetch,
   type ProviderFetchConfig,
@@ -716,7 +717,7 @@ export class CopartService {
       vin: raw.vin,
       odometerValue: raw.odometer?.km ? Number(raw.odometer.km) : undefined,
       odometerUnit: 'km',
-      bodyType: normalizeBodyType(specs.body_style) ?? undefined,
+      bodyType: normalizeBodyType(readProviderBodyStyle(raw)) ?? undefined,
       fuelType: normalizeFuelType(specs.fuel_type) ?? undefined,
       transmission: specs.transmission,
       driveType: normalizeDriveType(specs.drive_type) ?? undefined,

@@ -18,6 +18,7 @@ import { normalizeDiscoveredLot } from './lot-normalizer';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
 import { RequestBudgetService } from './request-budget.service';
 import { validateProviderResponse } from './response-validator';
+import { isPassengerAutomobile } from '../auction-lot/catalog-quality';
 
 export type DiscoveryMode = 'discovery' | 'refresh';
 
@@ -244,10 +245,12 @@ export class DiscoveryService {
               if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
               const lotId = String((raw as Record<string, unknown>).lot_number ?? '');
               if (!lotId) continue;
-              normalizedById.set(
-                lotId,
-                normalizeDiscoveredLot(raw as Record<string, unknown>, params.platform),
-              );
+              const normalized = normalizeDiscoveredLot(raw as Record<string, unknown>, params.platform);
+              if (!isPassengerAutomobile(normalized)) {
+                this.logger.warn(`${params.platform}: skipped non-passenger asset ${lotId}`);
+                continue;
+              }
+              normalizedById.set(lotId, normalized);
             }
 
             const observedAt = new Date();
@@ -306,7 +309,7 @@ export class DiscoveryService {
                     lastSeenAt: observedAt,
                     lastProviderUpdateAt: observedAt,
                     consecutiveMisses: 0,
-                    availabilityConfirmed: true,
+                    availabilityConfirmed: normalized.availabilityConfirmed,
                   };
 
                   // Task 053: Truth Contract V2 — strict time normalization

@@ -29,6 +29,7 @@ import { normalizeDiscoveredLot, sanitizeLotForResponse } from './lot-normalizer
 import { normalizeLifecycleState, providerResultStateFromRaw, computeFreshnessState, STALE_AFTER_MS } from '../auction-lot/lifecycle-mapping';
 import { AuctionLifecycleState } from '../auction-lot/types';
 import { normalizeAuctionTimestamp } from '../auction-lot/time-normalization';
+import { isPassengerAutomobile } from '../auction-lot/catalog-quality';
 
 export interface SearchParams {
   platform: 'copart' | 'iaai';
@@ -244,6 +245,10 @@ export class AuctionSearchService {
 
       const lotId = String(raw.lot_number);
       const normalized = normalizeDiscoveredLot(raw, params.platform);
+      if (!isPassengerAutomobile(normalized)) {
+        this.logger.warn(`${params.platform}: skipped non-passenger asset ${lotId}`);
+        continue;
+      }
       const { providerAuctionTimestampRaw: _rawTimestamp, hasPricingData, buyNowExplicitlyAbsent, ...prismaNormalized } = normalized;
 
       // Compute lifecycle and freshness at write time (same as discovery.service.ts)
@@ -306,7 +311,7 @@ export class AuctionSearchService {
           listingObservedAt: observedAt,
           ...priceAndBuyNowData,
           consecutiveMisses: 0,
-          availabilityConfirmed: true,
+          availabilityConfirmed: normalized.availabilityConfirmed,
         },
         update: {
           ...prismaNormalized,
@@ -321,7 +326,7 @@ export class AuctionSearchService {
           listingObservedAt: observedAt,
           ...priceAndBuyNowData,
           consecutiveMisses: 0,
-          availabilityConfirmed: true,
+          availabilityConfirmed: normalized.availabilityConfirmed,
         },
       });
 
