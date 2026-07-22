@@ -846,6 +846,42 @@ export class AdminController {
     return { contractVersion: CONTRACT_VERSION, items, asOf: new Date().toISOString() };
   }
 
+  @Get('auction/traversals')
+  @ApiOperation({ summary: 'Get checkpoint-proven traversal state per provider (admin)' })
+  @ApiResponse({ status: 200, description: 'Traversal diagnostics' })
+  async getTraversals(): Promise<any> {
+    const isoOrNull = (value: unknown): string | null => {
+      if (!value) return null;
+      const date = new Date(value as string | number | Date);
+      return Number.isNaN(date.getTime()) ? null : date.toISOString();
+    };
+    const items = await Promise.all(PROVIDERS.map(async (provider) => {
+      const canonicalFingerprint = `discovery:${this.discoveryService.buildQueryFingerprint({ platform: provider })}`;
+      const checkpoint = (await this.discoveryService.getCheckpointState(provider))
+        .find((entry: any) => entry.queryFingerprint === canonicalFingerprint);
+      const cycleStartedAt = isoOrNull(checkpoint?.cycleStartedAt);
+      const lastSuccessfulPageAt = isoOrNull(checkpoint?.lastCompletedAt);
+      const completedAt = isoOrNull(checkpoint?.exhaustedAt);
+      const nextSweepAt = isoOrNull(checkpoint?.nextDueAt);
+      const exhausted = Boolean(checkpoint?.isExhausted ?? checkpoint?.exhaustedAt);
+      const hasContinuation = Boolean(checkpoint?.lastCursor ?? checkpoint?.cursor);
+      const status = exhausted && cycleStartedAt && completedAt
+        ? 'completed'
+        : hasContinuation && cycleStartedAt && lastSuccessfulPageAt
+          ? 'continuation_available'
+          : 'unknown';
+      return {
+        provider,
+        status,
+        cycleStartedAt,
+        lastSuccessfulPageAt,
+        completedAt,
+        nextSweepAt,
+      };
+    }));
+    return { contractVersion: CONTRACT_VERSION, items, asOf: new Date().toISOString() };
+  }
+
   @Get('auction/discovered-lots')
   @ApiOperation({ summary: 'List discovered lots (admin)' })
   @ApiResponse({ status: 200, description: 'Paginated discovered lots' })
