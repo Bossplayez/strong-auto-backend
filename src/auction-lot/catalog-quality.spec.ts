@@ -1,7 +1,7 @@
 /**
  * Task 046 — Tests for evaluateCatalogQuality
  */
-import { evaluateCatalogQuality, isPassengerAutomobile, MIN_CATALOG_YEAR } from './catalog-quality';
+import { evaluateCatalogQuality, isPassengerAutomobile, MIN_CATALOG_YEAR, qualityExclusionWhere } from './catalog-quality';
 
 const baseLot = {
   year: 2020,
@@ -116,6 +116,17 @@ describe('evaluateCatalogQuality (Task 046)', () => {
 
   it('accepts a passenger car for ingestion', () => {
     expect(isPassengerAutomobile(baseLot)).toBe(true);
+  });
+
+  it('hides historical non-passenger records when the provider stored the signal outside the title', () => {
+    const where = qualityExclusionWhere();
+    const exclusions = ((where.NOT as { OR: unknown[] }).OR);
+
+    expect(exclusions).toEqual(expect.arrayContaining([
+      { bodyStyle: { contains: 'tractor', mode: 'insensitive' } },
+      { make: { contains: 'tractor', mode: 'insensitive' } },
+      { model: { contains: 'tractor', mode: 'insensitive' } },
+    ]));
   });
 
   it('excludes non-repairable document', () => {

@@ -171,7 +171,12 @@ const DB_CATASTROPHIC_TERMS = [
 ];
 
 export function qualityExclusionWhere(): Prisma.DiscoveredLotWhereInput {
-  const commercialExclusions = DB_COMMERCIAL_TERMS.map((term) => ({ title: { contains: term, mode: 'insensitive' as const } }));
+  const commercialExclusions = DB_COMMERCIAL_TERMS.flatMap((term) => [
+    { title: { contains: term, mode: 'insensitive' as const } },
+    { bodyStyle: { contains: term, mode: 'insensitive' as const } },
+    { make: { contains: term, mode: 'insensitive' as const } },
+    { model: { contains: term, mode: 'insensitive' as const } },
+  ]);
   const nonRepairableExclusions = DB_NON_REPAIRABLE_TERMS.map((term) => ({ title: { contains: term, mode: 'insensitive' as const } }));
   const catastrophicExclusions = DB_CATASTROPHIC_TERMS.map((term) => ({ primaryDamage: { contains: term, mode: 'insensitive' as const } }));
   return { NOT: { OR: [...commercialExclusions, ...nonRepairableExclusions, ...catastrophicExclusions] } };
