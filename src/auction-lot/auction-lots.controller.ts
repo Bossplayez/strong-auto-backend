@@ -116,6 +116,18 @@ export class AuctionLotsController {
     return this.auctionLotsService.searchByVinOrLot(q || '');
   }
 
+  @Get(':provider/:externalLotId/calculator-preview')
+  @ApiOperation({ summary: 'Preview the existing Strong Auto calculator for a public auction lot' })
+  @ApiParam({ name: 'provider', description: 'Provider (copart, iaai)' })
+  @ApiParam({ name: 'externalLotId', description: 'External lot number' })
+  @ApiResponse({ status: 200, description: 'Calculator preview or an unavailable state' })
+  async calculatorPreview(
+    @Param('provider') provider: string,
+    @Param('externalLotId') externalLotId: string,
+  ) {
+    return this.auctionLotsService.getCalculatorPreview(provider, externalLotId);
+  }
+
   @Get(':provider/:externalLotId')
   @ApiOperation({ summary: 'Get public auction lot detail' })
   @ApiParam({ name: 'provider', description: 'Provider (copart, iaai)' })

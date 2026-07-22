@@ -37,6 +37,11 @@ const envSchema = z.object({
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
 
+  // Existing Strong Auto calculation engine. Values are configured only in
+  // the runtime environment and are never exposed to browser clients.
+  CALCULATOR_ENGINE_URL: z.string().url().optional(),
+  CALCULATOR_ENGINE_UID: z.string().min(1).optional(),
+
   // ── Database ─────────────────────────────────────────────
   DATABASE_URL: z
     .string()

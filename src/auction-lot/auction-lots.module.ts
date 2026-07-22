@@ -8,9 +8,10 @@ import { Module } from '@nestjs/common';
 import { AuctionImportCompatibilityController, AuctionLotsController, AuctionLotFavoritesController } from './auction-lots.controller';
 import { AuctionLotsService } from './auction-lots.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CalculatorModule } from '../calculator/calculator.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, CalculatorModule],
   controllers: [AuctionLotsController, AuctionImportCompatibilityController, AuctionLotFavoritesController],
   providers: [AuctionLotsService],
   exports: [AuctionLotsService],

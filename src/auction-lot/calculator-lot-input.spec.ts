@@ -1,0 +1,84 @@
+import type { DiscoveredLot } from '@prisma/client';
+import {
+  buildLotCalculatorInput,
+  toBodyCode,
+  toEngineVolumeCc,
+  toFuelCode,
+} from './calculator-lot-input';
+
+const now = new Date('2026-07-22T10:00:00.000Z');
+
+function lot(overrides: Partial<DiscoveredLot> = {}): DiscoveredLot {
+  return {
+    provider: 'copart',
+    externalLotId: '123',
+    title: '2019 TEST SEDAN',
+    make: 'TEST',
+    model: 'SEDAN',
+    year: 2019,
+    facilityId: '142',
+    fuelType: 'Gas',
+    bodyStyle: 'Sedan',
+    engine: '2.0L I-4',
+    isBuyNow: false,
+    currentBidUsd: 3100 as never,
+    buyNowUsd: null,
+    auctionTime: new Date('2026-07-22T16:00:00.000Z'),
+    providerResultState: 'UNKNOWN' as never,
+    listingObservedAt: now,
+    priceObservedAt: now,
+    lastProviderUpdateAt: now,
+    availabilityConfirmed: true,
+    lastSeenAt: now,
+    state: 'DISCOVERED' as never,
+    consecutiveMisses: 0,
+    ...overrides,
+  } as DiscoveredLot;
+}
+
+describe('auction lot calculator input', () => {
+  it('uses an explicit Buy Now price ahead of the current bid', () => {
+    const result = buildLotCalculatorInput(lot({
+      isBuyNow: true,
+      buyNowUsd: 4200 as never,
+    }), now);
+
+    expect(result).toEqual(expect.objectContaining({
+      status: 'available',
+      basis: 'buyNow',
+      input: expect.objectContaining({ priceUsd: 4200, platformId: '142', engineVolumeCc: 2000 }),
+    }));
+  });
+
+  it('uses the current bid when Buy Now is not active', () => {
+    const result = buildLotCalculatorInput(lot(), now);
+
+    expect(result).toEqual(expect.objectContaining({
+      status: 'available',
+      basis: 'currentBid',
+      input: expect.objectContaining({ priceUsd: 3100 }),
+    }));
+  });
+
+  it('does not invent a facility when it is not in the legacy calculator directory', () => {
+    expect(buildLotCalculatorInput(lot({ facilityId: '999999' }), now)).toEqual({
+      status: 'unavailable',
+      reason: 'LOCATION_UNAVAILABLE',
+    });
+  });
+
+  it('does not infer an engine volume from cylinder notation', () => {
+    expect(toEngineVolumeCc('V6')).toBeNull();
+    expect(toEngineVolumeCc('2.0L I-4')).toBe(2000);
+    expect(toEngineVolumeCc('1998cc')).toBe(1998);
+    expect(toEngineVolumeCc('1998 cm³')).toBe(1998);
+    expect(toEngineVolumeCc('{"size_l":"1.8"}')).toBe(1800);
+  });
+
+  it('keeps unsupported body and fuel facts unavailable instead of guessing', () => {
+    expect(toBodyCode('Pickup truck')).toBeNull();
+    expect(toBodyCode('Sport utility vehicle')).toBe(3);
+    expect(toFuelCode('Hydrogen')).toBeNull();
+    expect(toFuelCode('Plug-in Hybrid')).toBe(3);
+  });
+});

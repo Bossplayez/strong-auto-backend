@@ -4,13 +4,34 @@ import {
   CalculateEstimateDto,
   CalculatorBreakdownDto,
   BreakdownLineDto,
+  CalculatorPreviewDto,
 } from './dto';
+import { CalculatorEngineService } from './calculator-engine.service';
+import type { CalculatorPreviewResult } from './calculator-preview.types';
 
 @Injectable()
 export class CalculatorService {
   private readonly logger = new Logger(CalculatorService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly calculatorEngine: CalculatorEngineService,
+  ) {}
+
+  /**
+   * Non-persistent preview used by the legacy-calculator-compatible page and
+   * auction lot cards. The existing saved estimate flow is intentionally
+   * unchanged.
+   */
+  async preview(
+    dto: CalculatorPreviewDto,
+    basis: 'buyNow' | 'currentBid' = 'currentBid',
+  ): Promise<CalculatorPreviewResult> {
+    if (dto.fuelType !== 4 && dto.engineVolumeCc <= 0) {
+      return { status: 'unavailable', reason: 'VEHICLE_DATA_UNAVAILABLE' };
+    }
+    return this.calculatorEngine.preview(dto, basis);
+  }
 
   async calculateEstimate(
     dto: CalculateEstimateDto,

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { DiscoveredLot, Vehicle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,6 +20,8 @@ import {
   type CatalogScheduleState, type ListingFreshnessV2, type PriceFreshnessV2,
 } from './projection-v2';
 import { resolveListingObservedAt } from './observation-resolver';
+import { buildLotCalculatorInput } from './calculator-lot-input';
+import { CalculatorService } from '../calculator/calculator.service';
 
 /** Task 054: Parse runCondition from stored JSON/string into clean label */
 function normalizeRunCondition(raw: string | null): string | null {
@@ -41,7 +43,10 @@ function normalizeRunCondition(raw: string | null): string | null {
 
 @Injectable()
 export class AuctionLotsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly calculatorService?: CalculatorService,
+  ) {}
 
   async findAll(raw: Record<string, unknown>) {
     const query = parseInventoryQuery(raw, 'usa');
@@ -234,6 +239,23 @@ export class AuctionLotsService {
       // Task 050: external auction URL for the lot
       externalAuctionUrl: buildExternalAuctionUrl(lot.provider, lot.externalLotId),
     };
+  }
+
+  async getCalculatorPreview(provider: string, externalLotId: string) {
+    const { provider: validProvider, externalLotId: validLotId } = validIdentity(provider, externalLotId);
+    const lot = await this.prisma.discoveredLot.findUnique({
+      where: { provider_externalLotId: { provider: validProvider, externalLotId: validLotId } },
+    });
+    if (!lot) {
+      throw new NotFoundException({ code: 'AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
+    }
+
+    const input = buildLotCalculatorInput(lot, new Date());
+    if (input.status === 'unavailable') return input;
+    if (!this.calculatorService) {
+      return { status: 'unavailable' as const, reason: 'ENGINE_UNAVAILABLE' as const };
+    }
+    return this.calculatorService.preview(input.input, input.basis);
   }
 
   async searchByVinOrLot(query: string) {
