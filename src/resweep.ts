@@ -8,10 +8,8 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { DiscoveryService } from './copart/discovery.service';
-import { ConfigService } from '@nestjs/config';
-import { ProviderLeaseService } from './copart/provider-lease.service';
-import { RequestBudgetService } from './copart/request-budget.service';
+import { isPassengerAutomobile } from './auction-lot/catalog-quality';
+import { normalizeDiscoveredLot } from './copart/lot-normalizer';
 
 // Simple mock for running discovery outside NestJS
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY!;
@@ -42,88 +40,6 @@ async function fetchPage(platform: 'copart' | 'iaai', cursor: string | null, per
   return res.json() as Promise<any>;
 }
 
-function normalizeLot(raw: any, platform: string) {
-  const auction = raw.auction || {};
-  const pricing = raw.pricing || {};
-  const media = raw.media || {};
-  const details = raw.details || {};
-  const location = raw.location || {};
-  const facility = raw.facility || {};
-
-  const mediaUrls: string[] = [];
-  const seen = new Set<string>();
-
-  if (Array.isArray(media.items)) {
-    for (const item of media.items) {
-      if (typeof item === 'string' && item.startsWith('https://') && !seen.has(item)) {
-        seen.add(item);
-        mediaUrls.push(item);
-      } else if (item && typeof item === 'object') {
-        const candidate = item.full ?? item.large ?? item.thumb ?? '';
-        if (candidate && typeof candidate === 'string' && candidate.startsWith('https://') && !seen.has(candidate)) {
-          seen.add(candidate);
-          mediaUrls.push(candidate);
-        }
-      }
-    }
-  }
-
-  if (mediaUrls.length === 0 && Array.isArray(media.thumbs)) {
-    for (const url of media.thumbs) {
-      if (typeof url === 'string' && url.startsWith('https://') && !seen.has(url)) {
-        seen.add(url);
-        mediaUrls.push(url);
-      }
-    }
-  }
-
-  const auctionDate = auction.auction_at ? new Date(auction.auction_at) : null;
-
-  return {
-    title: raw.title || '',
-    make: raw.make || '',
-    model: raw.model || '',
-    year: raw.year ? Number(raw.year) : null,
-    vin: raw.vin || null,
-    slugVin: raw.slug_vin || null,
-    ad: auctionDate,
-    auctionTime: auctionDate,
-    auctionState: auction.state || null,
-    auctionFormatted: auction.formatted || null,
-    isBuyNow: auction.is_buy_now || false,
-    buyNowUsd: pricing.buy_now_usd ? Number(pricing.buy_now_usd) : null,
-    currentBidUsd: pricing.current_bid_usd ? Number(pricing.current_bid_usd) : null,
-    estimatedCostUsd: pricing.estimated_cost?.to ? Number(pricing.estimated_cost.to) : null,
-    lastSoldPriceUsd: pricing.last_sold_price_usd ? Number(pricing.last_sold_price_usd) : null,
-    odometerMi: details.odometer?.value ? Number(details.odometer.value) : null,
-    primaryDamage: details.primary_damage || null,
-    secondaryDamage: details.secondary_damage || null,
-    loss: details.loss_type || null,
-    runCondition: details.condition?.run_condition || null,
-    hasKey: details.condition?.has_key ?? null,
-    bodyStyle: details.body_style || null,
-    engine: details.engine || null,
-    driveType: details.drive_type || null,
-    exteriorColor: details.exterior_color || null,
-    fuelType: details.fuel_type || null,
-    transmission: details.transmission || null,
-    locationDisplay: location.display || null,
-    locationState: location.state || null,
-    facilityId: facility.lot || null,
-    facilityOfficeName: facility.office_name || null,
-    facilityState: facility.state || null,
-    facilityZip: facility.zip || null,
-    has360: media.has_360 || false,
-    hasVideo: media.has_video || false,
-    thumbsCount: media.thumbs_count || 0,
-    mediaUrls,
-    sellerClass: raw.seller?.class || null,
-    sellerType: raw.seller?.type || null,
-    saleDocumentName: raw.sale_document?.name || null,
-    saleDocumentType: raw.sale_document?.type || null,
-  };
-}
-
 async function resweepProvider(platform: 'copart' | 'iaai', maxPages: number) {
   console.log(`\n=== Resweep ${platform} (max ${maxPages} pages) ===`);
 
@@ -151,7 +67,11 @@ async function resweepProvider(platform: 'copart' | 'iaai', maxPages: number) {
         const lotId = String(raw.lot_number ?? '');
         if (!lotId) continue;
 
-        const normalized = normalizeLot(raw, platform);
+        const normalized = normalizeDiscoveredLot(raw, platform);
+        if (!isPassengerAutomobile(normalized)) {
+          console.log(`  Skipping non-passenger inventory: ${lotId}`);
+          continue;
+        }
 
         const existing = await prisma.discoveredLot.findUnique({
           where: {
@@ -169,7 +89,6 @@ async function resweepProvider(platform: 'copart' | 'iaai', maxPages: number) {
               ...normalized,
               lastSeenAt: new Date(),
               consecutiveMisses: 0,
-              availabilityConfirmed: true,
             },
           });
           lotsUpdated++;
