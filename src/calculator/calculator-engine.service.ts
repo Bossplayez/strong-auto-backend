@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type {
   CalculatorPreviewBreakdown,
   CalculatorPreviewInput,
@@ -10,6 +9,8 @@ const LEGACY_BROKER_USD = 200;
 const LEGACY_FORWARDING_USD = 450;
 const LEGACY_DEALER_PRICE_USD = 500;
 const ENGINE_TIMEOUT_MS = 8_000;
+const DEALER_CALCULATOR_ORIGIN = 'https://dealer.vin-check.com.ua';
+const DEALER_UID_CACHE_MS = 15 * 60 * 1_000;
 
 type EngineResult = Record<string, unknown>;
 
@@ -21,32 +22,28 @@ type EngineResult = Record<string, unknown>;
 @Injectable()
 export class CalculatorEngineService {
   private readonly logger = new Logger(CalculatorEngineService.name);
-
-  constructor(private readonly config: ConfigService) {}
+  private cachedDealerUid: { value: string; expiresAt: number } | null = null;
 
   async preview(
     input: CalculatorPreviewInput,
     basis: 'buyNow' | 'currentBid',
   ): Promise<CalculatorPreviewResult> {
-    const endpoint = this.config.get<string>('CALCULATOR_ENGINE_URL');
-    const uid = this.config.get<string>('CALCULATOR_ENGINE_UID');
-    if (!endpoint || !uid) {
+    const profileId = process.env.DEALER_CALCULATOR_PROFILE_ID?.trim();
+    if (!profileId) {
       return { status: 'unavailable', reason: 'ENGINE_NOT_CONFIGURED' };
     }
 
     try {
-      const url = new URL(endpoint);
-      if (url.protocol !== 'https:') {
-        this.logger.warn('Calculator engine endpoint is not HTTPS.');
-        return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
-      }
+      const uid = await this.getDealerUid(profileId);
+      if (!uid) return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), ENGINE_TIMEOUT_MS);
-      try {
-        const response = await fetch(url, {
+      const response = await this.fetchWithTimeout(
+        new URL('/ajax-public?action=calc_new', DEALER_CALCULATOR_ORIGIN),
+        {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
           body: new URLSearchParams({
             uid,
             auction: input.provider === 'copart' ? '1' : '2',
@@ -57,45 +54,104 @@ export class CalculatorEngineService {
             lot_price: String(input.priceUsd),
             engine_volume: String(input.engineVolumeCc),
             broker: String(LEGACY_BROKER_USD),
+            insunance: '1',
             forwarding: String(LEGACY_FORWARDING_USD),
             dealer_price: String(LEGACY_DEALER_PRICE_USD),
             repair_price: '0',
           }).toString(),
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          this.logger.warn('Calculator engine request failed with HTTP ' + response.status + '.');
-          return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
-        }
-
-        const payload: unknown = await response.json();
-        const result = extractResult(payload);
-        const breakdown = result ? toBreakdown(result) : null;
-        if (!breakdown) {
-          this.logger.warn('Calculator engine returned an unusable calculation.');
-          return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
-        }
-
-        return {
-          status: 'available',
-          basis,
-          priceUsd: input.priceUsd,
-          breakdown,
-        };
-      } finally {
-        clearTimeout(timer);
+        },
+      );
+      if (!response.ok) {
+        this.logger.warn(
+          'Dealer calculator request failed with HTTP ' + response.status + '.',
+        );
+        return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
       }
+
+      const payload: unknown = await response.json();
+      const result = extractResult(payload);
+      const breakdown = result ? toBreakdown(result) : null;
+      if (!breakdown) {
+        this.logger.warn('Dealer calculator returned an unusable calculation.');
+        return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
+      }
+
+      return {
+        status: 'available',
+        basis,
+        priceUsd: input.priceUsd,
+        breakdown,
+      };
     } catch {
-      this.logger.warn('Calculator engine request was unavailable.');
+      this.logger.warn('Dealer calculator request was unavailable.');
       return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
     }
   }
+
+  private async getDealerUid(profileId: string): Promise<string | null> {
+    if (this.cachedDealerUid && this.cachedDealerUid.expiresAt > Date.now()) {
+      return this.cachedDealerUid.value;
+    }
+
+    const url = new URL('/dealer-calc', DEALER_CALCULATOR_ORIGIN);
+    url.searchParams.set('calc_id', profileId);
+    const response = await this.fetchWithTimeout(url);
+    if (!response.ok) {
+      this.logger.warn(
+        'Dealer calculator profile request failed with HTTP ' +
+          response.status +
+          '.',
+      );
+      return null;
+    }
+
+    const uid = extractDealerUid(await response.text());
+    if (!uid) {
+      this.logger.warn(
+        'Dealer calculator profile did not contain a calculation session.',
+      );
+      return null;
+    }
+
+    this.cachedDealerUid = {
+      value: uid,
+      expiresAt: Date.now() + DEALER_UID_CACHE_MS,
+    };
+    return uid;
+  }
+
+  private async fetchWithTimeout(
+    url: URL,
+    init?: RequestInit,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ENGINE_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+function extractDealerUid(html: string): string | null {
+  const inputs = html.match(/<input\b[^>]*>/gi) ?? [];
+  for (const input of inputs) {
+    const name = input.match(/\bname\s*=\s*["']?([^"'\s>]+)/i)?.[1];
+    if (name?.toLowerCase() !== 'uid') continue;
+    const value =
+      input.match(/\bvalue\s*=\s*["']([^"']+)["']/i)?.[1] ??
+      input.match(/\bvalue\s*=\s*([^\s>]+)/i)?.[1];
+    if (value?.trim()) return value.trim();
+  }
+  return null;
 }
 
 function extractResult(payload: unknown): EngineResult | null {
   if (!payload || typeof payload !== 'object') return null;
   const record = payload as { success?: unknown; result?: unknown };
-  if (!record.success || !record.result || typeof record.result !== 'object') return null;
+  if (!record.success || !record.result || typeof record.result !== 'object')
+    return null;
   return record.result as EngineResult;
 }
 
@@ -130,8 +186,9 @@ function toBreakdown(result: EngineResult): CalculatorPreviewBreakdown | null {
     brokerUsd: nullableNumber(result, 'broker'),
     uaDeliveryUsd: nullableNumber(result, 'ua_delivery'),
     totalUsd,
-    portName: typeof result.port_name === 'string' && result.port_name.trim()
-      ? result.port_name.trim()
-      : null,
+    portName:
+      typeof result.port_name === 'string' && result.port_name.trim()
+        ? result.port_name.trim()
+        : null,
   };
 }
