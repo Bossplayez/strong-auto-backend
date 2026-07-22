@@ -18,6 +18,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DiscoveredLotState } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   providerFetch,
@@ -260,16 +261,21 @@ export class AuctionSearchService {
         normalized.isBuyNow,
         normalized.buyNowUsd,
       );
+      const canonicalLifecycleState = normalized.availabilityConfirmed
+        ? lifecycleState
+        : AuctionLifecycleState.REMOVED;
       const freshnessState = computeFreshnessState(
         observedAt,
         null,
         0,
-        true,
-        lifecycleState,
+        normalized.availabilityConfirmed,
+        canonicalLifecycleState,
         STALE_AFTER_MS.COLD,
         observedAt,
       );
-      const providerResultState = providerResultStateFromRaw(
+      const providerResultState = !normalized.availabilityConfirmed
+        ? 'REMOVED'
+        : providerResultStateFromRaw(
         normalized.auctionState,
         auctionTime ?? normalized.ad,
         observedAt,
@@ -277,10 +283,12 @@ export class AuctionSearchService {
       const isTerminalResult = ['SOLD', 'UNSOLD', 'REMOVED'].includes(providerResultState);
       const priceAndBuyNowData = {
         ...(hasPricingData ? { priceObservedAt: observedAt } : {}),
-        ...((isTerminalResult || !normalized.isBuyNow || !(normalized.buyNowUsd && normalized.buyNowUsd > 0) || buyNowExplicitlyAbsent)
+        ...((isTerminalResult || !normalized.availabilityConfirmed || !normalized.isBuyNow || !(normalized.buyNowUsd && normalized.buyNowUsd > 0) || buyNowExplicitlyAbsent)
           ? { isBuyNow: false, buyNowUsd: null }
           : {}),
-        ...(isTerminalResult ? { terminalAt: observedAt } : {}),
+        ...((isTerminalResult || !normalized.availabilityConfirmed)
+          ? { terminalAt: observedAt, state: DiscoveredLotState.UNAVAILABLE }
+          : {}),
       };
 
       // Idempotent upsert with computed lifecycle/freshness
@@ -298,7 +306,7 @@ export class AuctionSearchService {
           providerAuctionTimestampRaw: timeResult.raw,
           auctionTimestampEvidence: timeResult.evidence,
           auctionTime,
-          lifecycleState,
+          lifecycleState: canonicalLifecycleState,
           providerResultState,
           freshnessState,
           lastSeenAt: observedAt,
@@ -306,14 +314,14 @@ export class AuctionSearchService {
           listingObservedAt: observedAt,
           ...priceAndBuyNowData,
           consecutiveMisses: 0,
-          availabilityConfirmed: true,
+          availabilityConfirmed: normalized.availabilityConfirmed,
         },
         update: {
           ...prismaNormalized,
           providerAuctionTimestampRaw: timeResult.raw,
           auctionTimestampEvidence: timeResult.evidence,
           auctionTime,
-          lifecycleState,
+          lifecycleState: canonicalLifecycleState,
           providerResultState,
           freshnessState,
           lastSeenAt: observedAt,
@@ -321,7 +329,7 @@ export class AuctionSearchService {
           listingObservedAt: observedAt,
           ...priceAndBuyNowData,
           consecutiveMisses: 0,
-          availabilityConfirmed: true,
+          availabilityConfirmed: normalized.availabilityConfirmed,
         },
       });
 

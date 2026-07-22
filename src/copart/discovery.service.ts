@@ -8,6 +8,7 @@ import {
   STALE_AFTER_MS,
 } from '../auction-lot/lifecycle-mapping';
 import { normalizeAuctionTimestamp } from '../auction-lot/time-normalization';
+import { AuctionLifecycleState } from '../auction-lot/types';
 import {
   RapidApiTransport,
   TransportLeaseLostError,
@@ -268,7 +269,12 @@ export class DiscoveryService {
                     normalized.isBuyNow,
                     normalized.buyNowUsd,
                   );
-                  const providerResultState = providerResultStateFromRaw(
+                  const canonicalLifecycleState = normalized.availabilityConfirmed
+                    ? lifecycleState
+                    : AuctionLifecycleState.REMOVED;
+                  const providerResultState = !normalized.availabilityConfirmed
+                    ? 'REMOVED'
+                    : providerResultStateFromRaw(
                     normalized.auctionState,
                     normalized.auctionTime ?? normalized.ad,
                     observedAt,
@@ -283,8 +289,8 @@ export class DiscoveryService {
                     observedAt,
                     null,
                     0,
-                    true,
-                    lifecycleState,
+                    normalized.availabilityConfirmed,
+                    canonicalLifecycleState,
                     STALE_AFTER_MS.COLD,
                     observedAt,
                   );
@@ -300,13 +306,13 @@ export class DiscoveryService {
                   const { providerAuctionTimestampRaw: _rawTs, hasPricingData: _hasPricing, buyNowExplicitlyAbsent: _bnAbsent, ...prismaNormalized } = normalized;
                   const data: Record<string, unknown> = {
                     ...prismaNormalized,
-                    lifecycleState,
+                    lifecycleState: canonicalLifecycleState,
                     providerResultState,
                     freshnessState,
                     lastSeenAt: observedAt,
                     lastProviderUpdateAt: observedAt,
                     consecutiveMisses: 0,
-                    availabilityConfirmed: true,
+                    availabilityConfirmed: normalized.availabilityConfirmed,
                   };
 
                   // Task 053: Truth Contract V2 — strict time normalization
@@ -332,9 +338,10 @@ export class DiscoveryService {
                   }
                   // If pricing missing entirely, do not refresh old price freshness
                   // Explicit provider result is terminal. An elapsed timestamp alone is not.
-                  if (isTerminalResult) {
+                  if (isTerminalResult || !normalized.availabilityConfirmed) {
                     data.isBuyNow = false;
                     data.terminalAt = observedAt;
+                    data.state = 'UNAVAILABLE';
                     if (soldPriceUsd !== null) data.lastSoldPriceUsd = soldPriceUsd;
                   }
 

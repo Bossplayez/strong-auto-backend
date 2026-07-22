@@ -53,6 +53,8 @@ export interface NormalizedLotData {
   saleDocumentName: string | null;
   saleDocumentType: string | null;
   sourcePayloadHash: string | null;
+  /** True unless the provider explicitly reports that the listing is unavailable. */
+  availabilityConfirmed: boolean;
   // Task 053: Truth Contract V2 fields
   providerAuctionTimestampRaw: string | null;
   hasPricingData: boolean;
@@ -116,6 +118,44 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+/**
+ * A provider's explicit availability result is authoritative. A missing field
+ * remains unknown/available here; it must not be fabricated into a removal.
+ */
+function isExplicitlyUnavailable(
+  raw: Record<string, unknown>,
+  auction: Record<string, unknown>,
+  attributes: Record<string, unknown>,
+): boolean {
+  const booleanSignals = [
+    raw.available,
+    raw.is_available,
+    raw.isAvailable,
+    auction.available,
+    auction.is_available,
+    auction.isAvailable,
+  ];
+  if (booleanSignals.some((value) => toBool(value) === false)) return true;
+
+  const unavailableStatuses = new Set([
+    'unavailable',
+    'not available',
+    'not_available',
+    'no longer listed',
+    'removed',
+  ]);
+  const statuses = [
+    auction.state,
+    auction.status,
+    raw.status,
+    raw.availability_status,
+    attributes.InventoryStatus,
+  ];
+  return statuses.some((value) =>
+    typeof value === 'string' && unavailableStatuses.has(value.trim().toLowerCase()),
+  );
+}
+
 export function normalizeDiscoveredLot(
   raw: unknown,
   _provider: string,
@@ -134,6 +174,7 @@ export function normalizeDiscoveredLot(
   const seller = isRecord(raw.seller) ? raw.seller : {};
   const saleDoc = isRecord(raw.sale_document) ? raw.sale_document : {};
   const odometer = isRecord(raw.odometer) ? raw.odometer : {};
+  const attributes = isRecord(raw.attributes) ? raw.attributes : {};
 
   // IAAI alternative paths — some providers nest location under different keys
   const yard = isRecord(raw.yard) ? raw.yard : {};
@@ -225,6 +266,7 @@ export function normalizeDiscoveredLot(
     saleDocumentName: saleDoc.name ? String(saleDoc.name) : null,
     saleDocumentType: saleDoc.type ? String(saleDoc.type) : null,
     sourcePayloadHash: null, // computed separately if needed
+    availabilityConfirmed: !isExplicitlyUnavailable(raw, auction, attributes),
 
     // Task 053: Truth Contract V2
     providerAuctionTimestampRaw: auctionTimeRaw, // preserve raw for diagnostics
