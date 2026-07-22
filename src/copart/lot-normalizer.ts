@@ -148,6 +148,23 @@ export function readProviderBodyStyle(raw: unknown): string | null {
   );
 }
 
+/**
+ * An explicit provider inventory type is authoritative. Missing type remains
+ * eligible for the text-based admission gate because providers do not expose
+ * this field uniformly across every response shape.
+ */
+export function isProviderAutomobile(raw: unknown): boolean {
+  if (!isRecord(raw)) return false;
+  const attributes = isRecord(raw.attributes) ? raw.attributes : {};
+  const inventoryType = firstProviderText(
+    attributes.InventoryType,
+    raw.inventory_type,
+    raw.vehicle_type,
+    raw.vehicleType,
+  );
+  return inventoryType === null || inventoryType.toUpperCase() === 'AUTOMOBILE';
+}
+
 function isExplicitlyUnavailable(
   raw: Record<string, unknown>,
   auction: Record<string, unknown>,

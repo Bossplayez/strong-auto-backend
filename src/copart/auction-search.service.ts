@@ -25,7 +25,7 @@ import {
 } from './provider-fetch';
 import { RequestBudgetService, type FailureKind } from './request-budget.service';
 import type { ProviderId } from './provider-lease.service';
-import { normalizeDiscoveredLot, sanitizeLotForResponse } from './lot-normalizer';
+import { isProviderAutomobile, normalizeDiscoveredLot, sanitizeLotForResponse } from './lot-normalizer';
 import { normalizeLifecycleState, providerResultStateFromRaw, computeFreshnessState, STALE_AFTER_MS } from '../auction-lot/lifecycle-mapping';
 import { AuctionLifecycleState } from '../auction-lot/types';
 import { normalizeAuctionTimestamp } from '../auction-lot/time-normalization';
@@ -244,6 +244,10 @@ export class AuctionSearchService {
       if (!raw?.lot_number) continue;
 
       const lotId = String(raw.lot_number);
+      if (!isProviderAutomobile(raw)) {
+        this.logger.warn(`${params.platform}: skipped non-automobile inventory ${lotId}`);
+        continue;
+      }
       const normalized = normalizeDiscoveredLot(raw, params.platform);
       if (!isPassengerAutomobile(normalized)) {
         this.logger.warn(`${params.platform}: skipped non-passenger asset ${lotId}`);

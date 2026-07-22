@@ -1,4 +1,4 @@
-import { normalizeDiscoveredLot } from './lot-normalizer';
+import { isProviderAutomobile, normalizeDiscoveredLot } from './lot-normalizer';
 
 describe('lot normalizer provider facts', () => {
   it('uses the provider body style when vehicle_specs.body_style is null', () => {
@@ -49,5 +49,11 @@ describe('lot normalizer provider facts', () => {
     }, 'iaai');
 
     expect(lot.availabilityConfirmed).toBe(false);
+  });
+
+  it('uses the explicit provider inventory type as the primary non-auto admission signal', () => {
+    expect(isProviderAutomobile({ attributes: { InventoryType: 'AUTOMOBILE' } })).toBe(true);
+    expect(isProviderAutomobile({ attributes: { InventoryType: 'GENERATOR' } })).toBe(false);
+    expect(isProviderAutomobile({ lot_number: '4' })).toBe(true);
   });
 });

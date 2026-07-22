@@ -14,7 +14,7 @@ import {
   TransportMalformedError,
   type AttemptBudget,
 } from '../auction-lot/rapidapi-transport';
-import { normalizeDiscoveredLot } from './lot-normalizer';
+import { isProviderAutomobile, normalizeDiscoveredLot } from './lot-normalizer';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
 import { RequestBudgetService } from './request-budget.service';
 import { validateProviderResponse } from './response-validator';
@@ -245,6 +245,10 @@ export class DiscoveryService {
               if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
               const lotId = String((raw as Record<string, unknown>).lot_number ?? '');
               if (!lotId) continue;
+              if (!isProviderAutomobile(raw)) {
+                this.logger.warn(`${params.platform}: skipped non-automobile inventory ${lotId}`);
+                continue;
+              }
               const normalized = normalizeDiscoveredLot(raw as Record<string, unknown>, params.platform);
               if (!isPassengerAutomobile(normalized)) {
                 this.logger.warn(`${params.platform}: skipped non-passenger asset ${lotId}`);

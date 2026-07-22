@@ -9,7 +9,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { isPassengerAutomobile } from './auction-lot/catalog-quality';
-import { normalizeDiscoveredLot } from './copart/lot-normalizer';
+import { isProviderAutomobile, normalizeDiscoveredLot } from './copart/lot-normalizer';
 
 // Simple mock for running discovery outside NestJS
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY!;
@@ -67,6 +67,10 @@ async function resweepProvider(platform: 'copart' | 'iaai', maxPages: number) {
         const lotId = String(raw.lot_number ?? '');
         if (!lotId) continue;
 
+        if (!isProviderAutomobile(raw)) {
+          console.log(`  Skipping non-automobile inventory: ${lotId}`);
+          continue;
+        }
         const normalized = normalizeDiscoveredLot(raw, platform);
         if (!isPassengerAutomobile(normalized)) {
           console.log(`  Skipping non-passenger inventory: ${lotId}`);
