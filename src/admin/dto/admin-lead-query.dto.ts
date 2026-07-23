@@ -13,4 +13,9 @@ export class AdminLeadQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ enum: ['BID_ASSISTANCE', 'BUY_NOW_ASSISTANCE'], isArray: true })
+  @IsOptional()
+  @IsString()
+  leadType?: string;
 }

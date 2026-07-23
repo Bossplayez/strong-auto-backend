@@ -26,6 +26,8 @@ describe('AuctionLotsService unified catalog invariants', () => {
     vehicle: {
       findMany: jest.fn(),
     },
+    user: { findUnique: jest.fn() },
+    lead: { findFirst: jest.fn(), create: jest.fn() },
   };
   const service = new AuctionLotsService(prisma as never);
 
@@ -205,6 +207,40 @@ describe('AuctionLotsService unified catalog invariants', () => {
         }) },
       }),
     }));
+  });
+
+  it('creates an assistance request from the server-confirmed current bid and reuses a recent duplicate', async () => {
+    const now = new Date();
+    const persisted = lot({
+      auctionTime: new Date(now.getTime() + 60 * 60 * 1000),
+      listingObservedAt: now,
+      lastProviderUpdateAt: now,
+      priceObservedAt: now,
+      providerResultState: 'UNKNOWN',
+      currentBidUsd: 3200,
+    });
+    prisma.discoveredLot.findUnique.mockResolvedValue(persisted);
+    prisma.user.findUnique.mockResolvedValue({ email: 'customer@example.com' });
+    prisma.lead.findFirst.mockResolvedValue(null);
+    const leadRecord = {
+      id: 'lead-1', leadType: 'BID_ASSISTANCE', assistanceStatus: 'NEW', createdAt: now,
+      auctionPriceUsd: 3200, auctionPriceBasis: 'CURRENT_BID',
+    };
+    prisma.lead.create.mockResolvedValue(leadRecord);
+
+    const created = await service.createAssistanceRequest('copart', 'lot-1', 'user-1', {
+      intent: 'BID_ASSISTANCE' as any, name: 'Customer', phone: '+380991234567',
+    });
+
+    expect(created).toMatchObject({ outcome: 'created', lead: { status: 'NEW', price: { usd: 3200, basis: 'CURRENT_BID' } } });
+    expect(prisma.lead.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ discoveredLotId: 'lot-row', auctionPriceUsd: 3200 }) }));
+
+    prisma.lead.findFirst.mockResolvedValueOnce(leadRecord);
+    const existing = await service.createAssistanceRequest('copart', 'lot-1', 'user-1', {
+      intent: 'BID_ASSISTANCE' as any, name: 'Customer', phone: '+380991234567',
+    });
+    expect(existing.outcome).toBe('existing');
+    expect(prisma.lead.create).toHaveBeenCalledTimes(1);
   });
 });
 

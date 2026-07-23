@@ -447,10 +447,18 @@ model Lead {
   customer             User?               @relation("LeadCustomer", fields: [customerUserId], references: [id])
   manager              User?               @relation("LeadManager", fields: [managerUserId], references: [id])
   vehicle              Vehicle?            @relation("LeadVehicle", fields: [vehicleId], references: [id])
+  discoveredLot        DiscoveredLot?      @relation("AuctionAssistanceLead", fields: [discoveredLotId], references: [id], onDelete: Restrict)
+  discoveredLotId      String?             @map("discovered_lot_id")
+  assistanceStatus     AssistanceRequestStatus? @map("assistance_status")
+  auctionPriceUsd      Decimal?            @map("auction_price_usd") @db.Decimal
+  auctionPriceBasis    String?             @map("auction_price_basis")
+  auctionPriceObservedAt DateTime?         @map("auction_price_observed_at")
 
   @@index([status, createdAt])
   @@index([managerUserId])
   @@index([leadType])
+  @@index([customerUserId, discoveredLotId, leadType, createdAt])
+  @@index([discoveredLotId])
   @@map("leads")
 }
 
@@ -885,6 +893,7 @@ model DiscoveredLot {
   @@index([isBuyNow, auctionState])
   @@index([lifecycleState, freshnessState])
   auctionLotFavorites  AuctionLotFavorite[]
+  assistanceLeads      Lead[]                @relation("AuctionAssistanceLead")
 
   @@index([firstSeenAt], map: "discovered_lots_first_seen_idx")
   @@map("discovered_lots")
@@ -969,6 +978,13 @@ enum LeadType {
   CATALOG_REQUEST
   CALCULATOR_REQUEST
   SELECTION_REQUEST
+  BID_ASSISTANCE
+  BUY_NOW_ASSISTANCE
+}
+
+enum AssistanceRequestStatus {
+  NEW
+  COMPLETED
 }
 
 enum LeadStatus {

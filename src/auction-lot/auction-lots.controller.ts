@@ -36,6 +36,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CONTRACT_VERSION, auctionItem, priceFact } from './inventory-projection';
 import { NotFoundException } from '@nestjs/common';
 import { deriveAuctionLifecycle, evaluateAuctionTruth, hasFreshAuctionPrice } from './public-eligibility';
+import { CreateAuctionAssistanceRequestDto } from './dto/create-auction-assistance-request.dto';
 
 @ApiTags('auction-lots')
 @UseFilters(ContractErrorFilter)
@@ -128,6 +129,21 @@ export class AuctionLotsController {
     return this.auctionLotsService.getCalculatorPreview(provider, externalLotId);
   }
 
+  @Post(':provider/:externalLotId/assistance-requests')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Throttle({ auction: { limit: 8, ttl: 60000 } })
+  @ApiOperation({ summary: 'Create an authenticated request about an auction lot' })
+  @ApiResponse({ status: 201, description: 'Request created or reused within the short duplicate window' })
+  async createAssistanceRequest(
+    @Param('provider') provider: string,
+    @Param('externalLotId') externalLotId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateAuctionAssistanceRequestDto,
+  ) {
+    return this.auctionLotsService.createAssistanceRequest(provider, externalLotId, userId, dto);
+  }
+
   @Get(':provider/:externalLotId')
   @ApiOperation({ summary: 'Get public auction lot detail' })
   @ApiParam({ name: 'provider', description: 'Provider (copart, iaai)' })
@@ -139,6 +155,24 @@ export class AuctionLotsController {
     @Param('externalLotId') externalLotId: string,
   ) {
     return this.auctionLotsService.findOne(provider, externalLotId);
+  }
+}
+
+@ApiTags('auction-assistance-requests')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('me/assistance-requests')
+export class MyAuctionAssistanceRequestsController {
+  constructor(private readonly auctionLotsService: AuctionLotsService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List the current user\'s auction requests' })
+  async list(
+    @CurrentUser('id') userId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.auctionLotsService.listMyAssistanceRequests(userId, Number(page ?? 1), Number(pageSize ?? 20));
   }
 }
 

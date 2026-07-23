@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
@@ -67,7 +68,11 @@ export class LeadsService {
     const where: Prisma.LeadWhereInput = {};
 
     if (filters.status) where.status = filters.status as any;
-    if (filters.leadType) where.leadType = filters.leadType as any;
+    if (filters.leadType) {
+      const leadTypes = filters.leadType.split(',').map((value) => value.trim()).filter(Boolean);
+      if (leadTypes.length === 1) where.leadType = leadTypes[0] as any;
+      if (leadTypes.length > 1) where.leadType = { in: leadTypes as any };
+    }
     if (filters.managerUserId) where.managerUserId = filters.managerUserId;
     if (filters.search) {
       where.OR = [
@@ -84,6 +89,9 @@ export class LeadsService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
+          discoveredLot: {
+            select: { provider: true, externalLotId: true, title: true },
+          },
           vehicle: {
             select: { id: true, title: true, slug: true, make: true, model: true, year: true },
           },
@@ -103,6 +111,7 @@ export class LeadsService {
       where: { id },
       include: {
         vehicle: true,
+        discoveredLot: true,
         calculatorEstimate: true,
         customer: {
           select: { id: true, email: true, phone: true, profile: true },
@@ -133,12 +142,17 @@ export class LeadsService {
     id: string,
     data: {
       status?: string;
+      assistanceStatus?: string;
       managerUserId?: string;
       comment?: string;
     },
     changedByUserId?: string,
   ) {
     const lead = await this.findById(id);
+
+    if (data.assistanceStatus && !lead.assistanceStatus) {
+      throw new BadRequestException('This lead does not have an auction assistance status.');
+    }
 
     // If status changed, track history
     if (data.status && data.status !== lead.status) {
@@ -156,6 +170,7 @@ export class LeadsService {
       where: { id },
       data: {
         ...(data.status && { status: data.status as any }),
+        ...(data.assistanceStatus && { assistanceStatus: data.assistanceStatus as any }),
         ...(data.managerUserId && { managerUserId: data.managerUserId }),
       },
     });

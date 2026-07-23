@@ -5,14 +5,14 @@
 // ─────────────────────────────────────────────────────────────
 
 import { Module } from '@nestjs/common';
-import { AuctionImportCompatibilityController, AuctionLotsController, AuctionLotFavoritesController } from './auction-lots.controller';
+import { AuctionImportCompatibilityController, AuctionLotsController, AuctionLotFavoritesController, MyAuctionAssistanceRequestsController } from './auction-lots.controller';
 import { AuctionLotsService } from './auction-lots.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CalculatorModule } from '../calculator/calculator.module';
 
 @Module({
   imports: [PrismaModule, CalculatorModule],
-  controllers: [AuctionLotsController, AuctionImportCompatibilityController, AuctionLotFavoritesController],
+  controllers: [AuctionLotsController, AuctionImportCompatibilityController, AuctionLotFavoritesController, MyAuctionAssistanceRequestsController],
   providers: [AuctionLotsService],
   exports: [AuctionLotsService],
 })

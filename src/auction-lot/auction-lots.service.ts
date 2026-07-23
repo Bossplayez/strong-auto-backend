@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { DiscoveredLot, Vehicle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,6 +22,7 @@ import {
 import { resolveListingObservedAt } from './observation-resolver';
 import { buildLotCalculatorInput } from './calculator-lot-input';
 import { CalculatorService } from '../calculator/calculator.service';
+import { AuctionAssistanceIntent, CreateAuctionAssistanceRequestDto } from './dto/create-auction-assistance-request.dto';
 
 /** Task 054: Parse runCondition from stored JSON/string into clean label */
 function normalizeRunCondition(raw: string | null): string | null {
@@ -47,6 +48,100 @@ export class AuctionLotsService {
     private readonly prisma: PrismaService,
     @Optional() private readonly calculatorService?: CalculatorService,
   ) {}
+
+  async createAssistanceRequest(
+    provider: string,
+    externalLotId: string,
+    userId: string,
+    dto: CreateAuctionAssistanceRequestDto,
+  ) {
+    const { provider: validProvider, externalLotId: validLotId } = validIdentity(provider, externalLotId);
+    const now = new Date();
+    const lot = await this.prisma.discoveredLot.findUnique({
+      where: { provider_externalLotId: { provider: validProvider, externalLotId: validLotId } },
+    });
+    if (!lot) throw new NotFoundException({ code: 'AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
+
+    const truth = evaluateAuctionTruth(lot, now);
+    if (!truth.publicVisible) {
+      throw new ConflictException({ code: 'LOT_NOT_AVAILABLE', message: 'Auction lot is not available for a request.' });
+    }
+    if (!hasFreshAuctionPrice(lot, now)) {
+      throw new ConflictException({ code: 'PRICE_NOT_FRESH', message: 'Auction price needs updating.' });
+    }
+
+    const price = dto.intent === AuctionAssistanceIntent.BUY_NOW_ASSISTANCE
+      ? Number(lot.buyNowUsd)
+      : Number(lot.currentBidUsd);
+    const isBuyNow = dto.intent === AuctionAssistanceIntent.BUY_NOW_ASSISTANCE;
+    if (!Number.isFinite(price) || price <= 0 || (isBuyNow && !lot.isBuyNow)) {
+      throw new ConflictException({ code: 'PRICE_NOT_AVAILABLE', message: 'Requested auction action is not available.' });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user) throw new ForbiddenException({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required.' });
+
+    const cutoff = new Date(now.getTime() - 15 * 60 * 1000);
+    const existing = await this.prisma.lead.findFirst({
+      where: {
+        customerUserId: userId,
+        discoveredLotId: lot.id,
+        leadType: dto.intent,
+        createdAt: { gte: cutoff },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) return { outcome: 'existing' as const, lead: assistanceLeadSummary(existing, lot) };
+
+    const created = await this.prisma.lead.create({
+      data: {
+        leadType: dto.intent,
+        status: 'NEW',
+        assistanceStatus: 'NEW',
+        customerUserId: userId,
+        discoveredLotId: lot.id,
+        name: dto.name.trim(),
+        phone: dto.phone.trim(),
+        email: user.email,
+        comment: dto.comment?.trim() || null,
+        auctionPriceUsd: price,
+        auctionPriceBasis: isBuyNow ? 'BUY_NOW' : 'CURRENT_BID',
+        auctionPriceObservedAt: lot.priceObservedAt ?? lot.lastProviderUpdateAt ?? now,
+        sourceChannel: 'auction_lot_detail',
+      },
+    });
+    return { outcome: 'created' as const, lead: assistanceLeadSummary(created, lot) };
+  }
+
+  async listMyAssistanceRequests(userId: string, page = 1, pageSize = 20) {
+    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+    const safePageSize = Number.isInteger(pageSize) && pageSize > 0 && pageSize <= 50 ? pageSize : 20;
+    const where: Prisma.LeadWhereInput = {
+      customerUserId: userId,
+      assistanceStatus: { not: null },
+      leadType: { in: ['BID_ASSISTANCE', 'BUY_NOW_ASSISTANCE'] as any },
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.lead.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (safePage - 1) * safePageSize,
+        take: safePageSize,
+        include: { discoveredLot: true },
+      }),
+      this.prisma.lead.count({ where }),
+    ]);
+    return {
+      items: items.map((lead) => assistanceLeadSummary(lead, lead.discoveredLot!)),
+      page: safePage,
+      pageSize: safePageSize,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / safePageSize),
+    };
+  }
 
   async findAll(raw: Record<string, unknown>) {
     const query = parseInventoryQuery(raw, 'usa');
@@ -707,6 +802,34 @@ function validIdentity(provider: string, externalLotId: string) {
   const identity = externalLotId.trim();
   if (!PROVIDERS.includes(provider as 'copart' | 'iaai') || !identity || identity.length > 128) validationError('Auction lot identity is invalid.');
   return { provider: provider as 'copart' | 'iaai', externalLotId: identity };
+}
+
+function assistanceLeadSummary(
+  lead: {
+    id: string;
+    leadType: string;
+    assistanceStatus: string | null;
+    createdAt: Date;
+    auctionPriceUsd: unknown;
+    auctionPriceBasis: string | null;
+  },
+  lot: { provider: string; externalLotId: string; title: string },
+) {
+  return {
+    id: lead.id,
+    intent: lead.leadType,
+    status: lead.assistanceStatus,
+    createdAt: lead.createdAt.toISOString(),
+    lot: {
+      provider: lot.provider,
+      externalLotId: lot.externalLotId,
+      title: lot.title,
+    },
+    price: {
+      usd: lead.auctionPriceUsd === null ? null : Number(lead.auctionPriceUsd),
+      basis: lead.auctionPriceBasis,
+    },
+  };
 }
 
 function parseAdminLotQuery(raw: Record<string, unknown>) {
