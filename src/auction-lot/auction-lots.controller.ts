@@ -8,15 +8,17 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Post,
   Query,
+  Req,
   Res,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -37,6 +39,21 @@ import { CONTRACT_VERSION, auctionItem, priceFact } from './inventory-projection
 import { NotFoundException } from '@nestjs/common';
 import { deriveAuctionLifecycle, evaluateAuctionTruth, hasFreshAuctionPrice } from './public-eligibility';
 import { CreateAuctionAssistanceRequestDto } from './dto/create-auction-assistance-request.dto';
+
+function assertCookieRequestOrigin(request: Request) {
+  if (request.headers.authorization || !request.cookies?.access_token) return;
+
+  const allowedOrigins = new Set([
+    'https://strong-auto-frontend-zeta.vercel.app',
+    'http://localhost:3000',
+    process.env.FRONTEND_URL,
+    process.env.RAILWAY_PUBLIC_DOMAIN,
+  ].filter(Boolean));
+
+  if (!request.headers.origin || !allowedOrigins.has(request.headers.origin)) {
+    throw new ForbiddenException({ code: 'INVALID_REQUEST_ORIGIN', message: 'Request origin is not allowed.' });
+  }
+}
 
 @ApiTags('auction-lots')
 @UseFilters(ContractErrorFilter)
@@ -134,14 +151,20 @@ export class AuctionLotsController {
   @ApiBearerAuth()
   @Throttle({ auction: { limit: 8, ttl: 60000 } })
   @ApiOperation({ summary: 'Create an authenticated request about an auction lot' })
-  @ApiResponse({ status: 201, description: 'Request created or reused within the short duplicate window' })
+  @ApiResponse({ status: 201, description: 'Request created' })
+  @ApiResponse({ status: 200, description: 'Recent duplicate request reused' })
   async createAssistanceRequest(
     @Param('provider') provider: string,
     @Param('externalLotId') externalLotId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateAuctionAssistanceRequestDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.auctionLotsService.createAssistanceRequest(provider, externalLotId, userId, dto);
+    assertCookieRequestOrigin(request);
+    const result = await this.auctionLotsService.createAssistanceRequest(provider, externalLotId, userId, dto);
+    response.status(result.outcome === 'created' ? 201 : 200);
+    return result;
   }
 
   @Get(':provider/:externalLotId')

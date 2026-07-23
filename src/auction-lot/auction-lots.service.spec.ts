@@ -2,6 +2,7 @@ import { AuctionLotsService } from './auction-lots.service';
 
 describe('AuctionLotsService unified catalog invariants', () => {
   const transaction = {
+    $executeRaw: jest.fn(),
     discoveredLot: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -16,9 +17,12 @@ describe('AuctionLotsService unified catalog invariants', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+    user: { findUnique: jest.fn() },
+    lead: { findFirst: jest.fn(), create: jest.fn() },
   };
   const prisma = {
-    $transaction: jest.fn(async (operation: (client: typeof transaction) => unknown) => operation(transaction)),
+    $transaction: jest.fn(async (operation: ((client: typeof transaction) => unknown) | unknown[]) =>
+      Array.isArray(operation) ? Promise.all(operation) : operation(transaction)),
     discoveredLot: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -33,6 +37,7 @@ describe('AuctionLotsService unified catalog invariants', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    transaction.$executeRaw.mockResolvedValue(1);
   });
 
   it('returns disjoint exhaustive admin metric partitions', async () => {
@@ -170,11 +175,16 @@ describe('AuctionLotsService unified catalog invariants', () => {
 
     expect(result.items).toHaveLength(1);
     expect(Object.keys(result.items[0]).sort()).toEqual([
-      'auctionAt', 'availabilityConfirmedAt', 'consecutiveMisses', 'externalLotId',
-      'firstDiscoveredAt', 'freshness', 'importState', 'key', 'lastObservedAt',
-      'lifecycle', 'linkedVehicle', 'locationState', 'make', 'mediaCount', 'model',
-      'odometerKm', 'price', 'provider', 'providerTimezoneOffset', 'state',
-      'thumbnailUrl', 'tier', 'title', 'updatedAt', 'year',
+      'auctionAt', 'auctionTimestampEvidence', 'availabilityConfirmedAt',
+      'catalogScheduleState', 'consecutiveMisses', 'externalLotId',
+      'firstDiscoveredAt', 'freshness', 'importState', 'isResultPending',
+      'isTerminal', 'key', 'lastObservedAt', 'lifecycle', 'linkedVehicle',
+      'listingFreshnessV2', 'listingObservedAt', 'locationState', 'make',
+      'mediaCount', 'model', 'odometerKm', 'price', 'priceFreshnessV2',
+      'priceObservedAt', 'provider', 'providerAuctionTimestampRaw',
+      'providerResultState', 'providerTimezoneOffset', 'publicVisible', 'state',
+      'thumbnailUrl', 'tier', 'title', 'truthReasonCode', 'updatedAt',
+      'v2ReasonCode', 'v2ReasonMessage', 'year',
     ].sort());
     expect(result.items[0]).not.toHaveProperty('kind');
     expect(result.items[0]).not.toHaveProperty('source');
@@ -219,28 +229,78 @@ describe('AuctionLotsService unified catalog invariants', () => {
       providerResultState: 'UNKNOWN',
       currentBidUsd: 3200,
     });
-    prisma.discoveredLot.findUnique.mockResolvedValue(persisted);
-    prisma.user.findUnique.mockResolvedValue({ email: 'customer@example.com' });
-    prisma.lead.findFirst.mockResolvedValue(null);
+    transaction.discoveredLot.findUnique.mockResolvedValue(persisted);
+    transaction.user.findUnique.mockResolvedValue({ email: 'customer@example.com' });
+    transaction.lead.findFirst.mockResolvedValue(null);
     const leadRecord = {
       id: 'lead-1', leadType: 'BID_ASSISTANCE', assistanceStatus: 'NEW', createdAt: now,
       auctionPriceUsd: 3200, auctionPriceBasis: 'CURRENT_BID',
     };
-    prisma.lead.create.mockResolvedValue(leadRecord);
+    transaction.lead.create.mockResolvedValue(leadRecord);
 
     const created = await service.createAssistanceRequest('copart', 'lot-1', 'user-1', {
       intent: 'BID_ASSISTANCE' as any, name: 'Customer', phone: '+380991234567',
     });
 
     expect(created).toMatchObject({ outcome: 'created', lead: { status: 'NEW', price: { usd: 3200, basis: 'CURRENT_BID' } } });
-    expect(prisma.lead.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ discoveredLotId: 'lot-row', auctionPriceUsd: 3200 }) }));
+    expect(transaction.lead.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ discoveredLotId: 'lot-row', auctionPriceUsd: 3200 }) }));
 
-    prisma.lead.findFirst.mockResolvedValueOnce(leadRecord);
+    transaction.lead.findFirst.mockResolvedValueOnce(leadRecord);
     const existing = await service.createAssistanceRequest('copart', 'lot-1', 'user-1', {
       intent: 'BID_ASSISTANCE' as any, name: 'Customer', phone: '+380991234567',
     });
     expect(existing.outcome).toBe('existing');
-    expect(prisma.lead.create).toHaveBeenCalledTimes(1);
+    expect(transaction.lead.create).toHaveBeenCalledTimes(1);
+    expect(transaction.$executeRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a bid request when the lot has Buy Now available', async () => {
+    const now = new Date();
+    transaction.discoveredLot.findUnique.mockResolvedValue(lot({
+      auctionTime: new Date(now.getTime() + 60 * 60 * 1000),
+      listingObservedAt: now,
+      lastProviderUpdateAt: now,
+      priceObservedAt: now,
+      currentBidUsd: 3200,
+      buyNowUsd: 4100,
+      isBuyNow: true,
+    }));
+
+    await expect(service.createAssistanceRequest('copart', 'lot-1', 'user-1', {
+      intent: 'BID_ASSISTANCE' as any,
+      name: 'Customer',
+      phone: '+380991234567',
+    })).rejects.toMatchObject({ response: expect.objectContaining({ code: 'ACTION_NOT_AVAILABLE' }) });
+    expect(transaction.lead.create).not.toHaveBeenCalled();
+  });
+
+  it('returns one lead when the same valid request arrives twice concurrently', async () => {
+    const now = new Date();
+    const persisted = lot({
+      auctionTime: new Date(now.getTime() + 60 * 60 * 1000),
+      listingObservedAt: now,
+      lastProviderUpdateAt: now,
+      priceObservedAt: now,
+      currentBidUsd: 3200,
+    });
+    const createdLead = {
+      id: 'lead-1', leadType: 'BID_ASSISTANCE', assistanceStatus: 'NEW', createdAt: now,
+      auctionPriceUsd: 3200, auctionPriceBasis: 'CURRENT_BID',
+    };
+    transaction.discoveredLot.findUnique.mockResolvedValue(persisted);
+    transaction.user.findUnique.mockResolvedValue({ email: 'customer@example.com' });
+    transaction.lead.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(createdLead);
+    transaction.lead.create.mockResolvedValue(createdLead);
+
+    const dto = { intent: 'BID_ASSISTANCE' as any, name: 'Customer', phone: '+380991234567' };
+    const [first, second] = await Promise.all([
+      service.createAssistanceRequest('copart', 'lot-1', 'user-1', dto),
+      service.createAssistanceRequest('copart', 'lot-1', 'user-1', dto),
+    ]);
+
+    expect([first.outcome, second.outcome].sort()).toEqual(['created', 'existing']);
+    expect(transaction.lead.create).toHaveBeenCalledTimes(1);
+    expect(transaction.$executeRaw).toHaveBeenCalledTimes(2);
   });
 });
 

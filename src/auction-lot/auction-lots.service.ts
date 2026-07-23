@@ -57,63 +57,72 @@ export class AuctionLotsService {
   ) {
     const { provider: validProvider, externalLotId: validLotId } = validIdentity(provider, externalLotId);
     const now = new Date();
-    const lot = await this.prisma.discoveredLot.findUnique({
-      where: { provider_externalLotId: { provider: validProvider, externalLotId: validLotId } },
+    const lockKey = `auction-assistance:${userId}:${validProvider}:${validLotId}:${dto.intent}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      // The lock scopes duplicate prevention to one customer, lot and action.
+      // Re-checking after the lock keeps the price and visibility decision truthful.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
+      const lot = await tx.discoveredLot.findUnique({
+        where: { provider_externalLotId: { provider: validProvider, externalLotId: validLotId } },
+      });
+      if (!lot) throw new NotFoundException({ code: 'AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
+
+      const truth = evaluateAuctionTruth(lot, now);
+      if (!truth.publicVisible) {
+        throw new ConflictException({ code: 'LOT_NOT_AVAILABLE', message: 'Auction lot is not available for a request.' });
+      }
+      if (!hasFreshAuctionPrice(lot, now)) {
+        throw new ConflictException({ code: 'PRICE_NOT_FRESH', message: 'Auction price needs updating.' });
+      }
+
+      const isBuyNow = dto.intent === AuctionAssistanceIntent.BUY_NOW_ASSISTANCE;
+      if (!isBuyNow && lot.isBuyNow) {
+        throw new ConflictException({ code: 'ACTION_NOT_AVAILABLE', message: 'Use the Buy Now action for this auction lot.' });
+      }
+      const price = isBuyNow ? Number(lot.buyNowUsd) : Number(lot.currentBidUsd);
+      if (!Number.isFinite(price) || price <= 0 || (isBuyNow && !lot.isBuyNow)) {
+        throw new ConflictException({ code: 'PRICE_NOT_AVAILABLE', message: 'Requested auction action is not available.' });
+      }
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      if (!user) throw new ForbiddenException({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required.' });
+
+      const cutoff = new Date(now.getTime() - 15 * 60 * 1000);
+      const existing = await tx.lead.findFirst({
+        where: {
+          customerUserId: userId,
+          discoveredLotId: lot.id,
+          leadType: dto.intent,
+          createdAt: { gte: cutoff },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (existing) return { outcome: 'existing' as const, lead: assistanceLeadSummary(existing, lot) };
+
+      const created = await tx.lead.create({
+        data: {
+          leadType: dto.intent,
+          status: 'NEW',
+          assistanceStatus: 'NEW',
+          customerUserId: userId,
+          discoveredLotId: lot.id,
+          name: dto.name.trim(),
+          phone: dto.phone.trim(),
+          email: user.email,
+          comment: dto.comment?.trim() || null,
+          auctionPriceUsd: price,
+          auctionPriceBasis: isBuyNow ? 'BUY_NOW' : 'CURRENT_BID',
+          auctionPriceObservedAt: lot.priceObservedAt ?? lot.lastProviderUpdateAt ?? now,
+          sourceChannel: 'auction_lot_detail',
+        },
+      });
+      return { outcome: 'created' as const, lead: assistanceLeadSummary(created, lot) };
     });
-    if (!lot) throw new NotFoundException({ code: 'AUCTION_LOT_NOT_FOUND', message: 'Auction lot was not found.' });
-
-    const truth = evaluateAuctionTruth(lot, now);
-    if (!truth.publicVisible) {
-      throw new ConflictException({ code: 'LOT_NOT_AVAILABLE', message: 'Auction lot is not available for a request.' });
-    }
-    if (!hasFreshAuctionPrice(lot, now)) {
-      throw new ConflictException({ code: 'PRICE_NOT_FRESH', message: 'Auction price needs updating.' });
-    }
-
-    const price = dto.intent === AuctionAssistanceIntent.BUY_NOW_ASSISTANCE
-      ? Number(lot.buyNowUsd)
-      : Number(lot.currentBidUsd);
-    const isBuyNow = dto.intent === AuctionAssistanceIntent.BUY_NOW_ASSISTANCE;
-    if (!Number.isFinite(price) || price <= 0 || (isBuyNow && !lot.isBuyNow)) {
-      throw new ConflictException({ code: 'PRICE_NOT_AVAILABLE', message: 'Requested auction action is not available.' });
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true },
-    });
-    if (!user) throw new ForbiddenException({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required.' });
-
-    const cutoff = new Date(now.getTime() - 15 * 60 * 1000);
-    const existing = await this.prisma.lead.findFirst({
-      where: {
-        customerUserId: userId,
-        discoveredLotId: lot.id,
-        leadType: dto.intent,
-        createdAt: { gte: cutoff },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (existing) return { outcome: 'existing' as const, lead: assistanceLeadSummary(existing, lot) };
-
-    const created = await this.prisma.lead.create({
-      data: {
-        leadType: dto.intent,
-        status: 'NEW',
-        assistanceStatus: 'NEW',
-        customerUserId: userId,
-        discoveredLotId: lot.id,
-        name: dto.name.trim(),
-        phone: dto.phone.trim(),
-        email: user.email,
-        comment: dto.comment?.trim() || null,
-        auctionPriceUsd: price,
-        auctionPriceBasis: isBuyNow ? 'BUY_NOW' : 'CURRENT_BID',
-        auctionPriceObservedAt: lot.priceObservedAt ?? lot.lastProviderUpdateAt ?? now,
-        sourceChannel: 'auction_lot_detail',
-      },
-    });
-    return { outcome: 'created' as const, lead: assistanceLeadSummary(created, lot) };
   }
 
   async listMyAssistanceRequests(userId: string, page = 1, pageSize = 20) {

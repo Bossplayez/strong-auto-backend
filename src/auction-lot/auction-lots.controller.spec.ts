@@ -102,6 +102,40 @@ describe('AuctionLotsController', () => {
       expect(result).toBe(mockStats);
     });
   });
+
+  describe('createAssistanceRequest HTTP outcome', () => {
+    const dto = { intent: 'BID_ASSISTANCE', name: 'Customer', phone: '+380991234567' } as any;
+
+    it('returns 201 when a new request is created', async () => {
+      const response = { status: jest.fn().mockReturnThis() } as any;
+      (service as any).createAssistanceRequest = jest.fn().mockResolvedValue({ outcome: 'created', lead: { id: 'lead-1' } });
+
+      await controller.createAssistanceRequest('copart', '123', 'user-1', dto, { headers: { authorization: 'Bearer test' }, cookies: {} } as any, response);
+
+      expect(response.status).toHaveBeenCalledWith(201);
+    });
+
+    it('returns 200 when a recent duplicate is reused', async () => {
+      const response = { status: jest.fn().mockReturnThis() } as any;
+      (service as any).createAssistanceRequest = jest.fn().mockResolvedValue({ outcome: 'existing', lead: { id: 'lead-1' } });
+
+      await controller.createAssistanceRequest('copart', '123', 'user-1', dto, { headers: { authorization: 'Bearer test' }, cookies: {} } as any, response);
+
+      expect(response.status).toHaveBeenCalledWith(200);
+    });
+
+    it('rejects a cookie-authenticated request from an unapproved origin', async () => {
+      const response = { status: jest.fn().mockReturnThis() } as any;
+      (service as any).createAssistanceRequest = jest.fn();
+
+      await expect(controller.createAssistanceRequest(
+        'copart', '123', 'user-1', dto,
+        { headers: { origin: 'https://attacker.example' }, cookies: { access_token: 'session' } } as any,
+        response,
+      )).rejects.toMatchObject({ response: expect.objectContaining({ code: 'INVALID_REQUEST_ORIGIN' }) });
+      expect((service as any).createAssistanceRequest).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('AuctionLotsService (redaction validation)', () => {
