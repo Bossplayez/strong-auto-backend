@@ -68,14 +68,13 @@ describe('CalculatorEngineService', () => {
     expect(body.get('insunance')).toBe('1');
   });
 
-  it('reuses the dealer session for later calculations', async () => {
+  it('caches an identical calculation without another dealer request', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce({
         ok: true,
         text: async () => '<input name="uid" value="cached-session">',
       })
-      .mockResolvedValueOnce({ ok: true, json: async () => dealerResult })
       .mockResolvedValueOnce({ ok: true, json: async () => dealerResult });
     global.fetch = fetchMock as typeof fetch;
     const service = new CalculatorEngineService();
@@ -83,7 +82,33 @@ describe('CalculatorEngineService', () => {
     await service.preview(input, 'currentBid');
     await service.preview(input, 'currentBid');
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('combines simultaneous identical calculations into one dealer request', async () => {
+    let resolveCalculation: ((value: unknown) => void) | undefined;
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => '<input name="uid" value="cached-session">',
+      })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveCalculation = resolve;
+        }),
+      );
+    global.fetch = fetchMock as typeof fetch;
+    const service = new CalculatorEngineService();
+
+    const first = service.preview(input, 'currentBid');
+    const second = service.preview(input, 'currentBid');
+    await Promise.resolve();
+    await Promise.resolve();
+    resolveCalculation?.({ ok: true, json: async () => dealerResult });
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('does not call the dealer when its server-only profile is missing', async () => {

@@ -11,6 +11,8 @@ const LEGACY_DEALER_PRICE_USD = 500;
 const ENGINE_TIMEOUT_MS = 8_000;
 const DEALER_CALCULATOR_ORIGIN = 'https://dealer.vin-check.com.ua';
 const DEALER_UID_CACHE_MS = 15 * 60 * 1_000;
+const PREVIEW_CACHE_MS = 2 * 60 * 1_000;
+const MAX_PREVIEW_CACHE_ENTRIES = 500;
 
 type EngineResult = Record<string, unknown>;
 
@@ -23,6 +25,14 @@ type EngineResult = Record<string, unknown>;
 export class CalculatorEngineService {
   private readonly logger = new Logger(CalculatorEngineService.name);
   private cachedDealerUid: { value: string; expiresAt: number } | null = null;
+  private readonly previewCache = new Map<
+    string,
+    { value: CalculatorPreviewResult; expiresAt: number }
+  >();
+  private readonly pendingPreviews = new Map<
+    string,
+    Promise<CalculatorPreviewResult>
+  >();
 
   async preview(
     input: CalculatorPreviewInput,
@@ -33,6 +43,28 @@ export class CalculatorEngineService {
       return { status: 'unavailable', reason: 'ENGINE_NOT_CONFIGURED' };
     }
 
+    const cacheKey = this.previewCacheKey(input, basis);
+    const cached = this.previewCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+    const pending = this.pendingPreviews.get(cacheKey);
+    if (pending) return pending;
+
+    const request = this.requestPreview(input, basis, profileId, cacheKey);
+    this.pendingPreviews.set(cacheKey, request);
+    try {
+      return await request;
+    } finally {
+      this.pendingPreviews.delete(cacheKey);
+    }
+  }
+
+  private async requestPreview(
+    input: CalculatorPreviewInput,
+    basis: 'buyNow' | 'currentBid',
+    profileId: string,
+    cacheKey: string,
+  ): Promise<CalculatorPreviewResult> {
     try {
       const uid = await this.getDealerUid(profileId);
       if (!uid) return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
@@ -76,16 +108,51 @@ export class CalculatorEngineService {
         return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
       }
 
-      return {
+      const preview: CalculatorPreviewResult = {
         status: 'available',
         basis,
         priceUsd: input.priceUsd,
         breakdown,
       };
+      this.cachePreview(cacheKey, preview);
+      return preview;
     } catch {
       this.logger.warn('Dealer calculator request was unavailable.');
       return { status: 'unavailable', reason: 'ENGINE_UNAVAILABLE' };
     }
+  }
+
+  private previewCacheKey(
+    input: CalculatorPreviewInput,
+    basis: 'buyNow' | 'currentBid',
+  ): string {
+    return [
+      basis,
+      input.provider,
+      input.platformId,
+      input.fuelType,
+      input.bodyType,
+      input.year,
+      input.priceUsd,
+      input.engineVolumeCc,
+    ].join(':');
+  }
+
+  private cachePreview(key: string, value: CalculatorPreviewResult): void {
+    if (this.previewCache.size >= MAX_PREVIEW_CACHE_ENTRIES) {
+      for (const [existingKey, cached] of this.previewCache) {
+        if (cached.expiresAt <= Date.now()) this.previewCache.delete(existingKey);
+      }
+      if (this.previewCache.size >= MAX_PREVIEW_CACHE_ENTRIES) {
+        const oldestKey = this.previewCache.keys().next().value;
+        if (oldestKey) this.previewCache.delete(oldestKey);
+      }
+    }
+
+    this.previewCache.set(key, {
+      value,
+      expiresAt: Date.now() + PREVIEW_CACHE_MS,
+    });
   }
 
   private async getDealerUid(profileId: string): Promise<string | null> {
