@@ -86,7 +86,7 @@ describe('auction lot calculator input', () => {
     }));
   });
 
-  it('resolves a Copart platform from an exact auction location when facility id is absent', () => {
+  it('resolves Copart platforms from the complete existing calculator directory when facility id is absent', () => {
     const result = buildLotCalculatorInput(lot({
       provider: 'copart', facilityId: null, locationDisplay: 'Miami Central (FL)',
       locationState: null, facilityOfficeName: null, facilityState: null,
@@ -97,13 +97,29 @@ describe('auction lot calculator input', () => {
       status: 'available',
       input: expect.objectContaining({ provider: 'copart', platformId: '101' }),
     }));
+
+    const westPalmBeach = buildLotCalculatorInput(lot({
+      provider: 'copart', facilityId: null, locationDisplay: 'West Palm Beach (FL)',
+      locationState: null, facilityOfficeName: null, facilityState: null,
+      bodyStyle: 'SUV/Crossover', fuelType: 'Electric and gas hybrid',
+      engine: '2.5L 4', currentBidUsd: 13000 as never,
+    }), now);
+
+    expect(westPalmBeach).toEqual(expect.objectContaining({
+      status: 'available',
+      basis: 'currentBid',
+      input: expect.objectContaining({ provider: 'copart', platformId: '68', engineVolumeCc: 2500 }),
+    }));
   });
 
-  it('does not override an explicit unknown Copart facility with a name match', () => {
+  it('uses an exact provider location when a provider facility id is unavailable to the calculator', () => {
     expect(buildLotCalculatorInput(lot({
       provider: 'copart', facilityId: '999999', locationDisplay: 'Miami Central (FL)',
       locationState: null, facilityOfficeName: null, facilityState: null,
-    }), now)).toEqual({ status: 'unavailable', reason: 'LOCATION_UNAVAILABLE' });
+    }), now)).toEqual(expect.objectContaining({
+      status: 'available',
+      input: expect.objectContaining({ platformId: '101' }),
+    }));
   });
 
   it('does not resolve an IAAI platform from a city without an explicit state', () => {

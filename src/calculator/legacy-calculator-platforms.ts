@@ -12,31 +12,13 @@ export type LegacyCalculatorProvider = keyof typeof LEGACY_CALCULATOR_PLATFORM_I
  */
 const IAAI_LOCATION_DIRECTORY = `378:Abilene (TX)|379:ACE - Carson (CA)|380:ACE - Perris (CA)|561:ACE - Perris 2 (CA)|382:ADESA Birmingham (AL)|383:Akron-Canton (OH)|384:Albany (NY)|385:Albuquerque (NM)|386:Altoona (PA)|387:Amarillo (TX)|388:Anaheim (CA)|562:Anchorage (AK)|390:Appleton (WI)|391:Asheville (NC)|392:Ashland (KY)|393:Atlanta (GA)|394:Atlanta East (GA)|395:Atlanta North (GA)|396:Atlanta South (GA)|654:Atlanta West (GA)|631:AUSTIN (TX)|397:Austin (TX)|632:AUSTIN North (TX)|398:Avenel New Jersey (NJ)|399:Baltimore (MD)|400:Baton Rouge (LA)|401:Billings (MT)|402:Birmingham (AL)|403:Boise (ID)|404:Boston - Shirley (MA)|405:Bowling Green (KY)|588:Brandon (MB)|406:Bridgeport (PA)|407:Buckhannon (WV)|408:Buffalo (NY)|409:Burlington (VT)|589:Calgary South (AB)|410:Casper (WY)|655:Central New Jersey (NJ)|411:Central New Jersey (NJ)|412:Charleston (SC)|413:Charlotte (NC)|414:Chattanooga (TN)|415:Chicago-North (IL)|416:Chicago-South (IL)|417:Chicago-West (IL)|418:Cincinnati (OH)|419:Cincinnati-South (OH)|420:Clearwater (FL)|421:Cleveland (OH)|577:Colorado Springs (CO)|422:Colton (CA)|423:Columbia (SC)|424:Columbus (OH)|425:Concord (NC)|426:Corpus Christi (TX)|427:Culpeper (VA)|428:Dallas (TX)|429:Dallas/Ft Worth (TX)|430:Davenport (IA)|431:Dayton (OH)|432:Denver (CO)|433:Denver East (CO)|434:Des Moines (IA)|435:Detroit (MI)|436:Dothan (AL)|438:Dundalk (MD)|439:East Bay (CA)|590:Edmonton (AB)|440:El Paso (TX)|606:Elkton (MD)|563:Englishtown (NJ)|442:Erie (PA)|443:Eugene (OR)|444:Fargo (ND)|445:Fayetteville (AR)|446:Flint (MI)|447:Fontana (CA)|448:Fort Myers (FL)|449:Fort Pierce (FL)|621:Fort Wayne (IN)|450:Fort Worth North (TX)|452:Fremont (CA)|453:Fresno (CA)|454:Grand Rapids (MI)|455:Greensboro (NC)|456:Greenville (SC)|457:Grenada (MS)|458:Gulf Coast (MS)|591:Halifax (NS)|592:Hamilton (ON)|459:Hartford (CT)|461:High Desert (CA)|622:High Point (NC)|462:Honolulu (HI)|463:Houston (TX)|464:Houston South (TX)|465:Houston-North (TX)|466:Huntsville (AL)|467:Indianapolis (IN)|609:Indianapolis South (IN)|468:Jackson (MS)|469:Jacksonville (FL)|470:Kansas City (KS)|578:Kansas City East (MO)|471:Knoxville (TN)|472:Lafayette (LA)|473:Las Vegas (NV)|636:LEE'S TOWING KAUAI (HI)|475:Lexington (SC)|476:Lincoln (IL)|477:Little Rock (AR)|593:London (ON)|478:Long Island (NY)|479:Longview (TX)|480:Los Angeles (CA)|564:Los Angeles South (CA)|481:Louisville (KY)|482:Louisville North (KY)|483:Lubbock (TX)|484:Macon (GA)|485:Manchester (NH)|594:Manitoba (MB)|486:McAllen (TX)|487:Memphis (TN)|488:Metro DC (MD)|489:Miami (FL)|490:Miami-North (FL)|491:Milwaukee (WI)|492:MINNEAPOLIS SOUTH (MN)|649:Minneapolis/St. Paul (MN)|493:Missoula (MT)|595:Moncton (NB)|648:Monticello (NY)|596:Montreal (QC)|494:Nashville (TN)|495:New Castle (DE)|496:New Orleans (LA)|497:New Orleans East (LA)|498:Newburgh (NY)|499:North Hollywood (CA)|500:Northern Virginia (VA)|501:Oklahoma City (OK)|502:Omaha (NE)|644:OMAHA SOUTH (NE)|503:Orlando (FL)|504:Orlando-North (FL)|597:Ottawa (ON)|505:Paducah (KY)|506:Pensacola (FL)|507:Permian Basin (TX)|508:Philadelphia (PA)|509:Phoenix (AZ)|510:Pittsburgh (PA)|511:Pittsburgh-North (PA)|611:Port Murray (NJ)|512:Portage (WI)|513:Portland (OR)|514:Portland - Gorham (ME)|623:Portland South (OR)|515:Portland West (OR)|516:Providence (RI)|634:Provo (UT)|517:Pulaski (VA)|598:Quebec City (QC)|518:Raleigh (NC)|520:Reno (NV)|522:Richmond (VA)|646:RIVERSIDE (CA)|565:Roanoke (VA)|524:Rochester (NY)|625:Rosedale (MD)|525:Sacramento (CA)|650:SACRAMENTO WEST (CA)|526:Salt Lake City (UT)|527:San Antonio-South (TX)|528:San Diego (CA)|610:Santa Clarita (CA)|529:Savannah (GA)|579:Sayreville (NJ)|530:Scranton (PA)|531:Seattle (WA)|532:Shady Spring (WV)|533:Shreveport (LA)|534:Sioux Falls (SD)|535:South Bend (IN)|536:Southern New Jersey (NJ)|566:Specialty Division (IL)|538:Spokane (WA)|539:Springfield (MO)|645:ST. CLOUD (MN)|599:St. John's (NL)|540:St. Louis (IL)|647:STATEN ISLAND (NY)|633:STOCKTON (CA)|600:Sudbury (ON)|541:Suffolk (VA)|542:Syracuse (NY)|543:Tampa (FL)|544:Tampa North (FL)|545:Taunton (MA)|546:Templeton (MA)|547:Tidewater (VA)|548:Tifton (GA)|601:Toronto (ON)|549:Tucson (AZ)|550:Tulsa (OK)|602:Vancouver (BC)|605:West Palm Beach (FL)|552:Western Colorado (CO)|553:Wichita (KS)|554:Winnipeg (MB)|603:Winnipeg (MB)|555:York Springs (PA)`;
 
-const IAAI_LOCATION_TO_PLATFORM = new Map<string, string[]>();
-for (const entry of IAAI_LOCATION_DIRECTORY.split('|')) {
-  const separator = entry.indexOf(':');
-  const id = entry.slice(0, separator);
-  const key = normalizeLocationKey(entry.slice(separator + 1));
-  if (!key) continue;
-  const ids = IAAI_LOCATION_TO_PLATFORM.get(key) ?? [];
-  ids.push(id);
-  IAAI_LOCATION_TO_PLATFORM.set(key, ids);
-}
+const IAAI_LOCATION_TO_PLATFORM = createLocationIndex(IAAI_LOCATION_DIRECTORY);
 
-// Exact public labels used by the calculator's Copart location selector. The
-// fallback is used only when RapidAPI did not send its facility id.
-const COPART_LOCATION_TO_PLATFORM = new Map<string, string[]>([
-  ['MIAMI CENTRAL (FL)', ['101']],
-  ['SPRINGFIELD (MO)', ['89']],
-  ['KNOXVILLE (TN)', ['109']],
-  ['CLEVELAND EAST (OH)', ['106']],
-  ['CLEVELAND WEST (OH)', ['107']],
-  ['HOUSTON (TX)', ['10']],
-  ['DALLAS (TX)', ['11']],
-  ['ATLANTA WEST (GA)', ['14']],
-  ['CHICAGO NORTH (IL)', ['35']],
-  ['LOS ANGELES (CA)', ['9']],
-]);
+// Complete public Copart selector copied from the existing Strong Auto
+// calculator. The prior ten-location sample caused valid lots such as
+// West Palm Beach (FL) to fail with LOCATION_UNAVAILABLE.
+const COPART_LOCATION_DIRECTORY = `71:ABILENE (TX)|569:ADELANTO (CA)|91:ALBANY (NY)|73:ALBUQUERQUE (NM)|120:ALTOONA (PA)|92:AMARILLO (TX)|108:ANCHORAGE (AK)|160:ANDREWS (TX)|138:ANTELOPE (CA)|165:APPLETON (WI)|103:ATLANTA EAST (GA)|144:ATLANTA NORTH (GA)|135:ATLANTA SOUTH (GA)|14:ATLANTA WEST (GA)|60:AUSTIN (TX)|5:BAKERSFIELD (CA)|98:BALTIMORE (MD)|48:BATON ROUGE (LA)|115:BILLINGS (MT)|125:BIRMINGHAM (AL)|574:BISMARCK (ND)|70:BOISE (ID)|189:BUFFALO (NY)|142:CANDIA (NH)|156:CARTERSVILLE (GA)|166:CASPER (WY)|119:CHAMBERSBURG (PA)|86:CHARLESTON (WV)|35:CHICAGO NORTH (IL)|78:CHICAGO SOUTH (IL)|40:CHINA GROVE (NC)|557:CICERO (IN)|106:CLEVELAND EAST (OH)|107:CLEVELAND WEST (OH)|113:COLORADO SPRINGS (CO)|54:COLUMBIA (SC)|117:COLUMBIA (MO)|28:COLUMBUS (OH)|191:CONCORD (NC)|93:CORPUS CHRISTI (TX)|182:CRASHEDTOYS ATLANTA (GA)|181:CRASHEDTOYS DALLAS (TX)|183:CRASHEDTOYS SACRAMENTO (CA)|11:DALLAS (TX)|158:DALLAS SOUTH (TX)|79:DANVILLE (VA)|153:DAVENPORT (IA)|151:DAYTON (OH)|66:DENVER (CO)|114:DENVER CENTRAL (CO)|167:DENVER SOUTH (CO)|58:DES MOINES (IA)|59:DETROIT (MI)|186:DOTHAN (AL)|576:DYER (IN)|573:EARLINGTON (KY)|44:EL PASO (TX)|100:EUGENE (OR)|171:EXETER (RI)|567:FAIRBURN (GA)|129:FAYETTEVILLE (AR)|145:FLINT (MI)|192:FORT WAYNE (IN)|168:FREDERICKSBURG (VA)|607:FREETOWN (MA)|4:FRESNO (CA)|83:FT. PIERCE (FL)|95:FT. WORTH (TX)|571:GASTONIA (NC)|30:GLASSBORO EAST (NJ)|67:GLASSBORO WEST (NJ)|62:GRAHAM (WA)|148:HAMPTON (VA)|74:HARRISBURG (PA)|22:HARTFORD (CT)|190:HARTFORD SPRINGFIELD (CT)|3:HAYWARD (CA)|102:HELENA (MT)|105:HONOLULU (HI)|10:HOUSTON (TX)|43:INDIANAPOLIS (IN)|146:IONIA (MI)|39:JACKSON (MS)|16:KANSAS CITY (KS)|147:KINCHELOE (MI)|109:KNOXVILLE (TN)|99:LANSING (MI)|55:LAS VEGAS (NV)|110:LEXINGTON EAST (KY)|80:LEXINGTON WEST (KY)|116:LINCOLN (NE)|20:LITTLE ROCK (AR)|161:LONG BEACH (CA)|29:LONG ISLAND (NY)|13:LONGVIEW (TX)|9:LOS ANGELES (CA)|132:LOUISVILLE (KY)|12:LUFKIN (TX)|558:LUMBERTON (NC)|87:LYMAN (ME)|162:MACON (GA)|604:MADISON SOUTH (WI)|75:MARTINEZ (CA)|63:MCALLEN (TX)|141:MEBANE (NC)|21:MEMPHIS (TN)|101:MIAMI CENTRAL (FL)|32:MIAMI NORTH (FL)|136:MIAMI SOUTH (FL)|570:MILWAUKEE NORTH (WI)|36:MINNEAPOLIS (MN)|77:MINNEAPOLIS NORTH (MN)|56:MOBILE (AL)|169:MOCKSVILLE (NC)|134:MONTGOMERY (AL)|61:NASHVILLE (TN)|76:NEW ORLEANS (LA)|23:NEWBURGH (NY)|51:NORTH BOSTON (MA)|170:NORTH CHARLESTON (SC)|46:NORTH SEATTLE (WA)|104:OCALA (FL)|163:OGDEN (UT)|17:OKLAHOMA CITY (OK)|140:ORLANDO NORTH (FL)|53:ORLANDO SOUTH (FL)|69:PASCO (WA)|49:PEORIA (IL)|25:PHILADELPHIA (PA)|150:PHILADELPHIA EAST (PA)|45:PHOENIX (AZ)|27:PITTSBURGH NORTH (PA)|82:PITTSBURGH SOUTH (PA)|155:PITTSBURGH WEST (PA)|8:PORTLAND NORTH (OR)|126:PUNTA GORDA (FL)|52:RALEIGH (NC)|94:RANCHO CUCAMONGA (CA)|572:REDDING (CA)|96:RENO (NV)|128:RICHMOND (VA)|97:RICHMOND EAST (VA)|34:ROCHESTER (NY)|618:RUTLAND (VT)|2:SACRAMENTO (CA)|184:SALT LAKE CITY (UT)|72:SAN ANTONIO (TX)|7:SAN BERNARDINO (CA)|57:SAN DIEGO (CA)|6:SAN JOSE (CA)|84:SAVANNAH (GA)|131:SCRANTON (PA)|121:SEAFORD (DE)|81:SHREVEPORT (LA)|130:SIKESTON (MO)|15:SO SACRAMENTO (CA)|88:SOMERVILLE (NJ)|26:SOUTH BOSTON (MA)|164:SOUTHERN ILLINOIS (IL)|133:SPARTANBURG (SC)|111:SPOKANE (WA)|89:SPRINGFIELD (MO)|50:ST. CLOUD (MN)|19:ST. LOUIS (MO)|157:SUN VALLEY (CA)|24:SYRACUSE (NY)|112:TALLAHASSEE (FL)|33:TAMPA SOUTH (FL)|64:TANNER (AL)|85:TIFTON (GA)|124:TRENTON (NJ)|90:TUCSON (AZ)|18:TULSA (OK)|1:VALLEJO (CA)|42:VAN NUYS (CA)|159:WACO (TX)|127:WALTON (KY)|31:WASHINGTON DC (MD)|620:WEBSTER (NH)|68:WEST PALM BEACH (FL)|137:WEST WARREN (MA)|143:WHEELING (IL)|65:WICHITA (KS)|118:YORK HAVEN (PA)`;
+const COPART_LOCATION_TO_PLATFORM = createLocationIndex(COPART_LOCATION_DIRECTORY);
 
 export function isLegacyCalculatorPlatform(
   provider: LegacyCalculatorProvider,
@@ -59,7 +41,6 @@ export function resolveLegacyCalculatorPlatform(
 ): string | null {
   const facilityId = location.facilityId?.trim();
   if (facilityId && isLegacyCalculatorPlatform(provider, facilityId)) return facilityId;
-  if (facilityId) return null;
 
   const locationIndex = provider === 'iaai'
     ? IAAI_LOCATION_TO_PLATFORM
@@ -89,4 +70,18 @@ function normalizeLocationKey(value: string | null | undefined): string | null {
   const match = value.trim().replace(/\s+/g, ' ').match(/^(.+?)\s*\(([A-Za-z]{2})\)$/);
   if (!match) return null;
   return `${match[1].trim().replace(/\s*-\s*/g, '-').toUpperCase()} (${match[2].toUpperCase()})`;
+}
+
+function createLocationIndex(directory: string): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const entry of directory.split('|')) {
+    const separator = entry.indexOf(':');
+    const id = entry.slice(0, separator);
+    const key = normalizeLocationKey(entry.slice(separator + 1));
+    if (!key) continue;
+    const ids = index.get(key) ?? [];
+    ids.push(id);
+    index.set(key, ids);
+  }
+  return index;
 }
