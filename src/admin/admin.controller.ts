@@ -237,6 +237,24 @@ export class AdminController {
     return this.adminService.createVehicle(data, actorUserId);
   }
 
+  @Get('vehicles/demo-inventory')
+  @ApiOperation({ summary: 'Get demo inventory counts for Ukraine and Europe' })
+  async demoVehicleInventoryStatus(): Promise<any> {
+    return this.adminService.demoVehicleInventoryStatus();
+  }
+
+  @Post('vehicles/demo-inventory')
+  @ApiOperation({ summary: 'Create any missing demo vehicles for Ukraine and Europe' })
+  async createDemoVehicleInventory(@CurrentUser('id') actorUserId: string): Promise<any> {
+    return this.adminService.createDemoVehicleInventory(actorUserId);
+  }
+
+  @Delete('vehicles/demo-inventory')
+  @ApiOperation({ summary: 'Delete only marked demo vehicles for Ukraine and Europe' })
+  async deleteDemoVehicleInventory(@CurrentUser('id') actorUserId: string): Promise<any> {
+    return this.adminService.deleteDemoVehicleInventory(actorUserId);
+  }
+
   @Patch('vehicles/:id')
   @ApiOperation({ summary: 'Update a vehicle (admin)' })
   @ApiResponse({ status: 200, description: 'Vehicle updated' })

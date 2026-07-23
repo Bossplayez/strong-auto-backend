@@ -208,6 +208,7 @@ model Vehicle {
   publicationStatus   VehiclePublicationStatus    @map("publication_status")
   availabilityStatus  VehicleAvailabilityStatus   @map("availability_status")
   isRecommended       Boolean                     @default(false) @map("is_recommended")
+  isDemo              Boolean                     @default(false) @map("is_demo")
   vin                 String?                     @map("vin")
   title               String                      @map("title")
   make                String                      @map("make")
@@ -240,6 +241,7 @@ model Vehicle {
 
   @@index([publicationStatus, publishedAt])
   @@index([sourceType, sourceRegion])
+  @@index([isDemo, sourceRegion])
   @@index([make, model, year])
   @@index([priceAmount])
   @@index([vin])

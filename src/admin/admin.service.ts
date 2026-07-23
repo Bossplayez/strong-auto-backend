@@ -6,6 +6,7 @@ import { CopartService } from '../copart/copart.service';
 import { BroadcastsService } from '../broadcasts/broadcasts.service';
 import { AuditService } from '../audit/audit.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { DEMO_IMAGE_URL, demoVehicleInventory } from './demo-vehicle-inventory';
 
 @Injectable()
 export class AdminService {
@@ -255,6 +256,7 @@ export class AdminService {
           sourceRegion: true,
           publicationStatus: true,
           availabilityStatus: true,
+          isDemo: true,
           vin: true,
           odometerValue: true,
           bodyType: true,
@@ -280,6 +282,61 @@ export class AdminService {
     const vehicle = await this.vehiclesService.create(data);
     await this.auditService.log(actorUserId, 'Vehicle', vehicle.id, 'CREATE');
     return vehicle;
+  }
+
+  async demoVehicleInventoryStatus() {
+    const rows = await this.prisma.vehicle.groupBy({
+      by: ['sourceRegion'],
+      where: { isDemo: true, sourceType: 'INTERNAL', sourceRegion: { in: ['UKRAINE', 'EUROPE'] } },
+      _count: { _all: true },
+    });
+    const counts = Object.fromEntries(rows.map((row) => [row.sourceRegion, row._count._all]));
+    return { expectedPerRegion: 20, ukraine: counts.UKRAINE ?? 0, europe: counts.EUROPE ?? 0 };
+  }
+
+  async createDemoVehicleInventory(actorUserId: string) {
+    const seeds = demoVehicleInventory();
+    const created = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('strong-auto-demo-inventory'))`;
+      const existing = await tx.vehicle.findMany({
+        where: { slug: { in: seeds.map((seed) => seed.slug) } },
+        select: { slug: true },
+      });
+      const existingSlugs = new Set(existing.map((vehicle) => vehicle.slug));
+      const missing = seeds.filter((seed) => !existingSlugs.has(seed.slug));
+
+      for (const seed of missing) {
+        await tx.vehicle.create({
+          data: {
+            ...seed,
+            sourceType: 'INTERNAL',
+            publicationStatus: 'PUBLISHED',
+            availabilityStatus: 'AVAILABLE',
+            isDemo: true,
+            publishedAt: new Date(),
+            media: { create: { sourceUrl: DEMO_IMAGE_URL, sortOrder: 0, isPrimary: true } },
+            contentTranslations: { create: { locale: 'uk', title: seed.title, description: seed.description } },
+          },
+        });
+      }
+      return missing.length;
+    });
+
+    await this.auditService.log(actorUserId, 'DemoVehicleInventory', 'ukraine-europe', 'CREATE', undefined, {
+      created,
+      existing: seeds.length - created,
+    });
+    return { ...(await this.demoVehicleInventoryStatus()), created };
+  }
+
+  async deleteDemoVehicleInventory(actorUserId: string) {
+    const deleted = await this.prisma.vehicle.deleteMany({
+      where: { isDemo: true, sourceType: 'INTERNAL', sourceRegion: { in: ['UKRAINE', 'EUROPE'] } },
+    });
+    await this.auditService.log(actorUserId, 'DemoVehicleInventory', 'ukraine-europe', 'DELETE', undefined, {
+      deleted: deleted.count,
+    });
+    return { ...(await this.demoVehicleInventoryStatus()), deleted: deleted.count };
   }
 
   async archiveVehicle(id: string, actorUserId: string) {

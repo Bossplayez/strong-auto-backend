@@ -130,6 +130,7 @@ export class CatalogService {
           sourceRegion: true,
           availabilityStatus: true,
           isRecommended: true,
+          isDemo: true,
           publishedAt: true,
           media: {
             where: { isPrimary: true },
