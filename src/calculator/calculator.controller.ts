@@ -1,5 +1,6 @@
-import { Controller, Post, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CalculatorService } from './calculator.service';
 import { CalculateEstimateDto, CalculatorBreakdownDto, CalculatorPreviewDto } from './dto';
 import type { CalculatorPreviewResult } from './calculator-preview.types';
@@ -24,6 +25,8 @@ export class CalculatorController {
   }
 
   @Post('preview')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Preview the existing Strong Auto calculator without saving an estimate' })
   @ApiResponse({ status: 201, description: 'Preview result or an unavailable state' })
   async preview(@Body() dto: CalculatorPreviewDto): Promise<CalculatorPreviewResult> {

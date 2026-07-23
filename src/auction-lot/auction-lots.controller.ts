@@ -117,6 +117,8 @@ export class AuctionLotsController {
   }
 
   @Get(':provider/:externalLotId/calculator-preview')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Preview the existing Strong Auto calculator for a public auction lot' })
   @ApiParam({ name: 'provider', description: 'Provider (copart, iaai)' })
   @ApiParam({ name: 'externalLotId', description: 'External lot number' })
