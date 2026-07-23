@@ -86,6 +86,28 @@ describe('auction lot calculator input', () => {
     }));
   });
 
+  it('keeps the IAAI Wilmington and Winnipeg calculator locations distinct', () => {
+    const wilmington = buildLotCalculatorInput(lot({
+      provider: 'iaai', facilityId: null, locationDisplay: 'Wilmington (NC)',
+      locationState: null, facilityOfficeName: null, facilityState: null,
+      bodyStyle: 'SUV/Crossover',
+    }), now);
+    const winnipeg = buildLotCalculatorInput(lot({
+      provider: 'iaai', facilityId: null, locationDisplay: 'Winnipeg (MB)',
+      locationState: null, facilityOfficeName: null, facilityState: null,
+      bodyStyle: 'SUV/Crossover',
+    }), now);
+
+    expect(wilmington).toEqual(expect.objectContaining({
+      status: 'available',
+      input: expect.objectContaining({ provider: 'iaai', platformId: '554' }),
+    }));
+    expect(winnipeg).toEqual(expect.objectContaining({
+      status: 'available',
+      input: expect.objectContaining({ provider: 'iaai', platformId: '603' }),
+    }));
+  });
+
   it('resolves Copart platforms from the complete existing calculator directory when facility id is absent', () => {
     const result = buildLotCalculatorInput(lot({
       provider: 'copart', facilityId: null, locationDisplay: 'Miami Central (FL)',
