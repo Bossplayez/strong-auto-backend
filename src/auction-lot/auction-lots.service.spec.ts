@@ -57,13 +57,15 @@ describe('AuctionLotsService unified catalog invariants', () => {
       currentExternal: 1,
       staleExternal: 1,
       endedExternal: 1,
-      unclassifiedExternal: 1,
+      resultPendingExternal: 0,
+      outsideHorizonExternal: 1,
+      unclassifiedExternal: 0,
       byProvider: {
-        copart: { totalExternal: 2, currentExternal: 1, staleExternal: 1, endedExternal: 0, unclassifiedExternal: 0 },
-        iaai: { totalExternal: 2, currentExternal: 0, staleExternal: 0, endedExternal: 1, unclassifiedExternal: 1 },
+        copart: { totalExternal: 2, currentExternal: 1, staleExternal: 1, endedExternal: 0, resultPendingExternal: 0, outsideHorizonExternal: 0, unclassifiedExternal: 0 },
+        iaai: { totalExternal: 2, currentExternal: 0, staleExternal: 0, endedExternal: 1, resultPendingExternal: 0, outsideHorizonExternal: 1, unclassifiedExternal: 0 },
       },
     });
-    expect(result.currentExternal + result.staleExternal + result.endedExternal + result.unclassifiedExternal).toBe(result.totalExternal);
+    expect(result.currentExternal + result.staleExternal + result.endedExternal + result.resultPendingExternal + result.outsideHorizonExternal + result.unclassifiedExternal).toBe(result.totalExternal);
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: 'RepeatableRead',
     });
@@ -71,6 +73,35 @@ describe('AuctionLotsService unified catalog invariants', () => {
       select: expect.not.objectContaining({ mediaUrls: true }),
     }));
     expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
+  });
+
+  it('reports past lots without a provider result as result pending, not unclassified', async () => {
+    const now = new Date();
+    transaction.discoveredLot.findMany.mockResolvedValue([
+      lot({
+        provider: 'copart',
+        providerResultState: 'UNKNOWN',
+        auctionTime: new Date(now.getTime() - 3600000),
+        listingObservedAt: now,
+        lastProviderUpdateAt: now,
+      }),
+    ]);
+    transaction.vehicle.findMany.mockResolvedValue([]);
+
+    const result = await service.adminMetrics();
+
+    expect(result).toMatchObject({
+      totalExternal: 1,
+      currentExternal: 0,
+      staleExternal: 0,
+      endedExternal: 0,
+      resultPendingExternal: 1,
+      outsideHorizonExternal: 0,
+      unclassifiedExternal: 0,
+      byProvider: {
+        copart: expect.objectContaining({ resultPendingExternal: 1, unclassifiedExternal: 0 }),
+      },
+    });
   });
 
   it('computes metrics for 35,706 projected lots from a narrow shared snapshot', async () => {
@@ -83,7 +114,7 @@ describe('AuctionLotsService unified catalog invariants', () => {
     const result = await service.adminMetrics();
 
     expect(result.totalExternal).toBe(35706);
-    expect(result.currentExternal + result.staleExternal + result.endedExternal + result.unclassifiedExternal).toBe(35706);
+    expect(result.currentExternal + result.staleExternal + result.endedExternal + result.resultPendingExternal + result.outsideHorizonExternal + result.unclassifiedExternal).toBe(35706);
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: 'RepeatableRead',
     });

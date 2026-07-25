@@ -559,6 +559,10 @@ export class AuctionLotsService {
         if (truth.reasonCode === 'LISTING_STALE' || truth.reasonCode === 'UNAVAILABLE') {
           return 'stale' as const;
         }
+        // A passed auction time is not a confirmed result. Keep this visible
+        // to operators instead of mixing it into the technical fallback bucket.
+        if (truth.reasonCode === 'RESULT_PENDING') return 'resultPending' as const;
+        if (truth.reasonCode === 'AUCTION_OUT_OF_HORIZON') return 'outsideHorizon' as const;
         return 'unclassified' as const;
       };
       const partition = (provider?: string) => {
@@ -569,6 +573,8 @@ export class AuctionLotsService {
           currentExternal: classes.filter((value) => value === 'current').length,
           staleExternal: classes.filter((value) => value === 'stale').length,
           endedExternal: classes.filter((value) => value === 'ended').length,
+          resultPendingExternal: classes.filter((value) => value === 'resultPending').length,
+          outsideHorizonExternal: classes.filter((value) => value === 'outsideHorizon').length,
           unclassifiedExternal: classes.filter((value) => value === 'unclassified').length,
         };
       };
