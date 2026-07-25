@@ -306,16 +306,17 @@ export class AdminService {
       const missing = seeds.filter((seed) => !existingSlugs.has(seed.slug));
 
       for (const seed of missing) {
+        const { description, ...vehicleData } = seed;
         await tx.vehicle.create({
           data: {
-            ...seed,
+            ...vehicleData,
             sourceType: 'INTERNAL',
             publicationStatus: 'PUBLISHED',
             availabilityStatus: 'AVAILABLE',
             isDemo: true,
             publishedAt: new Date(),
             media: { create: { sourceUrl: DEMO_IMAGE_URL, sortOrder: 0, isPrimary: true } },
-            contentTranslations: { create: { locale: 'uk', title: seed.title, description: seed.description } },
+            contentTranslations: { create: { locale: 'uk', title: seed.title, description } },
           },
         });
       }

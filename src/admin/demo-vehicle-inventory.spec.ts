@@ -53,6 +53,8 @@ describe('demo vehicle inventory', () => {
       availabilityStatus: 'AVAILABLE',
       media: { create: { sourceUrl: '/demo-vehicle-placeholder.svg', isPrimary: true } },
     });
+    expect(tx.vehicle.create.mock.calls[0][0].data).not.toHaveProperty('description');
+    expect(tx.vehicle.create.mock.calls[0][0].data.contentTranslations.create.description).toBe(seeds[0].description);
     expect(auditService.log).toHaveBeenCalledWith('admin-1', 'DemoVehicleInventory', 'ukraine-europe', 'CREATE', undefined, {
       created: 40,
       existing: 0,
