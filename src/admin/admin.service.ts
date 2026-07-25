@@ -320,7 +320,7 @@ export class AdminService {
         });
       }
       return missing.length;
-    });
+    }, { maxWait: 10_000, timeout: 30_000 });
 
     await this.auditService.log(actorUserId, 'DemoVehicleInventory', 'ukraine-europe', 'CREATE', undefined, {
       created,

@@ -34,8 +34,8 @@ describe('demo vehicle inventory', () => {
     expect(seeds.filter((seed) => seed.sourceRegion === 'EUROPE')).toHaveLength(20);
   });
 
-  it('creates only missing demo vehicles under one transaction lock', async () => {
-    const { service, tx, auditService } = createService();
+  it('creates only missing demo vehicles under one locked transaction with sufficient time for 40 inserts', async () => {
+    const { service, prisma, tx, auditService } = createService();
 
     await expect(service.createDemoVehicleInventory('admin-1')).resolves.toMatchObject({
       ukraine: 20,
@@ -44,6 +44,7 @@ describe('demo vehicle inventory', () => {
     });
 
     expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 10_000, timeout: 30_000 });
     expect(tx.vehicle.create).toHaveBeenCalledTimes(40);
     expect(tx.vehicle.create.mock.calls[0][0].data).toMatchObject({
       isDemo: true,
