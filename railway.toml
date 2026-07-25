@@ -1,5 +1,8 @@
 [deploy]
-startCommand = "npm run start:prod"
+# Keep Prisma's generated client and the current database schema in lockstep.
+# `migrate deploy` is additive/idempotent: it applies tracked migrations only
+# and never resets or recreates the production database.
+startCommand = "npx prisma migrate deploy && npm run start:prod"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
