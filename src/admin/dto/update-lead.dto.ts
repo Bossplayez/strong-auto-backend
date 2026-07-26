@@ -17,8 +17,14 @@ export class UpdateLeadDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  assignedToUserId?: string;
+  assignedToUserId?: string | null;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  comment?: string;
+
+  /** Backwards-compatible admin-client field name. */
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

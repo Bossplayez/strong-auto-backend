@@ -872,6 +872,9 @@ function assistanceLeadSummary(
     id: lead.id,
     intent: lead.leadType,
     status: lead.assistanceStatus,
+    customerStatus: lead.assistanceStatus === 'COMPLETED'
+      ? { code: 'COMPLETED', label: 'Менеджер зв’язався' }
+      : { code: 'NEW', label: 'Нова' },
     createdAt: lead.createdAt.toISOString(),
     lot: {
       provider: lot.provider,

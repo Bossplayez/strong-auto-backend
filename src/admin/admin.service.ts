@@ -85,7 +85,14 @@ export class AdminService {
   }
 
   async updateLead(id: string, data: any, actorUserId: string) {
-    const result = await this.leadsService.update(id, data, actorUserId);
+    const result = await this.leadsService.update(id, {
+      status: data.status,
+      assistanceStatus: data.assistanceStatus,
+      ...(Object.prototype.hasOwnProperty.call(data, 'assignedToUserId')
+        ? { managerUserId: data.assignedToUserId }
+        : {}),
+      comment: data.comment ?? data.internalNotes,
+    }, actorUserId);
     await this.auditService.log(actorUserId, 'Lead', id, 'UPDATE', undefined, data);
     return result;
   }

@@ -61,6 +61,7 @@ export class LeadsService {
     leadType?: string;
     search?: string;
     managerUserId?: string;
+    auctionOnly?: string | boolean;
   }): Promise<PaginatedResponseDto<any>> {
     const page = filters.page ?? 1;
     const pageSize = filters.pageSize ?? 20;
@@ -73,12 +74,19 @@ export class LeadsService {
       if (leadTypes.length === 1) where.leadType = leadTypes[0] as any;
       if (leadTypes.length > 1) where.leadType = { in: leadTypes as any };
     }
+    if (filters.auctionOnly === true || filters.auctionOnly === 'true') {
+      where.leadType = { in: ['BID_ASSISTANCE', 'BUY_NOW_ASSISTANCE'] };
+    }
     if (filters.managerUserId) where.managerUserId = filters.managerUserId;
     if (filters.search) {
+      const search = filters.search.trim();
       where.OR = [
-        { name: { contains: filters.search, mode: 'insensitive' } },
-        { phone: { contains: filters.search } },
-        { email: { contains: filters.search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { discoveredLot: { is: { title: { contains: search, mode: 'insensitive' } } } },
+        { discoveredLot: { is: { externalLotId: { contains: search, mode: 'insensitive' } } } },
+        { vehicle: { is: { title: { contains: search, mode: 'insensitive' } } } },
       ];
     }
 
@@ -98,12 +106,15 @@ export class LeadsService {
           manager: {
             select: { id: true, email: true, profile: true },
           },
+          customer: {
+            select: { id: true, email: true, phone: true, profile: true },
+          },
         },
       }),
       this.prisma.lead.count({ where }),
     ]);
 
-    return new PaginatedResponseDto(items, total, page, pageSize);
+    return new PaginatedResponseDto(items.map((lead) => this.adminLeadSummary(lead)), total, page, pageSize);
   }
 
   async findById(id: string) {
@@ -135,7 +146,23 @@ export class LeadsService {
       throw new NotFoundException(`Lead with id "${id}" not found`);
     }
 
-    return lead;
+    return {
+      ...this.adminLeadSummary(lead),
+      comments: lead.comments.map((comment) => ({
+        id: comment.id,
+        body: comment.body,
+        createdAt: comment.createdAt,
+        author: this.personSummary(comment.author),
+      })),
+      statusHistory: lead.statusHistory.map((entry) => ({
+        id: entry.id,
+        fromStatus: entry.fromStatus,
+        toStatus: entry.toStatus,
+        changedAt: entry.changedAt,
+        changedByUserId: entry.changedByUserId,
+        reason: entry.reason,
+      })),
+    };
   }
 
   async update(
@@ -143,7 +170,7 @@ export class LeadsService {
     data: {
       status?: string;
       assistanceStatus?: string;
-      managerUserId?: string;
+      managerUserId?: string | null;
       comment?: string;
     },
     changedByUserId?: string,
@@ -152,6 +179,14 @@ export class LeadsService {
 
     if (data.assistanceStatus && !lead.assistanceStatus) {
       throw new BadRequestException('This lead does not have an auction assistance status.');
+    }
+
+    if (data.managerUserId) {
+      const manager = await this.prisma.user.findUnique({
+        where: { id: data.managerUserId },
+        select: { id: true },
+      });
+      if (!manager) throw new BadRequestException('Assigned manager was not found.');
     }
 
     // If status changed, track history
@@ -171,7 +206,7 @@ export class LeadsService {
       data: {
         ...(data.status && { status: data.status as any }),
         ...(data.assistanceStatus && { assistanceStatus: data.assistanceStatus as any }),
-        ...(data.managerUserId && { managerUserId: data.managerUserId }),
+        ...(Object.prototype.hasOwnProperty.call(data, 'managerUserId') && { managerUserId: data.managerUserId }),
       },
     });
 
@@ -186,6 +221,56 @@ export class LeadsService {
       });
     }
 
-    return updated;
+    return this.findById(updated.id);
+  }
+
+  private personSummary(person: { id: string; email: string | null; phone?: string | null; profile: unknown } | null) {
+    if (!person) return null;
+    const profile = person.profile as { firstName?: string | null; lastName?: string | null } | null;
+    return {
+      id: person.id,
+      email: person.email ?? null,
+      phone: person.phone ?? null,
+      name: [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || null,
+    };
+  }
+
+  private adminLeadSummary(lead: any) {
+    return {
+      id: lead.id,
+      leadType: lead.leadType,
+      status: lead.status,
+      assistanceStatus: lead.assistanceStatus ?? null,
+      customerStatus: lead.assistanceStatus === 'COMPLETED'
+        ? { code: 'COMPLETED', label: 'Менеджер зв’язався' }
+        : lead.assistanceStatus === 'NEW'
+          ? { code: 'NEW', label: 'Нова' }
+          : null,
+      name: lead.name ?? null,
+      phone: lead.phone ?? null,
+      email: lead.email ?? null,
+      createdAt: lead.createdAt,
+      updatedAt: lead.updatedAt,
+      customer: this.personSummary(lead.customer ?? null),
+      manager: this.personSummary(lead.manager ?? null),
+      auctionLot: lead.discoveredLot ? {
+        provider: lead.discoveredLot.provider,
+        externalLotId: lead.discoveredLot.externalLotId,
+        title: lead.discoveredLot.title,
+      } : null,
+      vehicle: lead.vehicle ? {
+        id: lead.vehicle.id,
+        title: lead.vehicle.title,
+        slug: lead.vehicle.slug,
+        make: lead.vehicle.make,
+        model: lead.vehicle.model,
+        year: lead.vehicle.year,
+      } : null,
+      price: lead.auctionPriceUsd !== null && lead.auctionPriceUsd !== undefined ? {
+        usd: Number(lead.auctionPriceUsd),
+        basis: lead.auctionPriceBasis ?? null,
+        observedAt: lead.auctionPriceObservedAt ?? null,
+      } : null,
+    };
   }
 }
