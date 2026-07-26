@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsEnum, IsBooleanString } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
-import { LeadStatus } from '../../common/enums';
+import { LeadStatus } from '@prisma/client';
 
 export class AdminLeadQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ enum: LeadStatus })

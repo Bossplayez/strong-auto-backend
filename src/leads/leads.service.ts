@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { LeadStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLeadDto } from './dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
@@ -175,53 +175,72 @@ export class LeadsService {
     },
     changedByUserId?: string,
   ) {
-    const lead = await this.findById(id);
-
-    if (data.assistanceStatus && !lead.assistanceStatus) {
-      throw new BadRequestException('This lead does not have an auction assistance status.');
+    if (data.status && !Object.values(LeadStatus).includes(data.status as LeadStatus)) {
+      throw new BadRequestException('Lead status is invalid.');
     }
 
-    if (data.managerUserId) {
-      const manager = await this.prisma.user.findUnique({
-        where: { id: data.managerUserId },
+    const updatedId = await this.prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.findUnique({
+        where: { id },
+        select: { id: true, status: true, assistanceStatus: true },
+      });
+      if (!lead) throw new NotFoundException(`Lead with id "${id}" not found`);
+      if (data.assistanceStatus && !lead.assistanceStatus) {
+        throw new BadRequestException('This lead does not have an auction assistance status.');
+      }
+
+      const completesAssistance = lead.assistanceStatus === 'NEW' && data.assistanceStatus === 'COMPLETED';
+      if (completesAssistance && data.status && data.status !== 'QUALIFIED') {
+        throw new BadRequestException('Completing assistance requires the QUALIFIED lead status.');
+      }
+      const nextStatus = completesAssistance ? 'QUALIFIED' : data.status;
+
+      if (data.managerUserId) {
+        const manager = await tx.user.findUnique({
+          where: { id: data.managerUserId },
+          select: {
+            id: true,
+            userType: true,
+            userRoles: { select: { role: { select: { code: true } } } },
+          },
+        });
+        const roleCodes = manager?.userRoles.map((entry) => entry.role.code) ?? [];
+        if (!manager || !(['ADMIN', 'MANAGER'].includes(manager.userType) || roleCodes.some((code) => code === 'ADMIN' || code === 'MANAGER'))) {
+          throw new BadRequestException('Assigned user must be an administrator or manager.');
+        }
+      }
+
+      if (nextStatus && nextStatus !== lead.status) {
+        await tx.leadStatusHistory.create({
+          data: {
+            leadId: id,
+            fromStatus: lead.status,
+            toStatus: nextStatus as LeadStatus,
+            changedByUserId,
+          },
+        });
+      }
+
+      const updated = await tx.lead.update({
+        where: { id },
+        data: {
+          ...(nextStatus && { status: nextStatus as LeadStatus }),
+          ...(data.assistanceStatus && { assistanceStatus: data.assistanceStatus as any }),
+          ...(Object.prototype.hasOwnProperty.call(data, 'managerUserId') && { managerUserId: data.managerUserId }),
+        },
         select: { id: true },
       });
-      if (!manager) throw new BadRequestException('Assigned manager was not found.');
-    }
 
-    // If status changed, track history
-    if (data.status && data.status !== lead.status) {
-      await this.prisma.leadStatusHistory.create({
-        data: {
-          leadId: id,
-          fromStatus: lead.status,
-          toStatus: data.status as any,
-          changedByUserId,
-        },
-      });
-    }
-
-    const updated = await this.prisma.lead.update({
-      where: { id },
-      data: {
-        ...(data.status && { status: data.status as any }),
-        ...(data.assistanceStatus && { assistanceStatus: data.assistanceStatus as any }),
-        ...(Object.prototype.hasOwnProperty.call(data, 'managerUserId') && { managerUserId: data.managerUserId }),
-      },
+      const comment = data.comment?.trim();
+      if (comment && changedByUserId) {
+        await tx.leadComment.create({
+          data: { leadId: id, authorUserId: changedByUserId, body: comment },
+        });
+      }
+      return updated.id;
     });
 
-    // Add comment if provided
-    if (data.comment && changedByUserId) {
-      await this.prisma.leadComment.create({
-        data: {
-          leadId: id,
-          authorUserId: changedByUserId,
-          body: data.comment,
-        },
-      });
-    }
-
-    return this.findById(updated.id);
+    return this.findById(updatedId);
   }
 
   private personSummary(person: { id: string; email: string | null; phone?: string | null; profile: unknown } | null) {
@@ -249,6 +268,7 @@ export class LeadsService {
       name: lead.name ?? null,
       phone: lead.phone ?? null,
       email: lead.email ?? null,
+      comment: lead.comment ?? null,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
       customer: this.personSummary(lead.customer ?? null),
