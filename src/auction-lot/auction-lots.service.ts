@@ -42,6 +42,13 @@ function normalizeRunCondition(raw: string | null): string | null {
   return trimmed;
 }
 
+function maskPublicVin(vin: string | null): string | null {
+  if (!vin) return null;
+  const value = vin.trim();
+  if (value.length <= 4) return '*'.repeat(value.length);
+  return `${value.slice(0, 4)}${'*'.repeat(Math.max(4, value.length - 8))}${value.slice(-4)}`;
+}
+
 function allowsHistoricalExactLookup(
   truthReasonCode: string,
   qualityReasonCode: string | null,
@@ -338,7 +345,7 @@ export class AuctionLotsService {
       freshnessTier: tier,
       lastSoldPriceUsd: lot.lastSoldPriceUsd ? Number(lot.lastSoldPriceUsd) : null,
       terminalAt: lot.terminalAt ? lot.terminalAt.toISOString() : null,
-      vin: lot.vin ?? null,
+      vin: maskPublicVin(lot.vin),
       // Quality outcome
       qualityInclude: quality.include,
       qualityReasonCode: quality.reasonCode,

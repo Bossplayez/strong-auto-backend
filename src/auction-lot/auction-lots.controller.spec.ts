@@ -184,8 +184,8 @@ describe('AuctionLotsService (redaction validation)', () => {
       const service = new AuctionLotsService(mockPrisma as any);
       const result = await service.findOne('copart', '123');
 
-      // VIN must not appear in the public DTO
-      expect((result as any).vin).toBeUndefined();
+      // The public DTO may identify the record without exposing the full VIN.
+      expect((result as any).vin).toBe('WBA1*********1234');
       expect(JSON.stringify(result)).not.toContain('WBA12345678901234');
     });
 

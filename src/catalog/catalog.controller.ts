@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, UseFilters, UseGuards, Req } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Param, Query, Body, UseFilters, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CatalogService } from './catalog.service';
 import { VehicleFilterDto } from './dto';
@@ -20,7 +20,13 @@ export class CatalogController {
   @Get('filter-options')
   async inventoryFilterOptions(@Query() query: Record<string, unknown>): Promise<any> {
     if (query.view === undefined) {
-      return this.catalogService.getFilterOptions();
+      const sourceRegion = typeof query.sourceRegion === 'string'
+        ? query.sourceRegion.trim().toUpperCase()
+        : undefined;
+      if (sourceRegion !== undefined && sourceRegion !== 'UKRAINE' && sourceRegion !== 'EUROPE') {
+        throw new BadRequestException('Unsupported sourceRegion');
+      }
+      return this.catalogService.getFilterOptions(sourceRegion);
     }
     return this.catalogService.inventoryFilterOptions(query);
   }

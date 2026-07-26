@@ -55,6 +55,23 @@ function publicAuctionItem(lot: any, now: Date) {
   };
 }
 
+function stateFromLocation(locationState: string | null | undefined, locationDisplay: string | null | undefined): string | null {
+  if (locationState?.trim()) return locationState.trim().toUpperCase();
+  const match = locationDisplay?.match(/\(([A-Z]{2})\)\s*$/i);
+  return match?.[1]?.toUpperCase() ?? null;
+}
+
+function withResolvedLocationState<T extends { locationState?: string | null; locationDisplay?: string | null }>(lot: T): T {
+  const locationState = stateFromLocation(lot.locationState, lot.locationDisplay);
+  return locationState === lot.locationState ? lot : { ...lot, locationState };
+}
+
+function canonicalOptionValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized || null;
+}
+
 @Injectable()
 export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -213,19 +230,24 @@ export class CatalogService {
       },
     });
 
-    if (!vehicle || vehicle.publicationStatus !== 'PUBLISHED') {
+    if (
+      !vehicle ||
+      vehicle.publicationStatus !== 'PUBLISHED' ||
+      vehicle.availabilityStatus === 'SOLD' ||
+      vehicle.availabilityStatus === 'NOT_AVAILABLE'
+    ) {
       throw new NotFoundException(`Vehicle with slug "${slug}" not found`);
     }
 
     return vehicle;
   }
 
-  async getFilterOptions() {
+  async getFilterOptions(sourceRegion?: 'UKRAINE' | 'EUROPE') {
     const where: Prisma.VehicleWhereInput = {
       publicationStatus: 'PUBLISHED',
       availabilityStatus: { in: ['AVAILABLE', 'RESERVED'] },
       // Task 036: Exclude USA region — auction lots are served via the DiscoveredLot feed.
-      sourceRegion: { not: 'USA' },
+      sourceRegion: sourceRegion ?? { not: 'USA' },
     };
 
     // Price range excludes zero (unknown price) vehicles
@@ -325,7 +347,15 @@ export class CatalogService {
     if (parsed.fuelType) where.fuelType = { equals: parsed.fuelType, mode: 'insensitive' };
     if (parsed.transmission) where.transmission = { equals: parsed.transmission, mode: 'insensitive' };
     if (parsed.driveType) where.driveType = { equals: parsed.driveType, mode: 'insensitive' };
-    if (parsed.locationState) where.locationState = { equals: parsed.locationState, mode: 'insensitive' };
+    if (parsed.locationState) {
+      const locationState = parsed.locationState.trim().toUpperCase();
+      (where.AND as Prisma.DiscoveredLotWhereInput[]).push({
+        OR: [
+          { locationState: { equals: locationState, mode: 'insensitive' } },
+          { locationDisplay: { contains: `(${locationState})`, mode: 'insensitive' } },
+        ],
+      });
+    }
     const lifecycleWhere = publicLifecycleWhere(parsed.lifecycle);
     if (lifecycleWhere) (where.AND as Prisma.DiscoveredLotWhereInput[]).push(lifecycleWhere);
     if (parsed.q) {
@@ -393,7 +423,7 @@ export class CatalogService {
     if (interleaving) {
       // Fetch from each provider independently
       const providers: ('copart' | 'iaai')[] = ['copart', 'iaai'];
-      const perProviderTake = Math.min(take * 2, 40); // enough for interleaving
+      const perProviderTake = skip + take;
       const providerResults = await Promise.all(
         providers.map(p => {
           const pw: Prisma.DiscoveredLotWhereInput = { ...where, provider: p };
@@ -405,8 +435,8 @@ export class CatalogService {
       const total = await this.prisma.discoveredLot.count({ where });
 
       // Map to items and interleave
-      const copartItems = providerResults[0].map((lot) => publicAuctionItem(lot, now));
-      const iaaiItems = providerResults[1].map((lot) => publicAuctionItem(lot, now));
+      const copartItems = providerResults[0].map((lot) => publicAuctionItem(withResolvedLocationState(lot), now));
+      const iaaiItems = providerResults[1].map((lot) => publicAuctionItem(withResolvedLocationState(lot), now));
       const items = interleaveProviders(copartItems, iaaiItems, skip, take);
 
       // Task 051: Detect inventory recovery for unfiltered USA catalog
@@ -423,7 +453,7 @@ export class CatalogService {
       this.prisma.discoveredLot.count({ where }),
     ]);
 
-    const items = lots.map((lot) => publicAuctionItem(lot, now));
+    const items = lots.map((lot) => publicAuctionItem(withResolvedLocationState(lot), now));
     const result = page(items, total, parsed.page, parsed.pageSize);
     return { ...result, catalogState: 'NORMAL' };
   }
@@ -452,7 +482,15 @@ export class CatalogService {
     if (parsed.fuelType) where.fuelType = { equals: parsed.fuelType, mode: 'insensitive' };
     if (parsed.transmission) where.transmission = { equals: parsed.transmission, mode: 'insensitive' };
     if (parsed.driveType) where.driveType = { equals: parsed.driveType, mode: 'insensitive' };
-    if (parsed.locationState) where.locationState = { equals: parsed.locationState, mode: 'insensitive' };
+    if (parsed.locationState) {
+      const locationState = parsed.locationState.trim().toUpperCase();
+      (where.AND as Prisma.DiscoveredLotWhereInput[]).push({
+        OR: [
+          { locationState: { equals: locationState, mode: 'insensitive' } },
+          { locationDisplay: { contains: `(${locationState})`, mode: 'insensitive' } },
+        ],
+      });
+    }
     const lifecycleWhere = publicLifecycleWhere(parsed.lifecycle);
     if (lifecycleWhere) (where.AND as Prisma.DiscoveredLotWhereInput[]).push(lifecycleWhere);
     if (parsed.buyNow !== undefined) {
@@ -466,7 +504,7 @@ export class CatalogService {
       select: {
         make: true, model: true, bodyStyle: true, fuelType: true,
         transmission: true, driveType: true, provider: true,
-        locationState: true, auctionState: true, lifecycleState: true,
+        locationState: true, locationDisplay: true, auctionState: true, lifecycleState: true,
         year: true, buyNowUsd: true, currentBidUsd: true, odometerKm: true,
         isBuyNow: true, auctionTime: true, priceObservedAt: true,
         providerResultState: true, listingObservedAt: true, lastProviderUpdateAt: true,
@@ -476,14 +514,18 @@ export class CatalogService {
 
     // Compute filter option counts directly from raw lots
     const countField = (field: keyof typeof lots[0]) => {
-      const counts = new Map<string, number>();
+      const counts = new Map<string, { value: string; count: number }>();
       for (const lot of lots) {
-        const value = lot[field];
-        if (value !== null && value !== undefined && String(value)) {
-          counts.set(String(value), (counts.get(String(value)) ?? 0) + 1);
+        const value = field === 'locationState'
+          ? stateFromLocation(lot.locationState, lot.locationDisplay)
+          : canonicalOptionValue(lot[field]);
+        if (value) {
+          const key = value.toLocaleLowerCase();
+          const existing = counts.get(key);
+          counts.set(key, { value: existing?.value ?? value, count: (existing?.count ?? 0) + 1 });
         }
       }
-      return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([value, count]) => ({ value, label: value, count }));
+      return [...counts.values()].sort((a, b) => a.value.localeCompare(b.value)).map(({ value, count }) => ({ value, label: value, count }));
     };
 
     const options = {
@@ -584,7 +626,14 @@ export class CatalogService {
       throw new NotFoundException('Автомобіль не знайдено');
     }
 
-    if (vehicle.sourceType !== 'COPART' && vehicle.sourceType !== 'IAAI') {
+    if (vehicle.sourceType === 'COPART' || vehicle.sourceType === 'IAAI') {
+      throw new BadRequestException({
+        code: 'ACTION_REQUIRES_ASSISTANCE',
+        message: 'Auction bids are handled through an assistance request.',
+      });
+    }
+
+    if (vehicle.sourceType === 'INTERNAL') {
       throw new BadRequestException('Ставки доступні лише для аукціонних авто');
     }
 

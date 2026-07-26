@@ -86,7 +86,7 @@ export function parseInventoryQuery(raw: Record<string, unknown>, forcedView?: I
   if (!['all', 'usa', 'curated'].includes(requestedView)) validationError();
   if (forcedView && raw.view !== undefined && raw.view !== forcedView) validationError();
   const view = requestedView as InventoryView;
-  const page = optionalInteger(raw.page, 1) ?? 1;
+  const page = optionalInteger(raw.page, 1, 100) ?? 1;
   const pageSize = optionalInteger(raw.pageSize, 1, 50) ?? 20;
   const source = optionalText(raw.source);
   const provider = optionalText(raw.provider);

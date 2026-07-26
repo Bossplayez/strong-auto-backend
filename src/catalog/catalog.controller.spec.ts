@@ -13,7 +13,17 @@ describe('CatalogController filter-option compatibility', () => {
     catalogService.getFilterOptions.mockResolvedValue({ makes: ['Ford'] });
 
     await expect(controller.inventoryFilterOptions({})).resolves.toEqual({ makes: ['Ford'] });
+    expect(catalogService.getFilterOptions).toHaveBeenCalledWith(undefined);
     expect(catalogService.inventoryFilterOptions).not.toHaveBeenCalled();
+  });
+
+  it('scopes legacy filter options to the requested manual catalog region', async () => {
+    catalogService.getFilterOptions.mockResolvedValue({ makes: ['Audi'] });
+
+    await expect(
+      controller.inventoryFilterOptions({ sourceRegion: 'europe' }),
+    ).resolves.toEqual({ makes: ['Audi'] });
+    expect(catalogService.getFilterOptions).toHaveBeenCalledWith('EUROPE');
   });
 
   it('returns unified faceted options when view is explicit', async () => {

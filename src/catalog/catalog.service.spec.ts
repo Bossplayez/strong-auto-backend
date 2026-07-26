@@ -3,7 +3,7 @@ import { CatalogService } from './catalog.service';
 describe('CatalogService unified inventory identity projection', () => {
   const prisma = {
     discoveredLot: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(1) },
-    vehicle: { findMany: jest.fn() },
+    vehicle: { findMany: jest.fn(), findUnique: jest.fn() },
   };
   const service = new CatalogService(prisma as never);
 
@@ -36,6 +36,71 @@ describe('CatalogService unified inventory identity projection', () => {
     expect(result.total).toBe(1);
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ kind: 'auctionLot', importedVehicleId: 'vehicle-1' });
+  });
+
+  it('keeps unfiltered USA pagination populated after the second page', async () => {
+    prisma.discoveredLot.findMany.mockImplementation((args?: any) => {
+      const provider = args?.where?.provider;
+      const lots = Array.from({ length: 30 }, (_, index) => lot({
+        provider: index % 2 === 0 ? 'copart' : 'iaai',
+        externalLotId: `lot-${index}`,
+      }));
+      return Promise.resolve(lots.filter((entry) => !provider || entry.provider === provider));
+    });
+    prisma.discoveredLot.count.mockResolvedValue(60);
+
+    const result = await service.inventory({ view: 'usa', page: 3, pageSize: 10 });
+
+    expect(result.items).toHaveLength(10);
+    expect(prisma.discoveredLot.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 30 }));
+  });
+
+  it('rejects an unbounded catalog page before loading provider prefixes', async () => {
+    await expect(
+      service.inventory({ view: 'usa', page: 101, pageSize: 50 }),
+    ).rejects.toThrow();
+    expect(prisma.discoveredLot.findMany).not.toHaveBeenCalled();
+  });
+
+  it('routes provider auction bids into assistance instead of creating a local bid', async () => {
+    prisma.vehicle.findUnique.mockResolvedValue({
+      id: 'vehicle-1',
+      sourceType: 'COPART',
+      priceAmount: 1000,
+      availabilityStatus: 'AVAILABLE',
+    });
+
+    await expect(service.placeBid('vehicle-1', 'user-1', 1100)).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'ACTION_REQUIRES_ASSISTANCE' }),
+    });
+  });
+
+  it('derives a missing state facet from the provider location label', async () => {
+    prisma.discoveredLot.findMany.mockResolvedValue([
+      lot({
+        locationState: null,
+        locationDisplay: 'West Palm Beach (FL)',
+      }),
+    ]);
+
+    const result = await service.inventoryFilterOptions({ view: 'usa' });
+
+    expect(result.options.locationStates).toEqual([
+      { value: 'FL', label: 'FL', count: 1 },
+    ]);
+  });
+
+  it('collapses repeated whitespace in provider taxonomy facets', async () => {
+    prisma.discoveredLot.findMany.mockResolvedValue([
+      lot({ bodyStyle: 'Sport  Utility' }),
+      lot({ externalLotId: 'lot-2', bodyStyle: 'Sport Utility' }),
+    ]);
+
+    const result = await service.inventoryFilterOptions({ view: 'usa' });
+
+    expect(result.options.bodyTypes).toEqual([
+      { value: 'Sport Utility', label: 'Sport Utility', count: 2 },
+    ]);
   });
 
   it('uses the same identity projection for faceted filter counts', async () => {
