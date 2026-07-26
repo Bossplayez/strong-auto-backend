@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { HotOffersService } from './hot-offers.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 import { BadRequestException } from '@nestjs/common';
 
 // We test policy validation, weight validation, and tier classification logic.
@@ -24,12 +25,16 @@ describe('HotOffersService — Policy Validation', () => {
       auctionLotFavorite: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      aiLotAnalysis: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
 
     const module = await Test.createTestingModule({
       providers: [
         HotOffersService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
       ],
     }).compile();
 

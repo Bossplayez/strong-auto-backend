@@ -1,6 +1,8 @@
-import { Controller, Get, Put, Post, Delete, Body, Param, UseGuards, UseFilters, Req } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, Headers, Param, Query, UseGuards, UseFilters } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { HotOffersService, HotOfferPolicy } from './hot-offers.service';
+import { AiLotReviewDecisionState } from '@prisma/client';
+import { AiReviewDecisionDto, SubmitAiLotAnalysisDto } from './dto/ai-hot-offers.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -37,6 +39,33 @@ export class HotOffersPersonalController {
   }
 }
 
+@ApiTags('AI Hot Offers Worker')
+@Controller('worker/ai-hot-offers')
+export class HotOffersWorkerController {
+  constructor(private readonly hotOffersService: HotOffersService) {}
+
+  @Get('candidates')
+  @ApiOperation({ summary: 'Worker: list current Buy Now lots with saved media for AI review' })
+  async getCandidates(
+    @Headers('x-ai-worker-token') token: string | undefined,
+    @Query('limit') limit?: string,
+  ) {
+    this.hotOffersService.assertWorkerToken(token);
+    const parsed = Number(limit);
+    return this.hotOffersService.getAiReviewCandidates(Number.isFinite(parsed) ? Math.floor(parsed) : 20);
+  }
+
+  @Post('analyses')
+  @ApiOperation({ summary: 'Worker: submit a bounded advisory analysis for one eligible lot' })
+  async submitAnalysis(
+    @Headers('x-ai-worker-token') token: string | undefined,
+    @Body() dto: SubmitAiLotAnalysisDto,
+  ) {
+    this.hotOffersService.assertWorkerToken(token);
+    return this.hotOffersService.submitAiAnalysis(dto);
+  }
+}
+
 // ── Admin endpoints (ADMIN/MANAGER) ──
 
 @ApiTags('Admin Hot Offers')
@@ -52,6 +81,42 @@ export class HotOffersAdminController {
   @ApiOperation({ summary: 'Admin: get hot offers policy, candidates, overrides' })
   async getAdmin() {
     return this.hotOffersService.getAdminHotOffers();
+  }
+
+  @Get('reviews')
+  @ApiOperation({ summary: 'Admin: list AI lot analyses and their latest review decision' })
+  async listReviews(
+    @Query('decision') decision?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const allowed = new Set(['PENDING', ...Object.values(AiLotReviewDecisionState)]);
+    const normalized = decision && allowed.has(decision)
+      ? decision as AiLotReviewDecisionState | 'PENDING'
+      : undefined;
+    const parsedPage = Number(page);
+    const parsedPageSize = Number(pageSize);
+    return this.hotOffersService.listAiReviews(
+      normalized,
+      Number.isFinite(parsedPage) && parsedPage > 0 ? Math.floor(parsedPage) : 1,
+      Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? Math.min(Math.floor(parsedPageSize), 100) : 20,
+    );
+  }
+
+  @Get('reviews/:analysisId')
+  @ApiOperation({ summary: 'Admin: get one AI lot analysis with decision history' })
+  async getReview(@Param('analysisId') analysisId: string) {
+    return this.hotOffersService.getAiReviewDetail(analysisId);
+  }
+
+  @Post('reviews/:analysisId/decisions')
+  @ApiOperation({ summary: 'Admin: append a review decision and update the current decision' })
+  async decideReview(
+    @Param('analysisId') analysisId: string,
+    @Body() dto: AiReviewDecisionDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.hotOffersService.decideAiReview(analysisId, dto, userId);
   }
 
   @Put('policy')

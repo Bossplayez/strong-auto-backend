@@ -37,6 +37,7 @@ model User {
   siteSettingsUpdated     SiteSetting[]            @relation("SiteSettingUpdater")
   profile                 UserProfile?
   userRoles               UserRole[]
+  aiLotReviewDecisions    AiLotReviewDecision[]   @relation("AiLotDecisionActor")
 
   @@map("users")
 }
@@ -896,9 +897,58 @@ model DiscoveredLot {
   @@index([lifecycleState, freshnessState])
   auctionLotFavorites  AuctionLotFavorite[]
   assistanceLeads      Lead[]                @relation("AuctionAssistanceLead")
+  aiHotOfferAnalyses   AiLotAnalysis[]
+  aiLotReviewDecisions AiLotReviewDecision[]
 
   @@index([firstSeenAt], map: "discovered_lots_first_seen_idx")
   @@map("discovered_lots")
+}
+
+/// Advisory AI output for a saved auction lot. It never changes provider facts.
+model AiLotAnalysis {
+  id              String        @id @default(uuid()) @map("id")
+  discoveredLotId String        @map("discovered_lot_id")
+  modelIdentifier String        @map("model_identifier")
+  policyVersion   String        @map("policy_version")
+  verdict         AiLotVerdict @map("verdict")
+  confidence      Decimal       @map("confidence") @db.Decimal(4, 3)
+  reasonsJson     Json          @map("reasons_json")
+  visibleRisksJson Json         @map("visible_risks_json")
+  imageIndexesJson Json         @map("image_indexes_json")
+  providerFactsJson Json        @map("provider_facts_json")
+  sourcePayloadHash String?     @map("source_payload_hash")
+  sourceFactsDigest String      @map("source_facts_digest")
+  mediaCount      Int           @map("media_count")
+  payloadDigest   String        @map("payload_digest")
+  contractVersion String        @default("ai-hot-offer-review-v1") @map("contract_version")
+  currentDecisionId String?     @unique @map("current_decision_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  discoveredLot   DiscoveredLot @relation(fields: [discoveredLotId], references: [id], onDelete: Restrict)
+  decisions       AiLotReviewDecision[] @relation("AiLotAnalysisDecisions")
+  currentDecision AiLotReviewDecision? @relation("AiLotAnalysisCurrentDecision", fields: [currentDecisionId], references: [id], onDelete: Restrict)
+
+  @@unique([discoveredLotId, modelIdentifier, policyVersion, sourceFactsDigest])
+  @@index([discoveredLotId, createdAt])
+  @@map("ai_lot_analyses")
+}
+
+/// Append-only administrator publication decisions for advisory AI analyses.
+model AiLotReviewDecision {
+  id              String                  @id @default(uuid()) @map("id")
+  analysisId      String                  @map("analysis_id")
+  discoveredLotId String                  @map("discovered_lot_id")
+  decision        AiLotReviewDecisionState @map("decision")
+  note            String?                 @map("note")
+  decidedByUserId String                  @map("decided_by_user_id")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  analysis        AiLotAnalysis           @relation("AiLotAnalysisDecisions", fields: [analysisId], references: [id], onDelete: Restrict)
+  discoveredLot   DiscoveredLot           @relation(fields: [discoveredLotId], references: [id], onDelete: Restrict)
+  decidedBy       User                    @relation("AiLotDecisionActor", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  currentForAnalysis AiLotAnalysis?       @relation("AiLotAnalysisCurrentDecision")
+
+  @@index([analysisId, createdAt])
+  @@index([discoveredLotId, createdAt])
+  @@map("ai_lot_review_decisions")
 }
 
 /// Short-lived search result cache keyed by normalized query fingerprint.
@@ -987,6 +1037,18 @@ enum LeadType {
 enum AssistanceRequestStatus {
   NEW
   COMPLETED
+}
+
+enum AiLotVerdict {
+  RECOMMEND
+  CAUTION
+  REJECT
+}
+
+enum AiLotReviewDecisionState {
+  CONFIRMED
+  REJECTED
+  NEEDS_REVIEW
 }
 
 enum LeadStatus {

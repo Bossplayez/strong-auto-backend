@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { HotOffersService } from './hot-offers.service';
-import { HotOffersPublicController, HotOffersPersonalController, HotOffersAdminController } from './hot-offers.controller';
+import { HotOffersPublicController, HotOffersPersonalController, HotOffersAdminController, HotOffersWorkerController } from './hot-offers.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [HotOffersPublicController, HotOffersPersonalController, HotOffersAdminController],
+  controllers: [HotOffersPublicController, HotOffersPersonalController, HotOffersAdminController, HotOffersWorkerController],
   providers: [HotOffersService],
   exports: [HotOffersService],
 })

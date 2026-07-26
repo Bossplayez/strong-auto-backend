@@ -61,6 +61,7 @@ const envSchema = z.object({
 
   // ── External APIs ────────────────────────────────────────
   RAPIDAPI_KEY: z.string().optional(),
+  AI_HOT_OFFERS_WORKER_TOKEN: z.string().min(16).optional(),
 
   // ── Sentry ───────────────────────────────────────────────
   SENTRY_DSN: z

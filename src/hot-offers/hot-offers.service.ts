@@ -12,15 +12,19 @@
  * Reads only already-saved data — no parser/scheduler calls.
  */
 
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AiLotReviewDecisionState, Prisma } from '@prisma/client';
+import { createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { evaluateCatalogQuality, MIN_CATALOG_YEAR } from '../auction-lot/catalog-quality';
 import { deriveAuctionLifecycle, evaluateAuctionTruth, hasFreshAuctionPrice, publicCatalogWhere } from '../auction-lot/public-eligibility';
-import type { DiscoveredLot } from '@prisma/client';
-import { isPassengerMarketScope } from '../auction-lot/market-scope';
+import { isPassengerMarketScope, passengerMarketScopeWhere } from '../auction-lot/market-scope';
+import { AiReviewDecisionDto, SubmitAiLotAnalysisDto } from './dto/ai-hot-offers.dto';
 
 /** Minimal lot shape for hot-offers scoring/ranking. */
 interface HotOfferCandidateLot {
+  id: string;
   provider: string;
   externalLotId: string;
   title: string;
@@ -57,6 +61,7 @@ interface HotOfferCandidateLot {
   loss: string | null;
   saleDocumentName: string | null;
   saleDocumentType: string | null;
+  sourcePayloadHash: string | null;
 }
 
 // ── Types ──────────────────────────────────────────────────────
@@ -256,6 +261,7 @@ function normalize(value: number, min: number, max: number): number {
 // ── Select fields for candidate query ──────────────────────────
 
 const CANDIDATE_SELECT = {
+  id: true,
   provider: true,
   externalLotId: true,
   title: true,
@@ -292,13 +298,343 @@ const CANDIDATE_SELECT = {
   loss: true,
   saleDocumentName: true,
   saleDocumentType: true,
+  sourcePayloadHash: true,
 } as const;
 
 // ── Service ────────────────────────────────────────────────────
 
 @Injectable()
 export class HotOffersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  assertWorkerToken(token: string | undefined): void {
+    const configured = this.config.get<string>('AI_HOT_OFFERS_WORKER_TOKEN')?.trim();
+    if (!configured) {
+      throw new ServiceUnavailableException('AI review worker is not configured.');
+    }
+    if (!token) {
+      throw new ForbiddenException('Invalid AI review worker credentials.');
+    }
+    const expected = Buffer.from(configured);
+    const received = Buffer.from(token);
+    if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
+      throw new ForbiddenException('Invalid AI review worker credentials.');
+    }
+  }
+
+  async getAiReviewCandidates(limit = 20) {
+    const now = new Date();
+    const lots = await this.findAiCandidateLots(now, Math.min(Math.max(limit, 1), 50));
+    return {
+      items: lots.map((lot) => ({
+        lotId: lot.id,
+        provider: lot.provider,
+        externalLotId: lot.externalLotId,
+        title: lot.title,
+        make: lot.make,
+        model: lot.model,
+        year: lot.year,
+        buyNowUsd: Number(lot.buyNowUsd),
+        auctionAt: lot.auctionTime?.toISOString() ?? null,
+        bodyStyle: lot.bodyStyle,
+        primaryDamage: lot.primaryDamage,
+        secondaryDamage: lot.secondaryDamage,
+        locationDisplay: lot.locationDisplay,
+        mediaUrls: lot.mediaUrls,
+      })),
+    };
+  }
+
+  async submitAiAnalysis(dto: SubmitAiLotAnalysisDto) {
+    this.validateAnalysisIndexes(dto);
+    const lot = await this.prisma.discoveredLot.findUnique({
+      where: { id: dto.lotId },
+      select: CANDIDATE_SELECT,
+    });
+    const now = new Date();
+    if (!lot || !this.isAiCandidateEligible(lot, now)) {
+      throw new BadRequestException('Lot is not eligible for AI review.');
+    }
+
+    this.validateAnalysisImageRange(dto, lot.mediaUrls.length);
+    const providerFacts = this.providerFactsSnapshot(lot);
+    const sourceFactsDigest = this.digest(providerFacts);
+    const payloadDigest = createHash('sha256')
+      .update(JSON.stringify({
+        verdict: dto.verdict,
+        confidence: dto.confidence,
+        reasons: dto.reasons,
+        visibleRisks: dto.visibleRisks,
+        referencedImageIndexes: dto.referencedImageIndexes,
+      }))
+      .digest('hex');
+    const unique = {
+      discoveredLotId_modelIdentifier_policyVersion_sourceFactsDigest: {
+        discoveredLotId: lot.id,
+        modelIdentifier: dto.modelIdentifier,
+        policyVersion: dto.policyVersion,
+        sourceFactsDigest,
+      },
+    };
+    const existing = await this.prisma.aiLotAnalysis.findUnique({ where: unique });
+    if (existing) {
+      if (existing.payloadDigest !== payloadDigest) {
+        throw new ConflictException('Analysis identity already exists with a different payload.');
+      }
+      return this.analysisSummary(existing);
+    }
+
+    try {
+      const analysis = await this.prisma.aiLotAnalysis.create({
+        data: {
+          discoveredLotId: lot.id,
+          modelIdentifier: dto.modelIdentifier,
+          policyVersion: dto.policyVersion,
+          verdict: dto.verdict,
+          confidence: new Prisma.Decimal(dto.confidence),
+          reasonsJson: dto.reasons as Prisma.InputJsonValue,
+          visibleRisksJson: dto.visibleRisks as unknown as Prisma.InputJsonValue,
+          imageIndexesJson: dto.referencedImageIndexes as Prisma.InputJsonValue,
+          mediaCount: lot.mediaUrls.length,
+          providerFactsJson: providerFacts,
+          sourcePayloadHash: lot.sourcePayloadHash,
+          sourceFactsDigest,
+          payloadDigest,
+        },
+      });
+      return this.analysisSummary(analysis);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const duplicate = await this.prisma.aiLotAnalysis.findUnique({ where: unique });
+        if (duplicate?.payloadDigest === payloadDigest) return this.analysisSummary(duplicate);
+        throw new ConflictException('Analysis identity already exists with a different payload.');
+      }
+      throw error;
+    }
+  }
+
+  async listAiReviews(decision?: AiLotReviewDecisionState | 'PENDING', page = 1, pageSize = 20) {
+    const where: Prisma.AiLotAnalysisWhereInput = decision === 'PENDING'
+      ? { currentDecisionId: null }
+      : decision
+      ? { currentDecision: { is: { decision } } }
+      : {};
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.aiLotAnalysis.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          discoveredLot: { select: CANDIDATE_SELECT },
+          currentDecision: { include: { decidedBy: { select: { id: true, email: true } } } },
+        },
+      }),
+      this.prisma.aiLotAnalysis.count({ where }),
+    ]);
+    return {
+      items: items.map((item) => this.adminReviewSummary(item)),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async getAiReviewDetail(analysisId: string) {
+    const analysis = await this.prisma.aiLotAnalysis.findUnique({
+      where: { id: analysisId },
+      include: {
+        discoveredLot: { select: CANDIDATE_SELECT },
+        currentDecision: { include: { decidedBy: { select: { id: true, email: true } } } },
+        decisions: {
+          orderBy: { createdAt: 'desc' },
+          include: { decidedBy: { select: { id: true, email: true } } },
+        },
+      },
+    });
+    if (!analysis) throw new NotFoundException('AI analysis was not found.');
+    return {
+      ...this.adminReviewSummary(analysis),
+      history: analysis.decisions.map((entry) => this.decisionSummary(entry)),
+    };
+  }
+
+  async decideAiReview(analysisId: string, dto: AiReviewDecisionDto, userId: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const analysis = await tx.aiLotAnalysis.findUnique({
+        where: { id: analysisId },
+        include: { discoveredLot: { select: CANDIDATE_SELECT } },
+      });
+      if (!analysis) throw new NotFoundException('AI analysis was not found.');
+      if (dto.decision === AiLotReviewDecisionState.CONFIRMED) {
+        if (!this.isAiCandidateEligible(analysis.discoveredLot, new Date())) {
+          throw new BadRequestException('Lot is no longer eligible for public Hot Offers.');
+        }
+        if (!this.matchesAnalysisSource(analysis, analysis.discoveredLot)) {
+          throw new BadRequestException('Lot facts or media changed after AI analysis. Submit a new analysis before confirmation.');
+        }
+      }
+      const created = await tx.aiLotReviewDecision.create({
+        data: {
+          analysisId: analysis.id,
+          discoveredLotId: analysis.discoveredLotId,
+          decision: dto.decision,
+          note: dto.note?.trim() || null,
+          decidedByUserId: userId,
+        },
+      });
+      await tx.aiLotAnalysis.update({
+        where: { id: analysis.id },
+        data: { currentDecisionId: created.id },
+      });
+      return created.id;
+    });
+    return this.getAiReviewDetailByDecision(result);
+  }
+
+  private async findAiCandidateLots(now: Date, limit: number): Promise<HotOfferCandidateLot[]> {
+    const rows = await this.prisma.discoveredLot.findMany({
+      where: publicCatalogWhere({
+        AND: [
+          passengerMarketScopeWhere(),
+          { isBuyNow: true, buyNowUsd: { gt: 0 } },
+          { mediaUrls: { isEmpty: false } },
+        ],
+      }, now),
+      select: CANDIDATE_SELECT,
+      orderBy: [{ auctionTime: 'asc' }, { id: 'asc' }],
+      take: Math.max(limit * 4, 50),
+    });
+    return rows.filter((lot) => this.isAiCandidateEligible(lot, now)).slice(0, limit);
+  }
+
+  private isAiCandidateEligible(lot: HotOfferCandidateLot, now: Date): boolean {
+    return evaluateAuctionTruth(lot, now).publicVisible
+      && isPassengerVehicle(lot)
+      && lot.isBuyNow
+      && Number(lot.buyNowUsd) > 0
+      && lot.mediaUrls.length > 0
+      && hasFreshAuctionPrice(lot, now)
+      && evaluateCatalogQuality(lot).include;
+  }
+
+  private validateAnalysisIndexes(dto: SubmitAiLotAnalysisDto): void {
+    const imageCount = dto.referencedImageIndexes.length;
+    if (new Set(dto.referencedImageIndexes).size !== imageCount) {
+      throw new BadRequestException('Referenced image indexes must be unique.');
+    }
+    const riskIndexes = dto.visibleRisks.flatMap((risk) => risk.imageIndexes);
+    if (riskIndexes.some((index) => !dto.referencedImageIndexes.includes(index))) {
+      throw new BadRequestException('Visible risk image indexes must be referenced by the analysis.');
+    }
+  }
+
+  private validateAnalysisImageRange(dto: SubmitAiLotAnalysisDto, mediaCount: number): void {
+    const indexes = [
+      ...dto.referencedImageIndexes,
+      ...dto.visibleRisks.flatMap((risk) => risk.imageIndexes),
+    ];
+    if (indexes.some((index) => index >= mediaCount)) {
+      throw new BadRequestException('Analysis image indexes must reference saved lot media.');
+    }
+  }
+
+  private providerFactsSnapshot(lot: HotOfferCandidateLot) {
+    return {
+      provider: lot.provider,
+      externalLotId: lot.externalLotId,
+      title: lot.title,
+      make: lot.make,
+      model: lot.model,
+      year: lot.year,
+      buyNowUsd: Number(lot.buyNowUsd),
+      auctionAt: lot.auctionTime?.toISOString() ?? null,
+      bodyStyle: lot.bodyStyle,
+      primaryDamage: lot.primaryDamage,
+      secondaryDamage: lot.secondaryDamage,
+      locationDisplay: lot.locationDisplay,
+      mediaUrls: lot.mediaUrls,
+      sourcePayloadHash: lot.sourcePayloadHash,
+    };
+  }
+
+  private digest(value: unknown): string {
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  }
+
+  private matchesAnalysisSource(analysis: { sourcePayloadHash: string | null; sourceFactsDigest: string; mediaCount: number }, lot: HotOfferCandidateLot): boolean {
+    return analysis.mediaCount === lot.mediaUrls.length
+      && analysis.sourcePayloadHash === lot.sourcePayloadHash
+      && analysis.sourceFactsDigest === this.digest(this.providerFactsSnapshot(lot));
+  }
+
+  private analysisSummary(analysis: any) {
+    return {
+      id: analysis.id,
+      lotId: analysis.discoveredLotId,
+      modelIdentifier: analysis.modelIdentifier,
+      policyVersion: analysis.policyVersion,
+      contractVersion: analysis.contractVersion,
+      verdict: analysis.verdict,
+      confidence: Number(analysis.confidence),
+      reasons: analysis.reasonsJson,
+      visibleRisks: analysis.visibleRisksJson,
+      referencedImageIndexes: analysis.imageIndexesJson,
+      mediaCount: analysis.mediaCount,
+      sourcePayloadHash: analysis.sourcePayloadHash,
+      sourceFactsDigest: analysis.sourceFactsDigest,
+      createdAt: analysis.createdAt,
+    };
+  }
+
+  private decisionSummary(entry: any) {
+    return {
+      id: entry.id,
+      decision: entry.decision,
+      note: entry.note,
+      createdAt: entry.createdAt,
+      decidedBy: entry.decidedBy ? { id: entry.decidedBy.id, email: entry.decidedBy.email } : null,
+    };
+  }
+
+  private adminReviewSummary(analysis: any) {
+    return {
+      analysis: this.analysisSummary(analysis),
+      lot: analysis.discoveredLot ? {
+        lotId: analysis.discoveredLot.id,
+        provider: analysis.discoveredLot.provider,
+        externalLotId: analysis.discoveredLot.externalLotId,
+        title: analysis.discoveredLot.title,
+        make: analysis.discoveredLot.make,
+        model: analysis.discoveredLot.model,
+        year: analysis.discoveredLot.year,
+        currentBidUsd: analysis.discoveredLot.currentBidUsd == null ? null : Number(analysis.discoveredLot.currentBidUsd),
+        buyNowUsd: analysis.discoveredLot.buyNowUsd == null ? null : Number(analysis.discoveredLot.buyNowUsd),
+        auctionAt: analysis.discoveredLot.auctionTime?.toISOString() ?? null,
+        bodyStyle: analysis.discoveredLot.bodyStyle,
+        odometerKm: analysis.discoveredLot.odometerKm,
+        primaryDamage: analysis.discoveredLot.primaryDamage,
+        secondaryDamage: analysis.discoveredLot.secondaryDamage,
+        locationState: analysis.discoveredLot.locationState,
+        locationDisplay: analysis.discoveredLot.locationDisplay,
+        mediaUrls: analysis.discoveredLot.mediaUrls,
+        lifecycleState: analysis.discoveredLot.lifecycleState,
+      } : null,
+      latestDecision: analysis.currentDecision ? this.decisionSummary(analysis.currentDecision) : null,
+    };
+  }
+
+  private async getAiReviewDetailByDecision(decisionId: string) {
+    const decision = await this.prisma.aiLotReviewDecision.findUnique({
+      where: { id: decisionId },
+      select: { analysisId: true },
+    });
+    if (!decision) throw new NotFoundException('AI review decision was not found.');
+    return this.getAiReviewDetail(decision.analysisId);
+  }
 
   // ── Policy management ─────────────────────────────────────
 
@@ -410,8 +746,9 @@ export class HotOffersService {
 
     const snapshotFresh = snapshot && new Date(snapshot.validUntil).getTime() > now.getTime();
 
-    // Build tiers (always needed for re-validation)
-    const tiers = await this.buildTiers(policy, overrides, now);
+    // Public cards are a strict subset: an administrator must have confirmed
+    // an analysis whose captured provider facts still match the current lot.
+    const tiers = await this.buildConfirmedPublicTiers(policy, overrides, now);
 
     // Determine the authoritative timestamp pair for this response.
     // When snapshot is fresh, reuse its timestamps as-is (do NOT extend).
@@ -525,6 +862,54 @@ export class HotOffersService {
     };
   }
 
+  private async buildConfirmedPublicTiers(policy: HotOfferPolicy, overrides: HotOfferOverride[], now: Date) {
+    const analyses = await this.getCurrentConfirmedAiAnalyses(now);
+    const excluded = new Set(
+      overrides.filter((override) => override.action === 'exclude')
+        .map((override) => `${override.provider}:${override.externalLotId}`),
+    );
+    const grouped: Record<HotOfferTier, HotOfferCandidate[]> = { urgent: [], 'this-week': [] };
+
+    for (const analysis of analyses) {
+      const lot = analysis.discoveredLot;
+      const tier = classifyTier(lot.auctionTime, now);
+      if (!tier || excluded.has(`${lot.provider}:${lot.externalLotId}`)) continue;
+      const candidate = this.scoreLot(lot, policy, now, tier);
+      if (!candidate.buyNowAvailable || !candidate.buyNowUsd || !this.stillEligible(candidate, tier, now)) continue;
+      grouped[tier].push(candidate);
+    }
+
+    const orderTier = (tier: HotOfferTier) => {
+      const pins = overrides
+        .filter((override) => override.action === 'pin' && override.tier === tier)
+        .sort((left, right) => (left.position ?? 99) - (right.position ?? 99));
+      const ordered: HotOfferCandidate[] = [];
+      const used = new Set<string>();
+      for (const pin of pins) {
+        const candidate = grouped[tier].find((item) => item.provider === pin.provider && item.externalLotId === pin.externalLotId);
+        if (!candidate) continue;
+        candidate.manualPin = true;
+        ordered.push(candidate);
+        used.add(`${candidate.provider}:${candidate.externalLotId}`);
+      }
+      for (const candidate of grouped[tier]) {
+        const key = `${candidate.provider}:${candidate.externalLotId}`;
+        if (!used.has(key)) {
+          ordered.push(candidate);
+          used.add(key);
+        }
+      }
+      return ordered;
+    };
+
+    const urgent = orderTier('urgent');
+    const thisWeek = orderTier('this-week');
+    return {
+      urgent: { items: urgent.map((candidate) => this.toPublicItem(candidate, candidate.manualPin)), allCandidates: urgent },
+      'this-week': { items: thisWeek.map((candidate) => this.toPublicItem(candidate, candidate.manualPin)), allCandidates: thisWeek },
+    };
+  }
+
   // ── Personal recommendations ──────────────────────────────
 
   async getPersonalHotOffers(userId: string): Promise<{ items: PublicHotOfferItem[]; emptyState: string | null }> {
@@ -561,39 +946,19 @@ export class HotOffersService {
     const excluded = new Set(overrides.filter(o => o.action === 'exclude').map(o => `${o.provider}:${o.externalLotId}`));
 
     const now = new Date();
-    const urgentEnd = new Date(now.getTime() + WEEK_WINDOW_HOURS * 60 * 60 * 1000);
-
-    // Query candidates matching user signals
-    const candidates = await this.prisma.discoveredLot.findMany({
-      where: {
-        ...publicCatalogWhere({
-          auctionTime: { gte: now, lte: urgentEnd },
-          OR: [
-            ...(makes.size > 0 ? [{ make: { in: [...makes].map(m => m.charAt(0).toUpperCase() + m.slice(1)) } }] : []),
-            ...(bodyTypes.size > 0 ? [{ bodyStyle: { in: [...bodyTypes].map(b => b.charAt(0).toUpperCase() + b.slice(1)) } }] : []),
-          ],
-        }, now),
-      },
-      select: CANDIDATE_SELECT,
-      take: 100,
-      orderBy: { auctionTime: 'asc' },
-    });
-
-    const scored = candidates
+    const scored = (await this.getCurrentConfirmedAiAnalyses(now))
+      .map((analysis) => analysis.discoveredLot)
       .filter(lot => !excluded.has(`${lot.provider}:${lot.externalLotId}`))
-      .filter(lot => isPassengerVehicle(lot))
-      .filter(lot => hasRealPrice(lot))
-      .filter(lot => hasFreshAuctionPrice(lot, now))
+      .filter(() => makes.size > 0 || models.size > 0 || bodyTypes.size > 0)
+      .filter(lot => makes.has(lot.make.toLowerCase()) || models.has(lot.model.toLowerCase()) || bodyTypes.has((lot.bodyStyle ?? '').toLowerCase()))
       .filter(lot => {
-        const q = evaluateCatalogQuality(lot);
-        if (!q.include) return false;
         if (policy.extraDamageExclusions.length > 0) {
           const dmgText = [lot.primaryDamage, lot.secondaryDamage].filter(Boolean).join(' ');
           return !policy.extraDamageExclusions.some(term => dmgText.toLowerCase().includes(term.toLowerCase()));
         }
         return true;
       })
-      .map(lot => this.scoreLot(lot, policy, now, 'urgent'))
+      .map(lot => this.scoreLot(lot, policy, now, classifyTier(lot.auctionTime, now) ?? 'urgent'))
       .sort((a, b) => b.score - a.score)
       .slice(0, 6);
 
@@ -604,6 +969,22 @@ export class HotOffersService {
   }
 
   // ── Private helpers ───────────────────────────────────────
+
+  private async getCurrentConfirmedAiAnalyses(now: Date) {
+    const analyses = await this.prisma.aiLotAnalysis.findMany({
+      where: { currentDecision: { is: { decision: AiLotReviewDecisionState.CONFIRMED } } },
+      include: { discoveredLot: { select: CANDIDATE_SELECT } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    const seenLots = new Set<string>();
+    return analyses.filter((analysis) => {
+      const lot = analysis.discoveredLot;
+      if (seenLots.has(lot.id) || !this.isAiCandidateEligible(lot, now) || !this.matchesAnalysisSource(analysis, lot)) return false;
+      seenLots.add(lot.id);
+      return true;
+    });
+  }
 
   private async getPolicyRaw(): Promise<HotOfferPolicy & { overrides?: HotOfferOverride[] }> {
     const row = await this.prisma.siteSetting.findUnique({ where: { key: POLICY_KEY } });
