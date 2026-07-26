@@ -42,6 +42,14 @@ function normalizeRunCondition(raw: string | null): string | null {
   return trimmed;
 }
 
+function allowsHistoricalExactLookup(
+  truthReasonCode: string,
+  qualityReasonCode: string | null,
+): boolean {
+  const historical = truthReasonCode === 'TERMINAL_RESULT' || truthReasonCode === 'RESULT_PENDING';
+  return historical && qualityReasonCode !== 'OUTSIDE_MARKET_SCOPE' && qualityReasonCode !== 'COMMERCIAL_VEHICLE';
+}
+
 @Injectable()
 export class AuctionLotsService {
   constructor(
@@ -240,7 +248,7 @@ export class AuctionLotsService {
 
     // Quality evaluation for public visibility
     const quality = evaluateCatalogQuality(lot);
-    const historicalExactLookup = truth.reasonCode === 'TERMINAL_RESULT' || truth.reasonCode === 'RESULT_PENDING';
+    const historicalExactLookup = allowsHistoricalExactLookup(truth.reasonCode, quality.reasonCode);
     if (!quality.include && !historicalExactLookup) {
       throw new NotFoundException({
         code: 'AUCTION_LOT_NOT_AVAILABLE',
@@ -386,8 +394,9 @@ export class AuctionLotsService {
     const items = lots.flatMap(lot => {
       const projected = this.publicAuctionItem(lot, now);
       const truth = evaluateAuctionTruth(lot, now);
-      const historicalExactLookup = truth.reasonCode === 'TERMINAL_RESULT' || truth.reasonCode === 'RESULT_PENDING';
-      if (!historicalExactLookup && (!truth.publicVisible || !evaluateCatalogQuality(lot).include)) return [];
+      const quality = evaluateCatalogQuality(lot);
+      const historicalExactLookup = allowsHistoricalExactLookup(truth.reasonCode, quality.reasonCode);
+      if (!historicalExactLookup && (!truth.publicVisible || !quality.include)) return [];
       return [{
         ...projected,
         lifecycle: deriveAuctionLifecycle(lot, now),
@@ -561,6 +570,17 @@ export class AuctionLotsService {
         }
         return 'unclassified' as const;
       };
+      const operatorGroup = (lot: (typeof lots)[number]) => {
+        const truth = evaluateAuctionTruth(lot, asOf);
+        const quality = evaluateCatalogQuality(lot);
+        if (['SOLD', 'UNSOLD', 'REMOVED'].includes(lot.providerResultState)) return 'archivedConfirmed' as const;
+        if (truth.reasonCode === 'RESULT_PENDING') return 'awaitingResult' as const;
+        if (!quality.include) return 'excludedByPolicy' as const;
+        if (truth.publicVisible) return 'publicNow' as const;
+        const schedule = computeProjectionV2({ auctionTime: lot.auctionTime, providerResultState: lot.providerResultState, listingObservedAt: lot.listingObservedAt, priceObservedAt: lot.priceObservedAt, lastProviderUpdateAt: lot.lastProviderUpdateAt, availabilityConfirmedAt: lot.availabilityConfirmed ? lot.lastSeenAt : null, currentBidUsd: lot.currentBidUsd, buyNowUsd: lot.buyNowUsd }, asOf).catalogScheduleState;
+        if (schedule === 'SCHEDULED_OUT_OF_HORIZON') return 'outsideWindow' as const;
+        return 'missingCriticalData' as const;
+      };
       const partition = (provider?: string) => {
         const selected = provider ? lots.filter((lot) => lot.provider === provider) : lots;
         const classes = selected.map(classify);
@@ -574,6 +594,17 @@ export class AuctionLotsService {
       };
       const importedIds = new Set(lots.map((lot) => lot.vehicleId).filter((id): id is string => Boolean(id)));
       const imported = vehicles.filter((vehicle) => importedIds.has(vehicle.id));
+      const operatorGroups = (provider?: string) => {
+        const groups = (provider ? lots.filter((lot) => lot.provider === provider) : lots).map(operatorGroup);
+        return {
+          publicNow: groups.filter((group) => group === 'publicNow').length,
+          awaitingResult: groups.filter((group) => group === 'awaitingResult').length,
+          outsideWindow: groups.filter((group) => group === 'outsideWindow').length,
+          excludedByPolicy: groups.filter((group) => group === 'excludedByPolicy').length,
+          missingCriticalData: groups.filter((group) => group === 'missingCriticalData').length,
+          archivedConfirmed: groups.filter((group) => group === 'archivedConfirmed').length,
+        };
+      };
 
       // Coverage diagnostics: how many active lots have state/city
       const activeLots = lots.filter((lot) => evaluateAuctionTruth(lot, asOf).publicVisible && evaluateCatalogQuality(lot).include);
@@ -589,11 +620,13 @@ export class AuctionLotsService {
     return {
       contractVersion: CONTRACT_VERSION,
       ...partition(),
+      operatorGroups: operatorGroups(),
       importedVehicles: imported.length,
       draftVehicles: imported.filter((vehicle) => vehicle.publicationStatus === 'DRAFT').length,
       publishedVehicles: imported.filter((vehicle) => vehicle.publicationStatus === 'PUBLISHED').length,
       otherImportedVehicles: imported.filter((vehicle) => !['DRAFT', 'PUBLISHED'].includes(vehicle.publicationStatus)).length,
       byProvider: { copart: partition('copart'), iaai: partition('iaai') },
+      operatorGroupsByProvider: { copart: operatorGroups('copart'), iaai: operatorGroups('iaai') },
       coverage: { copart: coverage('copart'), iaai: coverage('iaai'), all: coverage() },
       // Task 053: V2 data health metrics
       dataHealth: this.computeDataHealth(lots, asOf),
@@ -757,6 +790,7 @@ export class AuctionLotsService {
       buyNowUsd: lot.buyNowUsd,
       currentBidUsd: lot.currentBidUsd,
     }, now);
+    const calculator = buildLotCalculatorInput(lot, now);
     return {
       key: projected.key,
       provider: lot.provider,
@@ -796,6 +830,9 @@ export class AuctionLotsService {
       priceObservedAt: lot.priceObservedAt?.toISOString() ?? null,
       publicVisible: truth.publicVisible,
       truthReasonCode: truth.reasonCode,
+      calculatorReadiness: calculator.status === 'available'
+        ? { status: 'input_ready' as const, reason: null }
+        : { status: 'unavailable' as const, reason: calculator.reason },
     };
   }
 

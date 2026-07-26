@@ -14,9 +14,12 @@
  */
 
 // ── Reason codes ──────────────────────────────────────────────
+import { isExplicitNonPassenger, isPassengerMarketScope, passengerMarketScopeWhere } from './market-scope';
+
 export type QualityReasonCode =
   | 'YEAR_TOO_OLD'
   | 'COMMERCIAL_VEHICLE'
+  | 'OUTSIDE_MARKET_SCOPE'
   | 'NON_REPAIRABLE'
   | 'CATASTROPHIC_DAMAGE';
 
@@ -106,10 +109,16 @@ export function evaluateCatalogQuality(lot: QualitySubject): QualityOutcome {
     return { include: false, reasonCode: 'YEAR_TOO_OLD', reason: `Рік випуску менший за ${MIN_CATALOG_YEAR} або невідомий` };
   }
   const vehicleText = [lot.title, lot.bodyStyle, lot.make, lot.model].filter(Boolean).join(' ');
+  if (isExplicitNonPassenger(lot)) {
+    return { include: false, reasonCode: 'COMMERCIAL_VEHICLE', reason: 'Комерційний або спеціальний транспорт' };
+  }
   for (const term of COMMERCIAL_TERMS) {
     if (term.pattern.test(vehicleText)) {
       return { include: false, reasonCode: 'COMMERCIAL_VEHICLE', reason: `Комерційний/спеціальний транспорт (${term.label})` };
     }
+  }
+  if (!isPassengerMarketScope(lot)) {
+    return { include: false, reasonCode: 'OUTSIDE_MARKET_SCOPE', reason: 'Марка або модель поза затвердженим переліком для ринку України' };
   }
   const docText = [lot.saleDocumentName, lot.saleDocumentType, lot.title, lot.bodyStyle].filter(Boolean).join(' ');
   for (const term of NON_REPAIRABLE_TERMS) {
@@ -155,7 +164,12 @@ export function qualityExclusionWhere(): Prisma.DiscoveredLotWhereInput {
   const commercialExclusions = DB_COMMERCIAL_TERMS.map((term) => ({ title: { contains: term, mode: 'insensitive' as const } }));
   const nonRepairableExclusions = DB_NON_REPAIRABLE_TERMS.map((term) => ({ title: { contains: term, mode: 'insensitive' as const } }));
   const catastrophicExclusions = DB_CATASTROPHIC_TERMS.map((term) => ({ primaryDamage: { contains: term, mode: 'insensitive' as const } }));
-  return { NOT: { OR: [...commercialExclusions, ...nonRepairableExclusions, ...catastrophicExclusions] } };
+  return {
+    AND: [
+      { NOT: { OR: [...commercialExclusions, ...nonRepairableExclusions, ...catastrophicExclusions] } },
+      passengerMarketScopeWhere(),
+    ],
+  };
 }
 
 // ── Task 056: Canonical public visibility predicate ─────────────

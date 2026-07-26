@@ -18,6 +18,7 @@ import { normalizeDiscoveredLot } from './lot-normalizer';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
 import { RequestBudgetService } from './request-budget.service';
 import { validateProviderResponse } from './response-validator';
+import { acceptsNewPassengerLot } from '../auction-lot/market-scope';
 
 export type DiscoveryMode = 'discovery' | 'refresh';
 
@@ -25,6 +26,7 @@ export interface DiscoveryParams {
   platform: ProviderId;
   mode?: DiscoveryMode;
   make?: string;
+  model?: string;
   year?: number;
   search?: string;
   buyNow?: boolean;
@@ -74,6 +76,7 @@ export class DiscoveryService {
   buildQueryFingerprint(params: DiscoveryParams): string {
     const parts: string[] = [params.platform];
     if (params.make) parts.push(`make=${params.make.toUpperCase()}`);
+    if (params.model) parts.push(`model=${params.model.toUpperCase()}`);
     if (params.year) parts.push(`year=${params.year}`);
     if (params.search) parts.push(`search=${params.search.toLowerCase()}`);
     if (params.buyNow) parts.push('buy_now=true');
@@ -215,6 +218,7 @@ export class DiscoveryService {
             jobDeadlineMs,
             filters: {
               make: params.make,
+              model: params.model,
               year: params.year,
               search: params.search,
               buy_now: params.buyNow ? true : undefined,
@@ -348,7 +352,7 @@ export class DiscoveryService {
                   if (existing) {
                     await tx.discoveredLot.update({ where: { id: existing.id }, data });
                     updated++;
-                  } else {
+                  } else if (acceptsNewPassengerLot(normalized)) {
                     await tx.discoveredLot.create({
                       data: {
                         provider: params.platform,
@@ -360,7 +364,8 @@ export class DiscoveryService {
                   }
                 }
 
-                if (pageExhausted) {
+                if (pageExhausted && !params.make && !params.model) {
+                  // A make/model partition cannot prove that other provider lots disappeared.
                   // Task 040: unified sweep — any complete lease-fenced exhausted sweep
                   // may increment misses. Partial/failed/quota-blocked cycles never do.
                   await tx.discoveredLot.updateMany({

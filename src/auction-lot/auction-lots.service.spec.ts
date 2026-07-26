@@ -64,6 +64,7 @@ describe('AuctionLotsService unified catalog invariants', () => {
       },
     });
     expect(result.currentExternal + result.staleExternal + result.endedExternal + result.unclassifiedExternal).toBe(result.totalExternal);
+    expect(result.operatorGroups).toEqual({ publicNow: 1, awaitingResult: 0, outsideWindow: 1, excludedByPolicy: 0, missingCriticalData: 1, archivedConfirmed: 1 });
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: 'RepeatableRead',
     });
@@ -176,7 +177,7 @@ describe('AuctionLotsService unified catalog invariants', () => {
     expect(result.items).toHaveLength(1);
     expect(Object.keys(result.items[0]).sort()).toEqual([
       'auctionAt', 'auctionTimestampEvidence', 'availabilityConfirmedAt',
-      'catalogScheduleState', 'consecutiveMisses', 'externalLotId',
+      'calculatorReadiness', 'catalogScheduleState', 'consecutiveMisses', 'externalLotId',
       'firstDiscoveredAt', 'freshness', 'importState', 'isResultPending',
       'isTerminal', 'key', 'lastObservedAt', 'lifecycle', 'linkedVehicle',
       'listingFreshnessV2', 'listingObservedAt', 'locationState', 'make',
@@ -217,6 +218,23 @@ describe('AuctionLotsService unified catalog invariants', () => {
         }) },
       }),
     }));
+  });
+
+  it('does not expose an off-scope historical lot by exact detail or search', async () => {
+    const offScope = lot({
+      make: 'Honda',
+      model: 'Civic',
+      title: '2020 Honda Civic',
+      auctionTime: new Date(Date.now() - 60_000),
+      providerResultState: 'RESULT_PENDING',
+    });
+    prisma.discoveredLot.findUnique.mockResolvedValue(offScope);
+    prisma.discoveredLot.findMany.mockResolvedValue([offScope]);
+
+    await expect(service.findOne('copart', 'lot-1')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'AUCTION_LOT_NOT_AVAILABLE' }),
+    });
+    await expect(service.searchByVinOrLot('lot-1')).resolves.toMatchObject({ items: [], total: 0 });
   });
 
   it('creates an assistance request from the server-confirmed current bid and reuses a recent duplicate', async () => {
@@ -306,7 +324,7 @@ describe('AuctionLotsService unified catalog invariants', () => {
 
 function lot(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'lot-row', provider: 'copart', externalLotId: 'lot-1', state: 'DISCOVERED', title: 'Auction vehicle', make: 'Make', model: 'Model', year: 2020,
+    id: 'lot-row', provider: 'copart', externalLotId: 'lot-1', state: 'DISCOVERED', title: 'Ford Escape', make: 'Ford', model: 'Escape', year: 2020,
     lifecycleState: 'OPEN', freshnessState: 'FRESH', availabilityConfirmed: true, consecutiveMisses: 0, freshnessTier: 'COLD', vehicleId: null,
     vin: null, odometerKm: null, odometerMi: null, bodyStyle: null, fuelType: null, transmission: null, driveType: null, primaryDamage: null,
     locationState: null, locationDisplay: null, auctionState: 'open', auctionTime: null, auctionTimezoneOffset: null, mediaUrls: [], isBuyNow: false,

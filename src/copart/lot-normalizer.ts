@@ -1,3 +1,5 @@
+import { normalizeBodyType } from '../common/normalization';
+
 /**
  * Normalize a raw provider lot into a DiscoveredLot-compatible object.
  * Excludes: seller name, seller phone (sensitive), full raw payload.
@@ -116,6 +118,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+function providerText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (isRecord(value)) {
+    const candidate = value.label ?? value.value ?? value.name ?? value.title;
+    return candidate === null || candidate === undefined ? null : String(candidate);
+  }
+  return String(value);
+}
+
 export function normalizeDiscoveredLot(
   raw: unknown,
   _provider: string,
@@ -128,6 +139,7 @@ export function normalizeDiscoveredLot(
   const pricing = isRecord(raw.pricing) ? raw.pricing : {};
   const condition = isRecord(raw.condition) ? raw.condition : {};
   const specs = isRecord(raw.vehicle_specs) ? raw.vehicle_specs : {};
+  const alternativeSpecs = isRecord(raw.specifications) ? raw.specifications : {};
   const media = isRecord(raw.media) ? raw.media : {};
   const location = isRecord(raw.location) ? raw.location : {};
   const facility = isRecord(raw.facility) ? raw.facility : {};
@@ -189,7 +201,9 @@ export function normalizeDiscoveredLot(
           })()
       : null,
     hasKey: toBool(condition.has_key),
-    bodyStyle: specs.body_style ? String(specs.body_style) : null,
+    bodyStyle: normalizeBodyType(providerText(
+      specs.body_style ?? alternativeSpecs.body_style ?? raw.body_style ?? raw.body_type,
+    )),
     engine: specs.engine ? (typeof specs.engine === 'object' ? JSON.stringify(specs.engine) : String(specs.engine)) : null,
     driveType: specs.drive_type ? String(specs.drive_type) : null,
     exteriorColor: specs.exterior_color ? String(specs.exterior_color) : null,

@@ -5,10 +5,10 @@ import { evaluateCatalogQuality, MIN_CATALOG_YEAR } from './catalog-quality';
 
 const baseLot = {
   year: 2020,
-  bodyStyle: 'SUV',
-  title: '2020 TOYOTA RAV4',
+  bodyStyle: 'SEDAN',
+  title: '2020 TOYOTA CAMRY',
   make: 'TOYOTA',
-  model: 'RAV4',
+  model: 'CAMRY',
   primaryDamage: 'FRONT END',
   secondaryDamage: null,
   loss: null,
@@ -31,6 +31,11 @@ describe('evaluateCatalogQuality (Task 046)', () => {
   it('includes car with vandalism damage', () => {
     const result = evaluateCatalogQuality({ ...baseLot, primaryDamage: 'VANDALISM' });
     expect(result.include).toBe(true);
+  });
+
+  it('excludes an existing passenger model outside the approved public market scope without deleting it', () => {
+    const result = evaluateCatalogQuality({ ...baseLot, make: 'HONDA', model: 'CIVIC', title: '2020 HONDA CIVIC' });
+    expect(result).toMatchObject({ include: false, reasonCode: 'OUTSIDE_MARKET_SCOPE' });
   });
 
   it('includes car with minor dents', () => {

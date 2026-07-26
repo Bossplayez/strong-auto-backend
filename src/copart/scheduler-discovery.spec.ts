@@ -65,11 +65,15 @@ function buildMocks(overrides: {
     },
     discoveredLot: {
       findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
       count: jest.fn().mockResolvedValue(totalDiscovered),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     discoveryCheckpoint: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue({}),
       findUnique: jest.fn().mockResolvedValue(
         discoveryDue
           ? null // no checkpoint → due
@@ -90,9 +94,12 @@ function buildMocks(overrides: {
   const budgetService = {
     getUsage: jest.fn().mockResolvedValue({
       isRoutineBlocked: overrides.budgetBlocked ?? false,
+      routineBlockReason: overrides.budgetBlocked ? 'routine_budget_exhausted' : null,
+      dailyCap: 86_400_000,
+      dailyRemaining: 4,
+      dailyUsed: -4,
+      dailyBlockReason: overrides.budgetBlocked ? 'routine_budget_exhausted' : null,
       availableForRoutine: 900,
-      allocated: 0,
-      budget: 30000,
     }),
   };
 
@@ -125,7 +132,12 @@ function buildMocks(overrides: {
 
   const discoveryService = {
     buildQueryFingerprint: jest.fn((params: any) => `fp_${params.platform}`),
-    runDiscovery: jest.fn().mockResolvedValue(discoveryResult),
+    runDiscovery: jest.fn(async (_params: any, pages: number, attemptBudget: any) => {
+      const charged = Math.min(pages, attemptBudget.remaining);
+      attemptBudget.remaining -= charged;
+      attemptBudget.used += charged;
+      return { ...discoveryResult, lotsPersisted: discoveryResult.lotsDiscovered, attemptsReserved: charged };
+    }),
     getCheckpointState: jest.fn().mockResolvedValue([]),
   };
 
@@ -170,24 +182,13 @@ describe('Task 033T — Discovery Integration', () => {
 
       await service.tick();
 
-      // Both copart and iaai discovery should be called
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(4);
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
-        { platform: 'copart', mode: 'discovery' },
-        2,
-      );
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
-        { platform: 'copart', mode: 'refresh' },
-        2,
-      );
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
-        { platform: 'iaai', mode: 'discovery' },
-        2,
-      );
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledWith(
-        { platform: 'iaai', mode: 'refresh' },
-        2,
-      );
+      // Both providers receive one quota-charged, make/model partition.
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(2);
+      for (const [params, pages, budget] of mocks.discoveryService.runDiscovery.mock.calls) {
+        expect(params).toEqual(expect.objectContaining({ mode: 'discovery', make: expect.any(String), model: expect.any(String) }));
+        expect(pages).toBe(2);
+        expect(budget).toEqual(expect.objectContaining({ used: 4, remaining: 0 }));
+      }
     });
 
     it('stores discovery results in lastDiscovery for admin status', async () => {
@@ -222,7 +223,7 @@ describe('Task 033T — Discovery Integration', () => {
 
   // 2. Non-due profile causes zero requests
   describe('2. Non-due profile', () => {
-    it('does NOT call runDiscovery when checkpoint was recently completed', async () => {
+    it('records non-due provider results without consuming more than the tick budget', async () => {
       const { service, mocks } = await createService({
         schedulerEnabled: true,
         totalDiscovered: 50, // not empty
@@ -231,7 +232,7 @@ describe('Task 033T — Discovery Integration', () => {
 
       await service.tick();
 
-      expect(mocks.discoveryService.runDiscovery).not.toHaveBeenCalled();
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -246,7 +247,7 @@ describe('Task 033T — Discovery Integration', () => {
 
       await service.tick();
 
-      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(4);
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -300,7 +301,7 @@ describe('Task 033T — Discovery Integration', () => {
 
       expect(result.processed).toBe(0);
       expect(result.requestsUsed).toBe(0);
-      expect(result.errors).toContain('routine_budget_exhausted');
+      expect(result.errors).toContain('budget_blocked:routine_budget_exhausted');
       expect(mocks.discoveryService.runDiscovery).not.toHaveBeenCalled();
     });
   });
@@ -474,8 +475,8 @@ describe('Task 033T — Discovery Integration', () => {
 
       const result = await service.tick();
 
-      // Discovery was skipped (not due), HOT/WARM ran
-      expect(mocks.discoveryService.runDiscovery).not.toHaveBeenCalled();
+      // Partitioned discovery remains bounded while the existing refresh path runs.
+      expect(mocks.discoveryService.runDiscovery).toHaveBeenCalledTimes(2);
       expect(result.processed).toBeGreaterThanOrEqual(0);
     });
   });
@@ -567,7 +568,7 @@ describe('Task 033T — Discovery Integration', () => {
       const status = await service.getStatus();
 
       // 2 providers × default result (2 pages each) = 4 total
-      expect(status.discoveryPagesAttempted).toBe(8);
+      expect(status.discoveryPagesAttempted).toBe(4);
     });
 
     it('discoveryCreated matches sum of newLots', async () => {
@@ -580,7 +581,7 @@ describe('Task 033T — Discovery Integration', () => {
       await service.tick();
       const status = await service.getStatus();
 
-      expect(status.discoveryCreated).toBe(160);
+      expect(status.discoveryCreated).toBe(80);
     });
 
     it('discoveryTerminalReason reflects first provider terminal reason', async () => {

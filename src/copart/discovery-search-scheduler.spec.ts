@@ -92,6 +92,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
           if (take) results = results.slice(0, take);
           return results;
         }),
+        findFirst: jest.fn(() => Array.from(discoveredLots.values())[0] ?? null),
         count: jest.fn((args?: { where?: any }) => {
           const where = args?.where;
           let results = Array.from(discoveredLots.values());
@@ -151,6 +152,7 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
         }),
       },
       discoveryCheckpoint: {
+        findFirst: jest.fn(() => Array.from(discoveryCheckpoints.values())[0] ?? null),
         findUnique: jest.fn(({ where }) => {
           const key = `${where.provider_queryFingerprint?.provider}_${where.provider_queryFingerprint?.queryFingerprint}`;
           return discoveryCheckpoints.get(key) || null;
@@ -882,6 +884,30 @@ describe('Task 033S — Discovery, Search & Scheduler', () => {
       expect(restarted.pagesCompleted).toBe(1);
       const restartUrl = new URL(fetchSpy.mock.calls[2][0] as string);
       expect(restartUrl.searchParams.has('cursor')).toBe(false);
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    });
+
+    it('does not increment provider-wide misses when one make/model partition is exhausted', async () => {
+      const fetchSpy = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map(),
+        json: async () => ({ data: [], meta: { next_cursor: null, per_page: 20 } }),
+      } as any);
+      Object.defineProperty(globalThis, 'fetch', {
+        configurable: true,
+        writable: true,
+        value: fetchSpy,
+      });
+      prisma.discoveredLot.updateMany.mockClear();
+
+      const result = await discoveryService.runDiscovery(
+        { platform: 'copart', mode: 'discovery', make: 'AUDI', model: 'A4' },
+        1,
+      );
+
+      expect(result.exhausted).toBe(true);
+      expect(prisma.discoveredLot.updateMany).not.toHaveBeenCalled();
       delete (globalThis as { fetch?: typeof fetch }).fetch;
     });
   });

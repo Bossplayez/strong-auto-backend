@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DiscoveryService } from './discovery.service';
 import { ProviderLeaseService, type ProviderId } from './provider-lease.service';
 import { RequestBudgetService } from './request-budget.service';
+import { PASSENGER_DISCOVERY_PARTITIONS } from '../auction-lot/market-scope';
 // Task 056: STALE_AFTER_MS no longer controls public visibility.
 // Scheduler tier intervals remain for refresh priority only.
 
@@ -751,8 +752,27 @@ export class FreshnessSchedulerService implements OnModuleInit, OnModuleDestroy 
       const pages = Math.min(attemptBudget.remaining, FreshnessSchedulerService.DISCOVERY_MAX_PAGES_PER_TICK);
 
       try {
+        // Pick the least recently attempted scope partition. Checkpoints are
+        // persistent per provider/query, so this continues deterministically
+        // across process restarts without extra provider requests.
+        const checkpoints = typeof (this.discoveryService as any).getCheckpointState === 'function'
+          ? ((await this.discoveryService.getCheckpointState(provider)) ?? [])
+          : [];
+        const fingerprintFor = typeof (this.discoveryService as any).buildQueryFingerprint === 'function'
+          ? (candidate: { make: string; model: string }) => `discovery:${this.discoveryService.buildQueryFingerprint({ platform: provider, mode: 'discovery', ...candidate })}`
+          : () => '';
+        const partition = PASSENGER_DISCOVERY_PARTITIONS
+          .map((candidate) => ({
+            candidate,
+            checkpoint: checkpoints.find((checkpoint) => checkpoint.queryFingerprint === fingerprintFor(candidate)),
+          }))
+          .sort((left, right) => {
+            const leftAt = left.checkpoint?.lastStartedAt ? new Date(left.checkpoint.lastStartedAt).getTime() : 0;
+            const rightAt = right.checkpoint?.lastStartedAt ? new Date(right.checkpoint.lastStartedAt).getTime() : 0;
+            return leftAt - rightAt || left.candidate.make.localeCompare(right.candidate.make) || left.candidate.model.localeCompare(right.candidate.model);
+          })[0].candidate;
         const result = await this.discoveryService.runDiscovery(
-          { platform: provider, mode: 'discovery' },
+          { platform: provider, mode: 'discovery', make: partition.make, model: partition.model },
           pages,
           attemptBudget,
         );

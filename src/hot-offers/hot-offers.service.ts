@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { evaluateCatalogQuality, MIN_CATALOG_YEAR } from '../auction-lot/catalog-quality';
 import { deriveAuctionLifecycle, evaluateAuctionTruth, hasFreshAuctionPrice, publicCatalogWhere } from '../auction-lot/public-eligibility';
 import type { DiscoveredLot } from '@prisma/client';
+import { isPassengerMarketScope } from '../auction-lot/market-scope';
 
 /** Minimal lot shape for hot-offers scoring/ranking. */
 interface HotOfferCandidateLot {
@@ -226,18 +227,10 @@ const TIER_LABELS = {
   'this-week': { uk: 'Вигідні цього тижня', en: 'This week deals' },
 } as const;
 
-// Body types that are NOT passenger vehicles
-const NON_PASSENGER_BODY = [
-  /cargo/i, /commercial/i, /box truck/i, /cube/i, /cutaway/i,
-  /chassis/i, /stake/i, /flatbed/i, /step van/i, /street sweeper/i,
-  /ambulance/i, /hearse/i, /limousine/i,
-];
-
 // ── Helpers ────────────────────────────────────────────────────
 
 function isPassengerVehicle(lot: { bodyStyle?: string | null; bodyType?: string | null; title: string; make: string; model: string }): boolean {
-  const text = [lot.bodyType ?? lot.bodyStyle, lot.title, lot.make, lot.model].filter(Boolean).join(' ');
-  return !NON_PASSENGER_BODY.some(re => re.test(text));
+  return isPassengerMarketScope({ ...lot, bodyStyle: lot.bodyType ?? lot.bodyStyle });
 }
 
 function hasRealPrice(lot: { currentBidUsd: any; buyNowUsd: any; isBuyNow: boolean }): boolean {
