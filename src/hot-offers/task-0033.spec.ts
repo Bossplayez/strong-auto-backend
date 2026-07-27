@@ -30,7 +30,7 @@ const dto = {
   referencedImageIndexes: [0],
 };
 
-function createService() {
+function createService(publicGateEnabled = true) {
   const prisma: any = {
     discoveredLot: { findUnique: jest.fn().mockResolvedValue(lot) },
     aiLotAnalysis: { findUnique: jest.fn(), create: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
@@ -39,7 +39,14 @@ function createService() {
     siteSetting: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
   };
   prisma.$transaction = jest.fn(async (value: any) => Array.isArray(value) ? Promise.all(value) : value(prisma));
-  return { service: new HotOffersService(prisma, { get: jest.fn().mockReturnValue('1234567890123456') } as any), prisma };
+  return {
+    service: new HotOffersService(prisma, {
+      get: jest.fn((key: string) => key === 'AI_HOT_OFFERS_PUBLIC_GATE_ENABLED'
+        ? publicGateEnabled
+        : '1234567890123456'),
+    } as any),
+    prisma,
+  };
 }
 
 function payloadDigest() {
@@ -129,6 +136,21 @@ describe('Task 0033 — AI Hot Offers evidence contract', () => {
     prisma.aiLotAnalysis.findMany.mockResolvedValue([{ sourcePayloadHash: 'old-source', sourceFactsDigest, mediaCount: 1, discoveredLot: lot }]);
     const changed = await service.getPublicHotOffers();
     expect(changed.tiers.urgent.items).toHaveLength(0);
+  });
+
+  it('keeps the existing public ranking active until the AI publication gate is enabled', async () => {
+    const { service } = createService(false);
+    const subject = service as any;
+    subject.buildTiers = jest.fn().mockResolvedValue({
+      urgent: { items: [], allCandidates: [] },
+      'this-week': { items: [], allCandidates: [] },
+    });
+    subject.buildConfirmedPublicTiers = jest.fn();
+
+    await service.getPublicHotOffers();
+
+    expect(subject.buildTiers).toHaveBeenCalled();
+    expect(subject.buildConfirmedPublicTiers).not.toHaveBeenCalled();
   });
 
   it('uses the same confirmed evidence gate for personalized recommendations', async () => {

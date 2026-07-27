@@ -325,6 +325,11 @@ export class HotOffersService {
     }
   }
 
+  private isAiPublicGateEnabled(): boolean {
+    const value = this.config.get<boolean | string>('AI_HOT_OFFERS_PUBLIC_GATE_ENABLED');
+    return value === true || value === 'true';
+  }
+
   async getAiReviewCandidates(limit = 20) {
     const now = new Date();
     const lots = await this.findAiCandidateLots(now, Math.min(Math.max(limit, 1), 50));
@@ -746,9 +751,12 @@ export class HotOffersService {
 
     const snapshotFresh = snapshot && new Date(snapshot.validUntil).getTime() > now.getTime();
 
-    // Public cards are a strict subset: an administrator must have confirmed
-    // an analysis whose captured provider facts still match the current lot.
-    const tiers = await this.buildConfirmedPublicTiers(policy, overrides, now);
+    // Roll out the stricter publication gate only after the local worker is
+    // connected and administrators have a populated review queue. This keeps
+    // the existing public block available during infrastructure rollout.
+    const tiers = this.isAiPublicGateEnabled()
+      ? await this.buildConfirmedPublicTiers(policy, overrides, now)
+      : await this.buildTiers(policy, overrides, now);
 
     // Determine the authoritative timestamp pair for this response.
     // When snapshot is fresh, reuse its timestamps as-is (do NOT extend).
