@@ -38,6 +38,9 @@ model User {
   profile                 UserProfile?
   userRoles               UserRole[]
   aiLotReviewDecisions    AiLotReviewDecision[]   @relation("AiLotDecisionActor")
+  marketplaceSellerProfile MarketplaceSellerProfile?
+  marketplaceInquiries     MarketplaceInquiry[]     @relation("BuyerInquiries")
+  marketplaceReviews       MarketplaceReview[]     @relation("ReviewBuyer")
 
   @@map("users")
 }
@@ -239,6 +242,7 @@ model Vehicle {
   media               VehicleMedia[]
   sourceBindings      VehicleSourceBinding[]
   specs               VehicleSpec?
+  marketplaceListing  MarketplaceListing?
 
   @@index([publicationStatus, publishedAt])
   @@index([sourceType, sourceRegion])
@@ -1146,4 +1150,112 @@ enum AuctionTimestampEvidence {
   UTC_OFFSET
   PROVIDER_TIMEZONE
   NONE
+}
+
+enum MarketplaceSellerType {
+  PRIVATE
+  DEALER
+}
+
+enum MarketplaceListingStatus {
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+  REJECTED
+  HIDDEN
+  SOLD
+  EXPIRED
+}
+
+enum MarketplaceInquiryStatus {
+  OPEN
+  CLOSED_INTERESTED
+  CLOSED_NOT_INTERESTED
+  CLOSED_SOLD
+}
+
+enum MarketplaceReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model MarketplaceSellerProfile {
+  id           String                @id @default(uuid()) @map("id")
+  userId       String                @unique @map("user_id")
+  sellerType   MarketplaceSellerType @map("seller_type")
+  displayName  String                @map("display_name")
+  businessName String?               @map("business_name")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listings     MarketplaceListing[]
+  reviews      MarketplaceReview[]
+
+  @@map("marketplace_seller_profiles")
+}
+
+model MarketplaceListing {
+  id                String                   @id @default(uuid()) @map("id")
+  sellerProfileId   String                   @map("seller_profile_id")
+  vehicleId         String                   @unique @map("vehicle_id")
+  status            MarketplaceListingStatus @default(DRAFT) @map("status")
+  moderationComment String?                  @map("moderation_comment")
+  publishedAt       DateTime?                @map("published_at")
+  expiresAt         DateTime?                @map("expires_at")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  sellerProfile     MarketplaceSellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle                  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  inquiries         MarketplaceInquiry[]
+  reviews           MarketplaceReview[]
+
+  @@index([status, expiresAt])
+  @@index([sellerProfileId])
+  @@map("marketplace_listings")
+}
+
+model MarketplaceInquiry {
+  id                String                   @id @default(uuid()) @map("id")
+  listingId         String                   @map("listing_id")
+  buyerUserId       String                   @map("buyer_user_id")
+  status            MarketplaceInquiryStatus @default(OPEN) @map("status")
+  contactRevealed   Boolean                  @default(true) @map("contact_revealed")
+  contactRevealedAt DateTime                 @default(now()) @map("contact_revealed_at")
+  closedAt          DateTime?                @map("closed_at")
+  closedReason      String?                  @map("closed_reason")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  listing           MarketplaceListing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer             User                     @relation("BuyerInquiries", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  review            MarketplaceReview?
+
+  @@unique([listingId, buyerUserId])
+  @@index([listingId])
+  @@index([buyerUserId])
+  @@map("marketplace_inquiries")
+}
+
+model MarketplaceReview {
+  id              String                  @id @default(uuid()) @map("id")
+  inquiryId       String                  @unique @map("inquiry_id")
+  listingId       String                  @map("listing_id")
+  buyerUserId     String                  @map("buyer_user_id")
+  sellerProfileId String                  @map("seller_profile_id")
+  sellerRating    Int                     @map("seller_rating")
+  listingRating   Int                     @map("listing_rating")
+  comment         String?                 @map("comment")
+  sellerReply     String?                 @map("seller_reply")
+  sellerRepliedAt DateTime?               @map("seller_replied_at")
+  status          MarketplaceReviewStatus @default(PENDING) @map("status")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  inquiry         MarketplaceInquiry      @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  listing         MarketplaceListing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer           User                    @relation("ReviewBuyer", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  sellerProfile   MarketplaceSellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, status])
+  @@index([sellerProfileId, status])
+  @@map("marketplace_reviews")
 }
